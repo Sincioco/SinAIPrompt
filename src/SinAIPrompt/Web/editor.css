@@ -84,4 +84,3 @@ h3{font-size:11px;letter-spacing:1.1px;text-transform:uppercase;color:#63768a;ma
 }
 :root[data-theme=dark]{--surface:#252e39;--soft:#202833;--line:#414e5c;--text:#e2e9f0;color:var(--text);background:var(--soft)}
 :root[data-theme=dark] button:hover{background:#394d60}
-

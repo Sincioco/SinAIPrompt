@@ -5,6 +5,8 @@ Validated on September 12, 2026 using the local Windows / Visual Studio 2026 ins
 ## Completed checks
 
 - .NET Release build: zero warnings, zero errors; package sources disabled.
+- Final packaged integration run: 64 checks passed under Windows PowerShell 5.1.
+- Final source-tree whitespace check passed after removing a trailing blank line in the stylesheet. The initial commit body reported this check as passed prematurely; the final tree was rechecked against Git's empty tree.
 - Build and offline packaging through Windows PowerShell 5.1, without npm, downloaded tools, or NuGet packages.
 - Native WPF/WebView2 integration checks for HTML creation, formatting and font size, PMT language highlighting, code editing and indentation, image storage, draggable shapes and endpoints, resize, crop and individual corner radii, annotation undo/redo, blank canvas and multiple pasted image layers, template JSON exchange, source editing, standalone export, and session recovery.
 - Native file checks for external-change protection, Save As across folders with separate PNG assets, document navigation, and numbering collisions.
