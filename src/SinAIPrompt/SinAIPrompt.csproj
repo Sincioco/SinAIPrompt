@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <UseWPF>true</UseWPF>
+    <AssemblyName>Sin - AI Prompt</AssemblyName>
+    <RootNamespace>SinAIPrompt</RootNamespace>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <ApplicationIcon>Assets\SinAIPrompt.ico</ApplicationIcon>
+    <Version>1.0.0</Version>
+    <Description>Native Windows HTML editor with layered image annotation.</Description>
+  </PropertyGroup>
+  <ItemGroup><ProjectReference Include="../SinAIPrompt.Core/SinAIPrompt.Core.csproj" /></ItemGroup>
+  <ItemGroup><Resource Include="Assets\SinAIPrompt.ico" /></ItemGroup>
+  <ItemGroup>
+    <Reference Include="Microsoft.Web.WebView2.Core"><HintPath>$(VisualStudioWebViewPath)\Microsoft.Web.WebView2.Core.dll</HintPath><Private>true</Private></Reference>
+    <Reference Include="Microsoft.Web.WebView2.Wpf"><HintPath>$(VisualStudioWebViewPath)\Microsoft.Web.WebView2.Wpf.dll</HintPath><Private>true</Private></Reference>
+    <Content Include="$(VisualStudioWebViewPath)\WebView2Loader.dll" Link="WebView2Loader.dll" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <Content Include="Web\**\*" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+  </ItemGroup>
+  <Target Name="RequireInstalledVisualStudioComponents" BeforeTargets="ResolveReferences" Condition="!Exists('$(VisualStudioWebViewPath)\Microsoft.Web.WebView2.Core.dll')">
+    <Error Text="Visual Studio 2026's installed WebView2 assemblies were not found. Run Build.ps1 or set VisualStudioWebViewPath to Common7\IDE\PrivateAssemblies. No packages will be downloaded." />
+  </Target>
+</Project>

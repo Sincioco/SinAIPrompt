@@ -1,0 +1,17 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Sin - AI Prompt editor</title><link rel="stylesheet" href="editor.css"></head>
+<body>
+<div id="toolbar" role="toolbar" aria-label="Rich text formatting">
+ <select id="block" aria-label="Paragraph style"><option value="p">Paragraph</option><option value="h1">Heading 1</option><option value="h2">Heading 2</option><option value="h3">Heading 3</option><option value="blockquote">Quote</option></select>
+ <select id="font" aria-label="Font"><option>Segoe UI</option><option>Arial</option><option>Calibri</option><option>Verdana</option><option>Georgia</option><option>Times New Roman</option><option>Consolas</option><option>Courier New</option></select>
+ <input id="fontSize" aria-label="Font size" type="number" min="6" max="144" value="16" title="Font size in pixels"><span class="unit">px</span>
+ <span class="divider"></span><button data-cmd="bold" title="Bold (Ctrl+B)" aria-label="Bold"><b>B</b></button><button data-cmd="italic" title="Italic (Ctrl+I)" aria-label="Italic"><i>I</i></button><button data-cmd="underline" title="Underline (Ctrl+U)" aria-label="Underline"><u>U</u></button><button data-cmd="strikeThrough" title="Strikethrough" aria-label="Strikethrough"><s>S</s></button>
+ <label class="color-label" title="Font color">A<input id="fontColor" type="color" value="#20252c" aria-label="Font color"></label><label class="color-label" title="Selection background color">▰<input id="backColor" type="color" value="#fff2a6" aria-label="Selection background color"></label>
+ <span class="divider"></span><button data-cmd="insertUnorderedList" title="Bullet list">• List</button><button data-cmd="insertOrderedList" title="Numbered list">1. List</button><button data-cmd="justifyLeft" title="Align left">≡</button><button data-cmd="justifyCenter" title="Align center">☰</button>
+ <button id="link">Link</button><button id="pasteCode">&lt;/&gt; Paste Code</button><button id="insertImage">▧ Insert an Image</button><button id="source">View Source</button>
+</div>
+<div id="imagebar" hidden><strong>Image</strong><label>Width <input id="imageWidth" type="number" min="1" max="30000"> px</label><label>Height <input id="imageHeight" type="number" min="1" max="30000"> px</label><label><input id="lockRatio" type="checkbox" checked> Lock ratio</label><button id="annotate">Annotate / Crop…</button><button id="deleteImage">Remove image</button><span>Double-click an image to edit its layers.</span></div>
+<div id="notice" hidden role="alert"></div>
+<iframe id="document" title="HTML document" sandbox="allow-same-origin"></iframe>
+<script type="module" src="editor.js"></script>
+</body></html>

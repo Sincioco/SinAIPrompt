@@ -1,0 +1,13 @@
+**/bin/
+**/obj/
+app/
+work/
+.vs/
+*.user
+*.suo
+*.lnk
+*.zip
+TestResults/
+data-location.json
+data-location.json.bak
+Data/
