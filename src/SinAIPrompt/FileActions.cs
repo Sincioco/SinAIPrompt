@@ -10,6 +10,7 @@ namespace SinAIPrompt;
 public partial class MainWindow
 {
     int fileOperationDepth;
+    void SortDocumentsClick(object sender, RoutedEventArgs e) => documentOrder.SetMode((string)((MenuItem)sender).Tag);
 
     void NavigationContextMenuOpening(object sender, ContextMenuEventArgs e)
     {
@@ -49,6 +50,7 @@ public partial class MainWindow
         }
         Add("_Rename…", () => RenameDocument(doc), true, needsPath: doc.Path != null);
         Add("D_uplicate", () => _ = RunDocumentAction("Duplicating Document…", async () => await DuplicateDocument(doc)), false, needsPath: false);
+        Add(doc.Pinned ? "Un_pin" : "_Pin To Top", () => documentOrder.TogglePin(doc), false, needsPath: false);
         Add("_Delete…", () => DeleteDocumentFile(doc, (path, dirty) => Dialogs.DeleteFile(this, path, dirty)), true);
         menu.Items.Add(new Separator());
         Add("Copy Full _Path", () => Clipboard.SetText(FullPathText(doc.Path!)), false);

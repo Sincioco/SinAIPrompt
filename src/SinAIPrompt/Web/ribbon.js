@@ -1,4 +1,5 @@
 import {report} from './bridge.js';
+import {numberingOptions} from './list-numbering.js';
 import {createColorPicker} from './color-picker.js';
 import {currentBlock,applyParagraphStyle,previewParagraphStyle} from './word-styles.js';
 import {wordStyles,stylesFor,documentStyleMode,setDocumentStyle} from './document-styles.js';
@@ -44,7 +45,7 @@ export function createRibbon(root,{getDocument,saveSelection,restoreSelection,co
       <button id="backColor" value="#ffff00" class="text-color highlight-color" aria-label="Text Highlight Color"><span class="color-glyph">${icon('highlight')}</span></button><button id="fontColor" value="#000000" class="text-color" aria-label="Font Color"><span class="color-glyph">${icon('fontColor')}</span></button>
     </div><div class="group-caption">Font</div></section>
     <section class="ribbon-group paragraph-group" aria-label="Paragraph"><div class="paragraph-row">
-      ${button('insertUnorderedList','Bullets',icon('bullets'))}${button('insertOrderedList','Numbering',icon('numbering'))}${button('outdent','Decrease Indent',icon('outdent'))}${button('indent','Increase Indent',icon('indent'))}
+      ${button('insertUnorderedList','Bullets',icon('bullets'))}${button('insertOrderedList','Numbering',icon('numbering'))}<button id="listNumbering" title="List Numbering Options" aria-label="List Numbering Options">⌄</button>${button('outdent','Decrease Indent',icon('outdent'))}${button('indent','Increase Indent',icon('indent'))}
     </div><div class="paragraph-row">${['Left','Center','Right','Full'].map((alignment,i)=>button('justify'+alignment,['Align Left','Center','Align Right','Justify'][i],icon(['left','center','right','justify'][i]))).join('')}</div><div class="group-caption">Paragraph</div></section>
     <section class="ribbon-group styles-group" aria-label="Styles"><div class="style-gallery"><div class="style-strip">${wordStyles.map(styleTile).join('')}</div><button id="moreStyles" aria-label="More Styles" title="More Styles" aria-expanded="false">⌄</button></div><div class="group-caption">Styles</div></section>
     <section class="ribbon-group editor-group" aria-label="Image Editor"><button id="insertImage" title="Edit the selected image, or create a new image">${icon('editor')}<span>Editor</span></button><div class="group-caption">Editor</div></section>
@@ -89,6 +90,7 @@ export function createRibbon(root,{getDocument,saveSelection,restoreSelection,co
     Promise.resolve(command(target.dataset.cmd)).catch(report);
   });
   $('#font').onchange=()=>command('fontName',$('#font').value);
+  $('#listNumbering').onclick=()=>{restoreSelection();numberingOptions(getDocument(),finishChange);};
   function fontSize(size){restoreSelection();formatting?.setFontSize(size);finishChange();}
   $('#fontSize').onchange=()=>fontSize($('#fontSize').value);
   $('#growFont').onclick=()=>fontSize(fontSizes.find(size=>size>Number($('#fontSize').value))||400);
@@ -114,6 +116,7 @@ export function createRibbon(root,{getDocument,saveSelection,restoreSelection,co
     if(syncFrame)return;
     syncFrame=requestAnimationFrame(()=>{
       syncFrame=0;const doc=getDocument(),element=selectionElement(doc);if(!doc||!element)return;
+      if(root.dataset.styleMode!==documentStyleMode(doc))refreshStyles();
       const css=doc.defaultView.getComputedStyle(element),font=css.fontFamily.split(',')[0].replaceAll('"','').trim();
       for(const control of root.querySelectorAll('[data-cmd]')){
         if(['cut','copy'].includes(control.dataset.cmd))control.disabled=doc.getSelection().isCollapsed;

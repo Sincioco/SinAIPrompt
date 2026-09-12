@@ -21,6 +21,9 @@ public sealed class Document : INotifyPropertyChanged
     public string? Fingerprint { get; set; }
     public int UntitledNumber { get; set; } = 1;
     public bool AutoSave { get; set; }
+    public bool Pinned { get; set; }
+    public DateTime CreatedUtc { get; set; }
+    public DateTime ModifiedUtc { get; set; }
     public int Caret { get; set; }
     public int SelectionLength { get; set; }
     public double Scroll { get; set; }
@@ -28,9 +31,9 @@ public sealed class Document : INotifyPropertyChanged
     public int Zoom { get; set; } = 100;
     public bool Dirty => Text != SavedText || EncodingName != SavedEncoding || NewLine != SavedNewLine;
     public string Name => Path != null ? System.IO.Path.GetFileName(Path) : DraftName ?? $"Prompt {UntitledNumber}";
-    public string AccessibleName => $"{Name}. {(Dirty ? "Modified" : "Unmodified")}.";
+    public string AccessibleName => $"{Name}. {(Pinned ? "Pinned. " : "")}{(Dirty ? "Modified" : "Unmodified")}.";
     public string Tooltip => (Path ?? Name) + (Dirty ? "\nUnsaved changes" : "");
-    public string Marker => Dirty ? "•" : "";
+    public string Marker => (Pinned ? "📌" : "") + (Dirty ? "•" : "");
     public event PropertyChangedEventHandler? PropertyChanged;
     public void Notify() { foreach (var name in new[] { nameof(Name), nameof(Dirty), nameof(Marker), nameof(Tooltip), nameof(AccessibleName) }) PropertyChanged?.Invoke(this, new(name)); }
 }
@@ -78,7 +81,7 @@ public static class TextFiles
         catch (DecoderFallbackException) when (skip == 0) { name = "ANSI"; raw = EncodingFor(name).GetString(bytes); }
         if (raw.Contains('\0')) throw new InvalidDataException("This file contains binary data or an unsupported encoding. It has not been opened as text.");
         string nl = DetectNewLine(raw);
-        return new() { Path = path, Text = Normalize(raw), SavedText = Normalize(raw), NewLine = nl, SavedNewLine = nl, EncodingName = name, SavedEncoding = name, Fingerprint = Hash(bytes) };
+        return new() { Path = path, Text = Normalize(raw), SavedText = Normalize(raw), NewLine = nl, SavedNewLine = nl, EncodingName = name, SavedEncoding = name, Fingerprint = Hash(bytes), CreatedUtc = File.GetCreationTimeUtc(path), ModifiedUtc = File.GetLastWriteTimeUtc(path) };
     }
     public static string DetectNewLine(string text)
     {
@@ -118,6 +121,8 @@ public static class TextFiles
         else { var enc = EncodingFor(doc.EncodingName); bytes = [.. enc.GetPreamble(), .. enc.GetBytes(doc.Text.Replace("\n", doc.NewLine))]; }
         AtomicWrite(path, bytes);
         doc.DraftName = null;
+        if (doc.CreatedUtc == default) doc.CreatedUtc = File.GetCreationTimeUtc(path);
+        doc.ModifiedUtc = File.GetLastWriteTimeUtc(path);
         doc.Path = path; doc.SavedText = doc.Text; doc.SavedEncoding = doc.EncodingName; doc.SavedNewLine = doc.NewLine; doc.Fingerprint = Hash(bytes); doc.Notify();
     }
     public static void AtomicWrite(string path, byte[] bytes, bool backup = false)
@@ -148,6 +153,7 @@ public sealed class Settings
     public bool OpenInNewWindow { get; set; }
     public bool RecentFiles { get; set; } = true;
     public bool DocumentList { get; set; }
+    public string DocumentSort { get; set; } = "newest";
     public double ListWidth { get; set; } = 250;
     public int DateTimeFormat { get; set; } = DateTimeFormats.Default;
     public List<string> Recent { get; set; } = [];
@@ -168,6 +174,7 @@ public static class DocumentFactory
     public static Document CreateDraft(int number) => new()
     {
         UntitledNumber = number,
+        CreatedUtc = DateTime.UtcNow, ModifiedUtc = DateTime.UtcNow,
         DraftName = DateTime.Now.ToString("yyyy-MM-dd HHmm", System.Globalization.CultureInfo.InvariantCulture) + $" - Prompt {number}"
     };
 
@@ -200,27 +207,4 @@ public sealed class Store(string directory)
         return new T();
     }
     public void Write<T>(string name, T value) { Directory.CreateDirectory(DirectoryPath); TextFiles.AtomicWrite(System.IO.Path.Combine(DirectoryPath, name), JsonSerializer.SerializeToUtf8Bytes(value), true); }
-}
-public readonly record struct SearchMatch(int Index, int Length);
-public static class SearchEngine
-{
-    public static List<SearchMatch> FindAll(string text, string query, bool matchCase, bool wholeWord)
-    {
-        List<SearchMatch> result = []; if (query.Length == 0) return result;
-        var comparison = matchCase ? StringComparison.Ordinal : StringComparison.OrdinalIgnoreCase;
-        for (int start = 0; start <= text.Length - query.Length;)
-        {
-            int i = text.IndexOf(query, start, comparison); if (i < 0) break;
-            if (!wholeWord || ((i == 0 || !IsWord(text[i - 1])) && (i + query.Length == text.Length || !IsWord(text[i + query.Length])))) result.Add(new(i, query.Length));
-            start = i + query.Length;
-        }
-        return result;
-    }
-    static bool IsWord(char ch) => char.IsLetterOrDigit(ch) || ch == '_';
-    public static string ReplaceAll(string text, string query, string replacement, bool matchCase, bool wholeWord, out int count)
-    {
-        var matches = FindAll(text, query, matchCase, wholeWord); count = matches.Count; var b = new StringBuilder(text);
-        foreach (var m in matches.AsEnumerable().Reverse()) { b.Remove(m.Index, m.Length); b.Insert(m.Index, replacement); }
-        return b.ToString();
-    }
 }

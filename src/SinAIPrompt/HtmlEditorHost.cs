@@ -102,6 +102,10 @@ public sealed partial class EditorView
         var message = json.RootElement;
         string type = message.GetProperty("type").GetString()!;
         string? id = message.TryGetProperty("id", out var idValue) ? idValue.GetString() : null;
+        // Finish the WebView callback before any native modal UI can start a
+        // nested message loop. Otherwise Rename waits forever for script results.
+        await System.Windows.Threading.Dispatcher.Yield(System.Windows.Threading.DispatcherPriority.Normal);
+        if (disposed) return;
         try
         {
             object? result = null;
@@ -116,7 +120,7 @@ public sealed partial class EditorView
                 case "annotation-copy": AnnotationClipboard.Copy(message.GetProperty("format").GetString()!, message.GetProperty("content").GetString()!, message.GetProperty("objects").GetString()!); break;
                 case "annotation-paste": result = AnnotationClipboard.Read(); break;
                 case "editor-copy": EditorClipboard.Copy(message.GetProperty("html").GetString()!, message.GetProperty("text").GetString()!); break;
-                case "editor-paste": result = EditorClipboard.Read(); break;
+                case "editor-paste": result = await EditorClipboard.ReadAsync(); break;
                 case "editor-fonts": result = await EditorFonts.StyleSheetAsync(Browser.CoreWebView2); break;
                 case "screen-capture": result = await ScreenCaptureDialog.CaptureAsync(Owner); break;
                 case "test-clipboard-formats" when App.Current.TestMode: result = AnnotationClipboard.TestData?.GetFormats(false); break;

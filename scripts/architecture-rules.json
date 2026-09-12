@@ -9,8 +9,8 @@
     {
       "id": "main-window-ui",
       "path": "src/SinAIPrompt/MainWindow.xaml.cs",
-      "maximum": 616,
-      "reason": "Existing window UI, document lifecycle, commands, and search share state. This is legacy debt, not an approved model for new modules.",
+      "maximum": 580,
+      "reason": "Reviewed reduction from 616 to 580 on 2026-09-12 after extracting search UI/operations. Window UI, document lifecycle and commands still share state. This is legacy debt, not an approved model for new modules.",
       "nextReview": "Before the next substantive change here, extract only the affected responsibility with behavior coverage; carry this record across renames and lower the baseline after reviewed reductions."
     }
   ]

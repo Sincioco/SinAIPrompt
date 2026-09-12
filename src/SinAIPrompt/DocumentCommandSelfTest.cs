@@ -34,7 +34,7 @@ internal static class DocumentCommandSelfTest
             check(await view.Browser.ExecuteScriptAsync("document.querySelectorAll('.style-strip [data-style]').length === 5 && [...document.fonts].every(face => face.display === 'swap')") == "true",
                 "All five Styles labels render without waiting for local Office fonts");
         }
-        finally { window.RemoveDocument(draft); window.ActiveDocument = previous; }
+        finally { window.ActiveDocument = previous; window.RemoveDocument(draft); }
     }
 
     public static async Task RenameDraft(MainWindow window, Action<bool, string> check)
@@ -168,7 +168,7 @@ internal static class DocumentCommandSelfTest
         window.ActiveDocument = source;
         var another = await window.DuplicateDocument(source);
         check(another.Name == Path.GetFileNameWithoutExtension(source.Name) + " 3" + Path.GetExtension(source.Name), "Duplicate numbering skips existing files and open document names");
-        window.RemoveDocument(another); window.RemoveDocument(copy); window.ActiveDocument = source;
+        window.ActiveDocument = source; window.RemoveDocument(another); window.RemoveDocument(copy);
         await view.FlushAsync(); string changed = source.Text;
         bool asked = false;
         check(!await window.RevertDocument(source, () => { asked = true; return false; }) && asked && source.Text == changed,
@@ -188,7 +188,7 @@ internal static class DocumentCommandSelfTest
         check(draftCopy.Path == null && draftCopy.Dirty && draftCopy.Text.Contains("data:image/png;base64,") && draftCopy.Text.Contains("data-sin-storage=\"inline\""),
             "Duplicating an unsaved draft creates independent embedded image copies without a Save dialog");
         check(!await window.RevertDocument(draftCopy, () => throw new Exception("Draft must not prompt")), "Unsaved drafts cannot revert to a nonexistent saved file");
-        window.RemoveDocument(draftCopy); window.RemoveDocument(draft); window.ActiveDocument = source;
+        window.ActiveDocument = source; window.RemoveDocument(draftCopy); window.RemoveDocument(draft);
     }
 
     sealed class ControlKeyboard() : KeyboardDevice(InputManager.Current)

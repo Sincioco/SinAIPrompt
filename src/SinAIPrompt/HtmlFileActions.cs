@@ -15,6 +15,13 @@ public partial class MainWindow
         finally { fileOperationDepth--; }
     }
     void SourceClick(object sender, RoutedEventArgs e) => CurrentView?.ToggleSource();
+    async void SaveMarkdownClick(object sender, RoutedEventArgs e)
+    {
+        if (CurrentView is not { } view) return;
+        var dialog = new Microsoft.Win32.SaveFileDialog { Title = "Save As Markdown", FileName = Path.GetFileNameWithoutExtension(view.Document.Name) + ".md", Filter = "Markdown Document|*.md", DefaultExt = ".md" };
+        if (dialog.ShowDialog(this) != true) return;
+        await RunDocumentAction("Saving Markdown…", async () => await view.SaveMarkdownAsync(dialog.FileName));
+    }
     async Task SaveAllDocuments()
     {
         foreach (var doc in Documents.ToArray())
@@ -48,6 +55,8 @@ public partial class MainWindow
             case "separator": InsertAtCaret(new string('_', 80)); break;
             case "find": ShowFind(); break;
             case "replace": ShowFind(true); break;
+            case "findNext": await FindNext(); break;
+            case "findPrevious": await FindNext(true); break;
             case "zoomIn": ChangeZoom(10); break;
             case "zoomOut": ChangeZoom(-10); break;
             case "zoomReset": ChangeZoom(100, true); break;

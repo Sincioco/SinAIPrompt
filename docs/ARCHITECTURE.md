@@ -12,7 +12,10 @@ Paths below are relative to `src/`; unqualified native filenames are under
 | Responsibility | Current owner and state | Dependencies / validation |
 | --- | --- | --- |
 | Application lifetime | `SinAIPrompt/App.xaml.cs`: windows, single-instance pipe, profile store, settings, recovery scheduling | Composes WPF windows and Core. Startup, session, and storage smoke checks. |
-| Documents and window UI | `SinAIPrompt/MainWindow.xaml.cs`: document list, active document, lazy editor instances, autosave queues, search and navigation state | Calls Core and `EditorView`. Native navigation, 100-document startup, save/conflict checks. |
+| Documents and window UI | `SinAIPrompt/MainWindow.xaml.cs`: document list, active document, lazy editor instances, autosave queues and navigation state | Calls Core, `EditorView`, search bar and document ordering. Native navigation, 100-document startup, save/conflict checks. |
+| Find/Replace | `SearchBar.xaml/.cs` owns query/options/debounce/status; `EditorSearch.cs` adapts one editor; `Web/document-search.js` owns visible text mapping and match selection, with a disposable `search-worker.js` matcher; Core `SearchEngine.cs` owns source-text matching | No search operation switches view modes. Explicit editor callbacks and request/result values; no window reference in search UI/model. Browser highlights never enter saved HTML. Source behavior passed before extraction; visual/native checks cover regex, timeouts, inline formatting, replacement and Ctrl+F. |
+| Document order | `DocumentOrder.cs` owns sorting subscriptions and cached metadata loading; each `Document` persists pin/created/modified values and Settings persists sort mode | Reorders existing models without editor creation. Missing legacy timestamps load on a worker after window construction. A narrow callback restores selection after moves. Native order/persistence and 100-document lazy-loading checks. |
+| Markdown and list numbering | `Web/markdown.js` owns safe Markdown conversion and empty-document paste; `list-numbering.js` owns current-list operations. `EditorClipboard` reads file/text clipboard data and `MarkdownExport.cs` coordinates one editor's existing asset export path | No libraries or runtime downloads. Browser checks cover common structures, nested numbering and Undo; native checks paste a real local Markdown file and export independent PNG assets. |
 | File operations and annotation hosting | `FileActions.cs`, `HtmlFileActions.cs`, `HtmlFileRename.cs`, `AnnotationHost.cs`: partial `MainWindow` implementations sharing that window's state | Existing legacy integration boundaries, not independent state owners. Native file/asset and modal-layout checks. |
 | Visual/source editing adapter | `EditorView.cs` + `HtmlEditorHost.cs`: one document's WPF source view, WebView lifecycle, synchronization, mapping, native messages | Calls the window and platform adapters. Existing reverse coupling must not spread. Source/visual, immediate save, image, typing tests. |
 | Document data and persistence | `SinAIPrompt.Core/Documents.cs`: `Document`, settings/session records, `TextFiles`, `Store`, numbering, search | Core uses .NET APIs; no dependency on the WPF app or WebView. Save/conflict, recovery, numbering checks. |
@@ -47,13 +50,13 @@ existing CI configuration to connect; these local entry points are the gate.
 | --- | ---: | ---: |
 | Application entry/composition (`App.xaml.cs`) | 200 physical lines | 300 |
 | Other handwritten modules, markup, tooling, and tests | 500 | 800 |
-| Legacy `MainWindow.xaml.cs` | 500 | **616 (no growth)** |
+| Legacy `MainWindow.xaml.cs` | 500 | **580 (no growth; reviewed reduction from 616)** |
 
 Physical lines include blank lines and comments; a final newline does not create
 an extra line. Files without a final newline are counted too. Tests use the same
 file budget for now. `MainWindow.xaml.cs` is classified by its actual window-UI
 role, not the word "Main" in its name; its mixed responsibilities require the
-stricter 616-line legacy ceiling recorded with a stable ID and review trigger.
+stricter 580-line legacy ceiling recorded with a stable ID and review trigger.
 
 The checker covers `.cs`, `.js`, `.xaml`, `.css`, `.html`, `.ps1`, `.csproj`,
 `.props`, and `.targets` anywhere in the checkout, including new directories.
@@ -182,6 +185,40 @@ Draft duplicates embed their copied assets instead of creating a new unsaved
 asset-folder convention. Saved duplicates use the existing separate-image flow.
 Existing browser/native adapter coupling and settings/storage integration debt
 remain; no guardrail limits or exclusions were changed.
+
+The 12:54 iteration extracted search from MainWindow after adding and passing
+source-search behavior checks. The reviewed window baseline fell from 616 to 580
+lines under the same `main-window-ui` record; limits for other modules and all
+exclusions are unchanged. Fixture tests now derive boundary cases from that
+record so a reviewed reduction does not leave hard-coded obsolete test sizes.
+
+Visual search maps text nodes once per content revision, uses binary lookup for
+match ranges, and paints at most 2,000 highlights without inserting markup.
+Matching runs in a worker that is terminated after 750 ms; .NET source regex uses
+a 250 ms timeout on a worker. Count/navigation remain available beyond the paint
+limit. Regex follows JavaScript syntax in visual mode and .NET syntax in source
+mode; zero-length matches are skipped. Replace All retains inline markup using
+native editing operations; browser Undo follows those individual edits.
+
+Ribbon Rename was opening WPF modal UI inside a WebView callback. The bridge now
+yields back to the dispatcher before handling messages, allowing callbacks needed
+by the rename to complete. The regression runs the actual ribbon button, native
+dialog, image-folder rename, encoded references, and unsaved-edit preservation.
+
+Newest First means last modification time; Date Created also orders newest first.
+Pins remain above either order and persist with session recovery. Drag reordering
+selects Manual Order. Unknown timestamps in old recovery records are populated
+from file metadata without reading HTML; unavailable files use a fallback date.
+
+Markdown paste autoformats an empty editor, including clipboard .md/.markdown
+files and their relative images, using Modern. Supported content includes common
+headings, emphasis, links/images, lists, quotes, fenced code and pipe tables. Raw
+HTML input is escaped. Export keeps the HTML document open and writes UTF-8 .md
+plus separate PNGs through the existing asset path. Markdown cannot preserve
+arbitrary fonts, colors, canvas editing metadata, or page layout; this is a focused
+implementation rather than a full CommonMark parser. Numbering changes use an
+explicit li value and an undoable replacement of the current list, avoiding
+Chromium's loss of outer ol start attributes during list merging.
 
 ## Template adoption
 

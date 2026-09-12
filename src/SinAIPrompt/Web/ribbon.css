@@ -1,5 +1,5 @@
 #toolbar{flex:none;background:var(--surface);border-bottom:1px solid var(--line);padding:6px 8px 0;user-select:none}
-.ribbon-groups{display:grid;grid-template-columns:152px 278px 138px minmax(150px,max-content) 64px;gap:0;align-items:stretch}
+.ribbon-groups{display:grid;grid-template-columns:152px 278px 166px minmax(150px,max-content) 64px;gap:0;align-items:stretch}
 .ribbon-group{min-width:0;padding:3px 8px 0;border-right:1px solid var(--line);display:flex;flex-direction:column}
 .ribbon-group:last-child{border-right:0;padding-right:0}
 .group-caption{text-align:center;font-size:11px;color:var(--text);padding:5px 0 3px;margin-top:auto}

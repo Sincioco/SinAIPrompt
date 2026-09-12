@@ -1,6 +1,7 @@
 import {native,request} from './bridge.js';
 import {pasteSafeHtml,portableHtml,parseHtml} from './document.js';
 import {captureFormat} from './text-formatting.js';
+import {pasteMarkdown} from './markdown.js';
 
 export async function clipboardCommand(doc,name,{changed,insertImage}) {
   const selection=doc.getSelection();if(!selection?.rangeCount)return;
@@ -19,6 +20,7 @@ export async function clipboardCommand(doc,name,{changed,insertImage}) {
     const data=await request('editor-paste');if(!data)return;
     if(!range.startContainer.isConnected)return;
     doc.body.focus();selection.removeAllRanges();selection.addRange(range);
+    if(await pasteMarkdown(doc,data.markdown??data.text??'',changed,data.base??'',data.markdown!=null))return;
     if(data.html)doc.execCommand('insertHTML',false,pasteSafeHtml(data.html));
     else if(data.image){await insertImage(data.image);return;}
     else if(data.text)doc.execCommand('insertText',false,data.text);

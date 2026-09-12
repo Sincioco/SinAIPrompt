@@ -29,11 +29,12 @@ function Check([string]$Name, [string]$ExpectedFailure = '', [string]$ExpectedWa
 try {
     $rules | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $rulesPath -Encoding utf8
     $entry = $rules.entryFiles[0]; $legacy = $rules.legacy[0].path
+    $legacyLimit = $rules.legacy[0].maximum
     $core = 'src/SinAIPrompt.Core/SinAIPrompt.Core.csproj'
     Write-Fixture $core '<Project Sdk="Microsoft.NET.Sdk" />'
     Write-Lines $entry 200
-    Write-Lines $legacy 616
-    Check 'Current legacy baseline passes with a visible review warning' -ExpectedWarning '616 lines'
+    Write-Lines $legacy $legacyLimit
+    Check 'Current legacy baseline passes with a visible review warning' -ExpectedWarning "$legacyLimit lines"
     Write-Lines 'src/Sample.cs' 800
     Check 'Module hard boundary is inclusive' -ExpectedWarning '800 lines'
     Write-Lines 'src/Sample.cs' 801
@@ -44,11 +45,11 @@ try {
     Write-Lines $entry 301
     Check 'Oversized entry file fails' '301 lines exceeds 300'
     Write-Lines $entry 200
-    Write-Lines $legacy 617
-    Check 'Legacy growth fails below the general module limit' '617 lines exceeds 616'
-    Write-Lines $legacy 615
+    Write-Lines $legacy ($legacyLimit + 1)
+    Check 'Legacy growth fails below the general module limit' "$($legacyLimit + 1) lines exceeds $legacyLimit"
+    Write-Lines $legacy ($legacyLimit - 1)
     Check 'Legacy reduction requests a reviewed baseline reduction' -ExpectedWarning 'tighten the recorded'
-    Write-Lines $legacy 616
+    Write-Lines $legacy $legacyLimit
     Move-Item -LiteralPath (Join-Path $fixtureRoot $legacy) -Destination (Join-Path $fixtureRoot 'src/Renamed.cs')
     Check 'Renaming cannot silently erase baseline history' 'Legacy path missing'
     Move-Item -LiteralPath (Join-Path $fixtureRoot 'src/Renamed.cs') -Destination (Join-Path $fixtureRoot $legacy)

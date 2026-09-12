@@ -1,4 +1,4 @@
-<Window x:Class="SinAIPrompt.MainWindow" xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+<Window x:Class="SinAIPrompt.MainWindow" xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:local="clr-namespace:SinAIPrompt"
  Title="Sin - AI Prompt" Icon="Assets/SinAIPrompt.ico" Width="1280" Height="820" MinWidth="880" MinHeight="320" WindowStyle="SingleBorderWindow" WindowStartupLocation="CenterScreen" Background="{DynamicResource ShellBrush}" Foreground="{DynamicResource TextBrush}" FontFamily="Segoe UI" FontSize="14" TextOptions.TextFormattingMode="Display" UseLayoutRounding="True" AllowDrop="True" PreviewKeyDown="WindowKeyDown" Drop="WindowDrop" DragOver="WindowDragOver" Closing="WindowClosing" Activated="WindowActivated">
  <Border BorderBrush="{DynamicResource LineBrush}" BorderThickness="1"><Grid x:Name="ClientArea"><Grid x:Name="Shell">
   <Grid.RowDefinitions><RowDefinition Height="34"/><RowDefinition x:Name="TabRow" Height="39"/><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
@@ -16,6 +16,7 @@
     </MenuItem>
     <Separator/><MenuItem Header="_Save" InputGestureText="Ctrl+S" Click="SaveClick"/>
     <MenuItem Header="Save _As" InputGestureText="Ctrl+Shift+S" Click="SaveAsClick"/>
+    <MenuItem Header="Save As _Markdown…" Click="SaveMarkdownClick"/>
     <MenuItem Header="Export As Standalone HTML…" Click="ExportHtmlClick"/><MenuItem Header="Save A_ll" InputGestureText="Ctrl+Alt+S" Click="SaveAllClick"/>
     <Separator/><MenuItem Header="_Close Tab" InputGestureText="Ctrl+W" Click="CloseTabClick"/>
     <MenuItem Header="Close Window" InputGestureText="Ctrl+Shift+W" Click="WindowCloseClick"/>
@@ -44,14 +45,10 @@
     <MenuItem x:Name="LineNumbersMenu" Header="_Line Numbers" IsCheckable="True" Click="LineNumbersClick"/>
     <MenuItem x:Name="WordWrapMenu" Header="_Word Wrap" IsCheckable="True" Click="WordWrapClick"/>
     <Separator/><MenuItem x:Name="DocumentListMenu" Header="_Document List" IsCheckable="True" InputGestureText="Ctrl+Shift+L" Click="DocumentListClick"/>
+    <MenuItem Header="Sort Documents"><MenuItem Header="Newest First (Last Modified)" Tag="newest" Click="SortDocumentsClick"/><MenuItem Header="Date Created (Newest First)" Tag="created" Click="SortDocumentsClick"/><MenuItem Header="Manual Order" Tag="manual" Click="SortDocumentsClick"/></MenuItem>
    </MenuItem>
   </Menu><Button HorizontalAlignment="Right" Margin="0,2,5,2" Content="&#xE713;" FontFamily="Segoe Fluent Icons" Style="{StaticResource FlatButton}" Width="32" Click="SettingsClick" ToolTip="Settings" AutomationProperties.Name="Settings"/></Grid></Border>
-  <Border x:Name="SearchPanel" Grid.Row="2" Visibility="Collapsed" Background="{DynamicResource ShellBrush}" BorderBrush="{DynamicResource LineBrush}" BorderThickness="0,0,0,1" Padding="12,8"><StackPanel>
-   <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions><TextBox x:Name="FindBox" MinWidth="120" MaxWidth="440" HorizontalAlignment="Stretch" AutomationProperties.Name="Find Text" TextChanged="SearchChanged" PreviewKeyDown="FindBoxKeyDown"/><Button Grid.Column="1" Content="↑" Style="{StaticResource FlatButton}" Click="FindPreviousClick" ToolTip="Find Previous (Shift+F3)" AutomationProperties.Name="Find Previous"/><Button Grid.Column="2" Content="↓" Style="{StaticResource FlatButton}" Click="FindNextClick" ToolTip="Find Next (F3)" AutomationProperties.Name="Find Next"/><Button Grid.Column="3" Content="&#xE713;" FontFamily="Segoe Fluent Icons" Style="{StaticResource FlatButton}" Click="FindOptionsClick" ToolTip="Search Options" AutomationProperties.Name="Search Options"/><Button Grid.Column="4" Content="&#xE8BB;" FontFamily="Segoe Fluent Icons" Style="{StaticResource FlatButton}" Click="CloseSearchClick" ToolTip="Close (Esc)" AutomationProperties.Name="Close Search"/></Grid>
-   <StackPanel x:Name="SearchOptions" Orientation="Horizontal" Margin="4,8,0,0" Visibility="Collapsed"><CheckBox x:Name="MatchCase" Content="Match Case" Margin="0,0,20,0" Click="SearchOptionChanged"/><CheckBox x:Name="WholeWord" Content="Match Whole Word" Margin="0,0,20,0" Click="SearchOptionChanged"/><CheckBox x:Name="WrapSearch" Content="Wrap Around" IsChecked="True"/></StackPanel>
-   <Grid x:Name="ReplacePanel" Visibility="Collapsed" Margin="0,8,0,0"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions><TextBox x:Name="ReplaceBox" AutomationProperties.Name="Replace With" MaxWidth="440" HorizontalAlignment="Stretch"/><Button Grid.Column="1" Content="Replace" Margin="8,0,0,0" Click="ReplaceOneClick"/><Button Grid.Column="2" Content="Replace All" Margin="8,0,0,0" Click="ReplaceAllClick"/></Grid>
-   <TextBlock x:Name="SearchStatus" Margin="4,5,0,0" Foreground="{DynamicResource MutedBrush}" FontSize="12" AutomationProperties.LiveSetting="Polite"/>
-  </StackPanel></Border>
+  <local:SearchBar x:Name="SearchPanel" Grid.Row="2"/>
   <Grid x:Name="Workspace" Grid.Row="3"><Grid.ColumnDefinitions><ColumnDefinition x:Name="ListColumn" Width="0"/><ColumnDefinition x:Name="SplitterColumn" Width="0"/><ColumnDefinition Width="*" MinWidth="240"/></Grid.ColumnDefinitions>
    <Border x:Name="DocumentPane" Visibility="Collapsed" Background="{DynamicResource ShellBrush}"><DockPanel>
     <Grid DockPanel.Dock="Top" Height="40" Margin="12,0,6,0"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="30"/></Grid.ColumnDefinitions><TextBlock Text="Document List" VerticalAlignment="Center" FontSize="12" Foreground="{DynamicResource MutedBrush}"/><Button Grid.Column="1" Content="&#xE710;" FontFamily="Segoe Fluent Icons" FontSize="11" Style="{StaticResource FlatButton}" Click="NewTabClick" ToolTip="New Document (Ctrl+N)" AutomationProperties.Name="New Document"/></Grid>

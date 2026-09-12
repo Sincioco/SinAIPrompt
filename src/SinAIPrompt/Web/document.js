@@ -2,7 +2,7 @@ import { request, escapeHtml } from './bridge.js';
 import {wordDocumentStyles,documentStyleMode,setDocumentStyle} from './document-styles.js';
 
 export const documentStyles = `${wordDocumentStyles}body{margin:32px;background:#fff;overflow-wrap:break-word}img{max-width:100%;height:auto}pre[data-sin-code]{white-space:pre;overflow:auto;padding:18px;border:1px solid #d8dfe6;border-radius:6px;background:#f6f8fa;color:#24292f;font:14px/1.6 Consolas,monospace;tab-size:4}pre[data-sin-code] code{font:inherit}.rich-source-token-keyword,.rich-source-token-property{color:#0954b5}.rich-source-token-comment{color:#50784a;font-style:italic}.rich-source-token-string{color:#a12623}.rich-source-token-number{color:#8250a3}table{border-collapse:collapse}td,th{border:1px solid #aaa;padding:6px 10px}`;
-export const editingStyles = `body{min-height:calc(100vh - 80px);outline:none}img[data-sin-selected]{outline:3px solid #156bc1;outline-offset:3px}pre[data-sin-code]{cursor:pointer}a{cursor:text}`;
+export const editingStyles = `body{min-height:calc(100vh - 80px);outline:none}img[data-sin-selected]{outline:3px solid #156bc1;outline-offset:3px}pre[data-sin-code]{cursor:pointer}a{cursor:text}::highlight(sin-search){background:#ffe49a;color:#111}`;
 
 export function normalizeIndent(code) {
   const lines = String(code).replace(/\r\n?/g, '\n').replace(/\t/g, '    ').split('\n');

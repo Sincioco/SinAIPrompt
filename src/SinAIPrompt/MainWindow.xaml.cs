@@ -18,6 +18,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 {
     public ObservableCollection<Document> Documents { get; } = [];
     readonly Dictionary<Guid, EditorView> editors = [];
+    readonly DocumentOrder documentOrder;
     readonly HashSet<Guid> restoredDocuments = [];
     readonly Dictionary<Guid, string?> noticedVersions = [];
     readonly Dictionary<Guid, DateTime> pendingAutoSaves = [];
@@ -29,7 +30,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         get => activeDocument;
         set
         {
-            if (value == null || value == activeDocument || IsAnnotating || !Documents.Contains(value)) return;
+            if (value == null || value == activeDocument || IsAnnotating || documentOrder?.IsSorting == true || !Documents.Contains(value)) return;
             activeDocument = value;
             if (EditorHost != null)
             {
@@ -60,7 +61,8 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
     public MainWindow(WindowSession? session = null)
     {
-        InitializeComponent(); DataContext = this;
+        InitializeComponent(); DataContext = this; SearchPanel.GetEditor = () => CurrentView;
+        documentOrder = new(Documents, Preferences, Dispatcher, App.Current.MarkChanged, () => PropertyChanged?.Invoke(this, new(nameof(ActiveDocument))));
         if (session != null)
         {
             Width = Math.Clamp(session.Width, MinWidth, Math.Max(MinWidth, SystemParameters.WorkArea.Width));
@@ -86,7 +88,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         Loaded += (_, _) => { initialized = true; UpdateTabWidths(); ApplyPreferences(); CurrentView?.FocusEditing(); };
         autoSaveTimer.Tick += (_, _) => FlushAutoSaves(false);
         autoSaveTimer.Start();
-        Closed += (_, _) => { autoSaveTimer.Stop(); if (Application.Current.Windows.OfType<MainWindow>().Any() && !App.Current.Exiting) { App.Current.MarkChanged(); App.Current.SaveState(); } };
+        Closed += (_, _) => { documentOrder.Dispose(); autoSaveTimer.Stop(); if (Application.Current.Windows.OfType<MainWindow>().Any() && !App.Current.Exiting) { App.Current.MarkChanged(); App.Current.SaveState(); } };
     }
     public Document NewDocument(string? excludedPath = null)
     {
@@ -320,6 +322,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     public void MoveDocument(Document doc, int target)
     {
         int index = Documents.IndexOf(doc); if (index < 0) return;
+        documentOrder.SetMode("manual");
         Documents.Move(index, Math.Clamp(target, 0, Documents.Count - 1)); ActiveDocument = doc; App.Current.MarkChanged();
     }
     void NavigationDrop(object sender, DragEventArgs e)
@@ -409,49 +412,10 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { MessageBox.Show(this, ex.Message, "Could not reload"); }
     }
     void KeepVersionClick(object sender, RoutedEventArgs e) { ExternalNotice.Visibility = Visibility.Collapsed; FocusEditor(); }
-    public async void ShowFind(bool replace = false)
-    {
-        if (CurrentView != null) await CurrentView.SetSourceAsync(true);
-        SearchPanel.Visibility = Visibility.Visible; ReplacePanel.Visibility = replace ? Visibility.Visible : Visibility.Collapsed;
-        if (Editor != null && Editor.SelectionLength > 0 && !Editor.SelectedText.Contains('\n')) FindBox.Text = Editor.SelectedText;
-        FindBox.Focus(); FindBox.SelectAll(); UpdateSearchStatus();
-    }
-    List<SearchMatch> Matches() => SearchEngine.FindAll(Editor?.Text ?? "", FindBox.Text, MatchCase.IsChecked == true, WholeWord.IsChecked == true);
-    void UpdateSearchStatus()
-    {
-        if (SearchPanel?.Visibility != Visibility.Visible) return;
-        int count = Matches().Count; SearchStatus.Text = FindBox.Text.Length == 0 ? "" : count == 0 ? "No results" : $"{count:N0} {(count == 1 ? "match" : "matches")}";
-    }
-    public bool FindNext(bool previous = false)
-    {
-        if (Editor == null || FindBox.Text.Length == 0) { ShowFind(); return false; }
-        var matches = Matches(); if (matches.Count == 0) { SearchStatus.Text = "No results"; return false; }
-        int origin = previous ? Editor.SelectionStart : Editor.SelectionStart + Editor.SelectionLength;
-        int matchIndex = previous ? matches.FindLastIndex(m => m.Index < origin) : matches.FindIndex(m => m.Index >= origin);
-        if (matchIndex < 0 && WrapSearch.IsChecked == true) matchIndex = previous ? matches.Count - 1 : 0;
-        if (matchIndex < 0) { SearchStatus.Text = previous ? "Reached the start of the document" : "Reached the end of the document"; return false; }
-        var match = matches[matchIndex]; Editor.Select(match.Index, match.Length); Editor.ScrollToLine(Editor.GetLineIndexFromCharacterIndex(match.Index));
-        SearchStatus.Text = $"{matchIndex + 1:N0} of {matches.Count:N0} matches"; return true;
-    }
-    void ReplaceOneClick(object sender, RoutedEventArgs e)
-    {
-        if (Editor == null) return;
-        if (Matches().Any(m => m.Index == Editor.SelectionStart && m.Length == Editor.SelectionLength)) Editor.SelectedText = ReplaceBox.Text;
-        FindNext();
-    }
-    public int ReplaceAll(string query, string replacement, bool matchCase = false, bool wholeWord = false)
-    {
-        if (Editor == null) return 0;
-        string result = SearchEngine.ReplaceAll(Editor.Text, query, replacement, matchCase, wholeWord, out int count);
-        if (count > 0) { int caret = Editor.CaretIndex; Editor.BeginChange(); Editor.SelectAll(); Editor.SelectedText = result; Editor.Select(Math.Min(caret, Editor.Text.Length), 0); Editor.EndChange(); }
-        return count;
-    }
-    void ReplaceAllClick(object sender, RoutedEventArgs e) { int count = ReplaceAll(FindBox.Text, ReplaceBox.Text, MatchCase.IsChecked == true, WholeWord.IsChecked == true); SearchStatus.Text = $"Replaced {count:N0} {(count == 1 ? "occurrence" : "occurrences")}"; }
-    void SearchChanged(object sender, TextChangedEventArgs e) => UpdateSearchStatus();
-    void SearchOptionChanged(object sender, RoutedEventArgs e) => UpdateSearchStatus();
-    void FindBoxKeyDown(object sender, KeyEventArgs e) { if (e.Key == Key.Enter) { FindNext(Keyboard.Modifiers.HasFlag(ModifierKeys.Shift)); e.Handled = true; } }
-    void FindOptionsClick(object sender, RoutedEventArgs e) => SearchOptions.Visibility = SearchOptions.Visibility == Visibility.Visible ? Visibility.Collapsed : Visibility.Visible;
-    void CloseSearchClick(object sender, RoutedEventArgs e) { SearchPanel.Visibility = Visibility.Collapsed; FocusEditor(); }
+    public void ShowFind(bool replace = false) => SearchPanel.Show(replace);
+    void UpdateSearchStatus() => SearchPanel.Refresh();
+    public async Task<bool> FindNext(bool previous = false) => (await SearchPanel.ExecuteAsync(previous ? "previous" : "next")).Index > 0;
+    void CloseSearchClick(object sender, RoutedEventArgs e) => SearchPanel.Close();
     public bool GoToLine(int line)
     {
         if (CurrentView == null || Editor == null || line < 1 || line > CurrentView.Gutter.LineCount) return false;
@@ -494,7 +458,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                 default: e.Handled = false; return;
             }
         }
-        else if (e.Key == Key.F3) { FindNext(shift); e.Handled = true; }
+        else if (e.Key == Key.F3) { e.Handled = true; await FindNext(shift); }
         else if (e.Key == Key.F5) { InsertDate(); e.Handled = true; }
         else if (e.Key == Key.Escape && SearchPanel.Visibility == Visibility.Visible) { CloseSearchClick(this, e); e.Handled = true; }
     }
@@ -573,8 +537,8 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     void SelectAllClick(object sender, RoutedEventArgs e) { if (CurrentView?.IsVisual == true) CurrentView.Command("selectAll"); else Editor?.SelectAll(); FocusEditor(); }
     void FindClick(object sender, RoutedEventArgs e) => ShowFind();
     void ReplaceClick(object sender, RoutedEventArgs e) => ShowFind(true);
-    void FindNextClick(object sender, RoutedEventArgs e) => FindNext();
-    void FindPreviousClick(object sender, RoutedEventArgs e) => FindNext(true);
+    async void FindNextClick(object sender, RoutedEventArgs e) => await FindNext();
+    async void FindPreviousClick(object sender, RoutedEventArgs e) => await FindNext(true);
     void ZoomInClick(object sender, RoutedEventArgs e) => ChangeZoom(10);
     void ZoomOutClick(object sender, RoutedEventArgs e) => ChangeZoom(-10);
     void ResetZoomClick(object sender, RoutedEventArgs e) => ChangeZoom(100, true);

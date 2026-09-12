@@ -23,7 +23,8 @@ internal static class DocumentCopies
         }
         string html = destination == null ? await view.ExportAsync(duplicate: true) : (await view.PrepareSaveAsAsync(destination))!;
         var copy = new Document { DraftName = name, Text = html, EncodingName = source.EncodingName,
-            NewLine = source.NewLine, Zoom = source.Zoom, AutoSave = source.AutoSave && destination != null };
+            NewLine = source.NewLine, Zoom = source.Zoom, AutoSave = source.AutoSave && destination != null,
+            CreatedUtc = DateTime.UtcNow, ModifiedUtc = DateTime.UtcNow };
         if (destination != null)
         {
             if (File.Exists(destination)) throw new IOException("The duplicate name was just used by another file. Try again.");

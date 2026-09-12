@@ -8,7 +8,7 @@ namespace SinAIPrompt;
 // Windows text/HTML interchange; browser selection and editing stay in the editor.
 internal static class EditorClipboard
 {
-    static DataObject? testData;
+    internal static DataObject? TestData { get; set; }
 
     internal static void Copy(string html, string text)
     {
@@ -22,14 +22,17 @@ internal static class EditorClipboard
         var data = new DataObject();
         data.SetText(text, TextDataFormat.UnicodeText);
         data.SetData(DataFormats.Html, string.Format(header, startHtml, endHtml, startFragment, endFragment) + prefix + html + suffix);
-        if (App.Current.TestMode) testData = data;
+        if (App.Current.TestMode) TestData = data;
         else Clipboard.SetDataObject(data, true);
     }
 
-    internal static object? Read()
+    internal static async Task<object?> ReadAsync()
     {
-        var data = App.Current.TestMode ? testData : Clipboard.GetDataObject();
+        var data = App.Current.TestMode ? TestData : Clipboard.GetDataObject();
         if (data == null) return null;
+        if (data.GetData(DataFormats.FileDrop) is string[] files && files.FirstOrDefault(path => Path.GetExtension(path).ToLowerInvariant() is ".md" or ".markdown") is { } markdown)
+            return new { markdown = await File.ReadAllTextAsync(markdown), @base = new Uri(Path.GetDirectoryName(markdown)! + Path.DirectorySeparatorChar).AbsoluteUri };
+        string text = data.GetData(DataFormats.UnicodeText) as string ?? "";
         string? html = data.GetData(DataFormats.Html) as string;
         if (!string.IsNullOrEmpty(html))
         {
@@ -49,7 +52,7 @@ internal static class EditorClipboard
                 start = Offset("StartFragment:"); end = Offset("EndFragment:");
                 html = start >= 0 && end >= start && end <= bytes.Length ? Encoding.UTF8.GetString(bytes, start, end - start) : html[html.IndexOf('<')..];
             }
-            return new { html };
+            return new { html, text };
         }
         if (data.GetData("PNG") is MemoryStream png) return new { image = "data:image/png;base64," + Convert.ToBase64String(png.ToArray()) };
         if (data.GetData(DataFormats.Bitmap) is BitmapSource bitmap)
@@ -58,6 +61,6 @@ internal static class EditorClipboard
             using var output = new MemoryStream(); encoder.Save(output);
             return new { image = "data:image/png;base64," + Convert.ToBase64String(output.ToArray()) };
         }
-        return new { text = data.GetData(DataFormats.UnicodeText) as string ?? "" };
+        return new { text };
     }
 }

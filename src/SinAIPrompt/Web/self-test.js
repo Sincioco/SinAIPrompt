@@ -4,6 +4,7 @@ import {captureTemplate,parseTemplate,templateJson} from './templates.js';
 import {renderPng,outputBounds,move,id} from './annotation-model.js';
 import {request} from './bridge.js';
 import {runRibbonTests} from './ribbon-self-test.js';
+import {runDocumentToolsTests} from './document-tools-self-test.js';
 
 export async function run(){
   const results=[];const check=(value,name)=>{if(!value)throw Error(name);results.push(name);};
@@ -13,6 +14,7 @@ export async function run(){
   const click=selector=>{const element=document.querySelector(selector);if(!element)throw Error('Missing control: '+selector);element.click();};
   const waitFor=async selector=>{for(let i=0;i<100;i++){const el=document.querySelector(selector);if(el)return el;await delay(50);}throw Error('Timed out: '+selector);};
   await window.editor.ready();
+  await runDocumentToolsTests(check);
   check(doc().body.isContentEditable,'Visual HTML is editable');
   const renamed=parseHtml(renameImageFolder('<p>Old folder/photo.png</p><img src="./Old%20folder/photo.png?size=1#preview"><img src="https://example.invalid/Old%20folder/photo.png"><img src="Other/photo.png">','Old folder','New # folder'));
   check(renamed.images[0].getAttribute('src')==='New%20%23%20folder/photo.png?size=1#preview'&&renamed.images[1].getAttribute('src').startsWith('https://example.invalid/')&&renamed.images[2].getAttribute('src')==='Other/photo.png'&&renamed.querySelector('p').textContent==='Old folder/photo.png','Folder rename updates encoded local image references without replacing other text or URLs');

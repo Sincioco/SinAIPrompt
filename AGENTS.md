@@ -18,7 +18,8 @@ dependencies, validation, and expected growth; keep the assessment proportional.
   replacement monoliths, or coupled partial families.
 - Reuse an appropriate module. Make only the smallest behavior-covered extraction
   needed for the task; separate structural changes from feature changes.
-- `MainWindow.xaml.cs` has a reviewed 616-line no-growth baseline. Respect the
+- `MainWindow.xaml.cs` has a reviewed 580-line no-growth baseline (reduced from 616
+  after the September 12 search extraction). Respect the
   checked-in limits and exclusions; never reset baselines or grant exceptions to pass.
 - Size is a review tripwire, not a quality score. Do not compress code or remove
   useful comments. Record unrelated debt instead of starting a broad refactor.

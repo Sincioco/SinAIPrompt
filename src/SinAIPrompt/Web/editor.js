@@ -1,5 +1,7 @@
 import {send,request,native,blobData,escapeHtml,ask,report} from './bridge.js';
 import {parseHtml,ensureStyle,editingStyles,serialize,normalizeIndent,codeHtml,toPng,portableHtml,pasteSafeHtml,renameImageFolder} from './document.js';
+import {createDocumentSearch} from './document-search.js';
+import {pasteMarkdown,looksLikeMarkdown,htmlToMarkdown} from './markdown.js';
 import {prepareRichSourceHighlight,RICH_SOURCE_TEXT_TYPES} from './source-highlighting.js';
 import {annotate} from './annotation-ui.js';
 import {id,outputBounds} from './annotation-model.js';
@@ -13,6 +15,7 @@ let doc=null,selection=null,selectedImage=null,currentRaw='',base='https://sin-d
 let changeTimer,lastImageStatus="";
 function imageStatus(source=""){if(source!==lastImageStatus){lastImageStatus=source;send('image-status',{source});}}
 const exports=new Map();
+const search=createDocumentSearch(()=>doc,changed);
 const ribbon=createRibbon($('#toolbar'),{getDocument:()=>doc,saveSelection,restoreSelection,command,changed});
 function saveSelection(){if(!doc)return;const s=doc.getSelection();if(s.rangeCount && doc.body.contains(s.anchorNode))selection=s.getRangeAt(0).cloneRange();}
 function restoreSelection(){if(!doc)return;doc.body.focus();const s=doc.getSelection();if(selection&&doc.body.contains(selection.startContainer)){s.removeAllRanges();s.addRange(selection);}else {const range=doc.createRange();range.selectNodeContents(doc.body);range.collapse(false);s.removeAllRanges();s.addRange(range);}}
@@ -25,12 +28,13 @@ async function focus(){
   restoreSelection();saveSelection();syncFormatting();
 }
 function changed(){
-  if(!doc||loadingNow)return;saveSelection();clearTimeout(changeTimer);
+  if(!doc||loadingNow)return;search.invalidate();saveSelection();clearTimeout(changeTimer);
   // Keep full-document serialization and native synchronization out of keystrokes.
   changeTimer=setTimeout(()=>{currentRaw=serialize(doc);send('change',{html:currentRaw});},150);
 }
 function html(flush=false){if(flush)clearTimeout(changeTimer);return loadingNow?currentRaw:doc?serialize(doc):currentRaw;}
 async function load(raw,newBase=base){
+  search.invalidate();
   clearTimeout(changeTimer);
   imageStatus();currentRaw=raw||'';base=newBase;loadingNow=true;selection=null;selectedImage=null;$('#imagebar').hidden=true;
   const input=parseHtml(raw);ensureStyle(input);
@@ -76,6 +80,11 @@ async function storageChoice(){const answer=await ask('Store Image','<p>Choose h
 async function storeImage(png,mode){const source=mode==='separate'?await request('save-image',{data:png}):png;await loading;return source;}
 async function insertImage(source){saveSelection();const mode=await storageChoice();if(!mode)return;const png=await toPng(source),src=await storeImage(png.data,mode);restoreSelection();command('insertHTML',`<img src="${escapeHtml(src)}" data-sin-storage="${mode}" style="width:${png.width}px;max-width:100%;height:auto" alt=""><p><br></p>`);}
 async function paste(event){
+  const files=[...event.clipboardData.files],text=event.clipboardData.getData('text/plain');
+  if(files.some(file=>/\.(md|markdown)$/i.test(file.name))){event.preventDefault();await clipboardCommand(doc,'paste',{changed,insertImage}).catch(report);return;}
+  if(!doc.body.textContent.trim()&&!doc.body.querySelector('img,pre,table')&&looksLikeMarkdown(text)){
+    event.preventDefault();try{await pasteMarkdown(doc,text,changed);ribbon.attach(doc);}catch(error){report(error);}return;
+  }
   const images=[...event.clipboardData.items].filter(i=>i.type.startsWith('image/')).map(i=>i.getAsFile());
   if(images.length){event.preventDefault();saveSelection();try{for(const image of images)await insertImage(await blobData(image));}catch(e){report(e);}return;}
   const markup=event.clipboardData.getData('text/html');
@@ -123,6 +132,7 @@ function shortcuts(event){
   const ctrl=event.ctrlKey||event.metaKey,key=event.key.toLowerCase();let action=null;
   if(ctrl){const map={s:event.shiftKey?'saveAs':'save',n:'new',t:'new',o:'open',w:'close',f:'find',h:'replace',d:'longDate',l:'separator',tab:event.shiftKey?'previous':'next','+':'zoomIn','=':'zoomIn','-':'zoomOut','0':'zoomReset'};action=map[key];if(key==='l'&&event.shiftKey)action='documentList';if(key==='u'&&event.shiftKey){event.preventDefault();send('source');return;}}
   if(event.key==='F5')action='date';
+  if(event.key==='F3')action=event.shiftKey?'findPrevious':'findNext';
   if(action){event.preventDefault();changed();send('command',{command:action,html:html()});}
 }
 $('#pasteCode').onclick=()=>pasteCode().catch(report);
@@ -152,6 +162,8 @@ $('#source').onclick=async()=>{if(native){send('source');return;}const answer=aw
 $('#link').onclick=async()=>{saveSelection();const answer=await ask('Insert Link','<label>Address <input name="url" type="url" required placeholder="https://…"></label>');if(answer.choice==='ok')command('createLink',answer.values.url);};
 $('#notice').onclick=()=>$('#notice').hidden=true;
 window.editor={load,html,setBase,focus,command,insertImage,openAnnotation,pasteCode,renameImageFolder,ready:()=>loading,
+  search:options=>search.run(options),
+  beginMarkdown(){const key=id();(async()=>{await loading;return await htmlToMarkdown(doc,png=>request('save-image-as',{data:png}));})().then(html=>exports.set(key,{html})).catch(error=>exports.set(key,{error:error.message}));return key;},
   renameOpenImageFolder(oldName,newName){const updated=renameImageFolder(html(true),oldName,newName);load(updated);return updated;},
   beginPortable(duplicate=false){const key=id();(async()=>{await loading;return await portableHtml(html(),base,duplicate);})().then(html=>exports.set(key,{html})).catch(error=>exports.set(key,{error:error.message}));return key;},
   beginRelocate(){
