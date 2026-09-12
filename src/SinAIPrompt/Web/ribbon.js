@@ -2,7 +2,7 @@ import {report} from './bridge.js';
 import {numberingOptions} from './list-numbering.js';
 import {createColorPicker} from './color-picker.js';
 import {currentBlock,applyParagraphStyle,previewParagraphStyle} from './word-styles.js';
-import {wordStyles,stylesFor,documentStyleMode,setDocumentStyle} from './document-styles.js';
+import {modernStyles,stylesFor,documentStyleMode} from './document-styles.js';
 import {createTextFormatting,selectionElement,captureFormat,applyInlineFormat,selectWordAtCaret} from './text-formatting.js';
 
 const icons={
@@ -14,7 +14,7 @@ const icons={
   save:'<path d="M3 2h16l3 3v17H3z" fill="#c967c9" stroke="#855483"/><path d="M7 2h10v7H7zM7 14h11v8H7z" fill="white" stroke="#855483"/>',
   saveAs:'<path d="M2 2h16l3 3v11H2zM6 2v6h10V2M6 16v-5h10"/><path d="m11 23 1-5 8-8 3 3-8 8zM18 12l3 3" stroke="#259ccc" fill="white"/>',
   close:'<path d="M2 6h7l2 2h11v14H2zM2 8V4h8l2 2h8v2"/>',
-  capture:'<path d="M3 7h5l2-3h5l2 3h5v14H3z"/><circle cx="12" cy="14" r="4" stroke="#259ccc"/>',
+  capture:'<rect x="2" y="3" width="20" height="14" rx="1" fill="#e4f3ff" stroke="#259ccc"/><path d="M8 22h8M12 17v5M5 6h4M5 6v4M19 14h-4M19 14v-4"/>',
   highlight:'<path d="m7 13 8-9a2 2 0 0 1 3 0l2 2a2 2 0 0 1 0 3l-9 8z" fill="#8c8c8c" stroke="#666"/><path d="m7 13 4 4-2 2-4-1z" fill="#fff" stroke="#666"/><path d="m5 18 4 1-4 2H2z" fill="#646464" stroke="none"/>',
   paste:'<path d="M8 5H4v17h15V5h-4M9 3h5v4H9z"/><path d="M8 11h7M8 15h7M8 19h5"/>',
   cut:'<circle cx="5" cy="18" r="3"/><circle cx="18" cy="18" r="3"/><path d="m7 16 12-13M16 16 3 3"/>',
@@ -36,7 +36,9 @@ const fontSizes=[8,9,10,11,12,14,16,18,20,22,24,26,28,36,48,72,96,144,200,300,40
 export function createRibbon(root,{getDocument,saveSelection,restoreSelection,command,changed}) {
   const styleTile=style=>`<button type="button" class="style-tile style-${style.id}" data-style="${style.id}" title="${style.name}: ${style.css.fontFamily.split(',')[0].replaceAll('"','')}, ${style.css.fontSize}" aria-label="${style.name}"><span>${style.name}</span></button>`;
   root.innerHTML=`<div class="ribbon-groups">
-    <section class="ribbon-group file-group" aria-label="File"><div class="file-controls">${[['new','New'],['save','Save'],['saveAs','Save As'],['close','Close']].map(([action,label])=>`<button data-native-command="${action}" title="${label}">${icon(action)}<span>${label}</span></button>`).join('')}</div><div class="group-caption">File</div></section>
+    <section class="ribbon-group file-group" aria-label="File"><div class="clipboard-controls">
+      <button class="save-large" data-native-command="save" title="Save (Ctrl+S)">${icon('save')}<span>Save</span></button>
+      <div class="clipboard-small">${[['new','New'],['saveAs','Save As'],['close','Close']].map(([action,label])=>`<button data-native-command="${action}" title="${label}">${icon(action)}<span>${label}</span></button>`).join('')}</div></div><div class="group-caption">File</div></section>
     <section class="ribbon-group clipboard-group" aria-label="Clipboard"><div class="clipboard-controls">
       <button class="paste-large" data-cmd="paste" title="Paste (Ctrl+V)">${icon('paste')}<span>Paste</span></button>
       <div class="clipboard-small">${button('cut','Cut (Ctrl+X)',icon('cut')+'Cut')}${button('copy','Copy (Ctrl+C)',icon('copy')+'Copy')}
@@ -53,10 +55,9 @@ export function createRibbon(root,{getDocument,saveSelection,restoreSelection,co
     <section class="ribbon-group paragraph-group" aria-label="Paragraph"><div class="paragraph-row">
       ${button('insertUnorderedList','Bullets',icon('bullets'))}${button('insertOrderedList','Numbering',icon('numbering'))}<button id="listNumbering" title="List Numbering Options" aria-label="List Numbering Options">⌄</button>${button('outdent','Decrease Indent',icon('outdent'))}${button('indent','Increase Indent',icon('indent'))}
     </div><div class="paragraph-row">${['Left','Center','Right','Full'].map((alignment,i)=>button('justify'+alignment,['Align Left','Center','Align Right','Justify'][i],icon(['left','center','right','justify'][i]))).join('')}</div><div class="group-caption">Paragraph</div></section>
-    <section class="ribbon-group styles-group" aria-label="Styles"><div class="style-gallery"><div class="style-strip">${wordStyles.map(styleTile).join('')}</div><button id="moreStyles" aria-label="More Styles" title="More Styles" aria-expanded="false">⌄</button></div><div class="group-caption">Styles</div></section>
-    <section class="ribbon-group editor-group" aria-label="Image Editor"><button id="insertImage" aria-label="Image Editor" title="Edit the selected image, or create a new image">${icon('editor')}</button><div class="group-caption">Editor</div></section>
-    <section class="ribbon-group capture-group" aria-label="Screen Capture"><button id="screenCapture" title="Screen Capture">${icon('capture')}<span>Screen<br>Capture</span></button><div class="group-caption">Capture</div></section>
-  </div><div class="ribbon-actions"><button data-native-command="saveAll" title="Save All (Ctrl+Alt+S)">Save All</button><button data-native-command="rename">Rename</button><span class="action-divider"></span>${button('undo','Undo (Ctrl+Z)','↶')}${button('redo','Redo (Ctrl+Y)','↷')}<button id="link">Link</button><button id="pasteCode">&lt;/&gt; Paste Code</button><select id="documentStyle" aria-label="Document Style" title="Document Style"><option value="modern">Modern</option><option value="office">MS Office Style</option></select><span class="ribbon-hint" id="painterHint" hidden>Select text to paint its formatting · Esc cancels</span><button id="source">View Source</button></div>`;
+    <section class="ribbon-group styles-group" aria-label="Styles"><div class="style-gallery"><div class="style-strip">${modernStyles.map(styleTile).join('')}</div><button id="moreStyles" aria-label="More Styles" title="More Styles" aria-expanded="false">⌄</button></div><div class="group-caption">Styles</div></section>
+    <section class="ribbon-group tools-group" aria-label="Tools"><div class="tools-controls"><button id="insertImage" aria-label="Image Editor" title="Edit the selected image, or create a new image">${icon('editor')}<span>Editor</span></button><button id="screenCapture" title="Capture your desktop">${icon('capture')}<span>Capture</span></button></div><div class="group-caption">Tools</div></section>
+  </div><div class="ribbon-actions"><button data-native-command="saveAll" title="Save All (Ctrl+Alt+S)">Save All</button><button data-native-command="rename">Rename</button><span class="action-divider"></span>${button('undo','Undo (Ctrl+Z)','↶')}${button('redo','Redo (Ctrl+Y)','↷')}<button id="link">Link</button><button id="pasteCode">&lt;/&gt; Paste Code</button><span class="ribbon-hint" id="painterHint" hidden>Select text to paint its formatting · Esc cancels</span><button id="source">View Source</button></div>`;
   const $=selector=>root.querySelector(selector);
   let formatting=null,painter=null,locked=false,painterSheet=null,stylePopup=null,syncFrame=0;
   const colorPickers=[
@@ -67,14 +68,9 @@ export function createRibbon(root,{getDocument,saveSelection,restoreSelection,co
   function finishChange(){saveSelection();changed();sync();}
   function refreshStyles(){
     const doc=getDocument();root.dataset.styleMode=documentStyleMode(doc);
-    $('#documentStyle').value=documentStyleMode(doc);
     $('.style-strip').innerHTML=stylesFor(doc).map(styleTile).join('');
     stylePopup?.hidePopover();
   }
-  $('#documentStyle').onchange=()=>{
-    const doc=getDocument();previewParagraphStyle(doc,null);restoreSelection();
-    setDocumentStyle(doc,$('#documentStyle').value);refreshStyles();finishChange();
-  };
   function applyStyle(id){const doc=getDocument();previewParagraphStyle(doc,null);restoreSelection();applyParagraphStyle(doc,id);finishChange();stylePopup?.hidePopover();}
   function wireGallery(gallery){
     gallery.addEventListener('mouseover',event=>{const tile=event.target.closest('[data-style]');if(tile)previewParagraphStyle(getDocument(),tile.dataset.style);});
@@ -134,7 +130,8 @@ export function createRibbon(root,{getDocument,saveSelection,restoreSelection,co
       const block=currentBlock(doc);
       const style=block?.dataset.sinStyle||({H1:'heading',H2:'heading2'}[block?.tagName])||'normal';
       root.querySelectorAll('[data-style]').forEach(tile=>tile.setAttribute('aria-pressed',String(tile.dataset.style===style)));
-      $('#fontColor').value=css.color;$('#backColor').value=css.backgroundColor==='rgba(0, 0, 0, 0)'?'transparent':css.backgroundColor;
+      $('#fontColor').value=css.color;
+      // The marker remembers the chosen ink, initially yellow, across selections.
       colorPickers.forEach(picker=>picker.sync());
     });
   }

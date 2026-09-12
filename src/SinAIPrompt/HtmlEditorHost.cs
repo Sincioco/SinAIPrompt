@@ -119,9 +119,10 @@ public sealed partial class EditorView
                 case "annotation-mode": Owner.SetAnnotationMode(this, message.GetProperty("open").GetBoolean()); break;
                 case "annotation-copy": AnnotationClipboard.Copy(message.GetProperty("format").GetString()!, message.GetProperty("content").GetString()!, message.GetProperty("objects").GetString()!); break;
                 case "annotation-paste": result = AnnotationClipboard.Read(); break;
-                case "editor-copy": EditorClipboard.Copy(message.GetProperty("html").GetString()!, message.GetProperty("text").GetString()!); break;
-                case "editor-paste": result = await EditorClipboard.ReadAsync(); break;
+                case "editor-copy": EditorClipboard.Copy(message.GetProperty("html").GetString()!, message.GetProperty("text").GetString()!, message.TryGetProperty("internalHtml", out var internalHtml) ? internalHtml.GetString() : null, Document.Id.ToString()); break;
+                case "editor-paste": result = await EditorClipboard.ReadAsync(Document.Id.ToString()); break;
                 case "editor-fonts": result = await EditorFonts.StyleSheetAsync(Browser.CoreWebView2); break;
+                case "link-preview": result = await LinkPreview.FetchAsync(message.GetProperty("url").GetString()!); break;
                 case "screen-capture": result = await ScreenCaptureDialog.CaptureAsync(Owner); break;
                 case "test-clipboard-formats" when App.Current.TestMode: result = AnnotationClipboard.TestData?.GetFormats(false); break;
                 case "command":
@@ -129,10 +130,11 @@ public sealed partial class EditorView
                     await Owner.HandleHtmlCommand(message.GetProperty("command").GetString()!); break;
                 case "save-image":
                     if (Document.Path == null && !await Owner.SaveDocument(Document)) throw new OperationCanceledException("Save the HTML file before storing a separate image.");
-                    result = HtmlAssets.SavePng(Document.Path!, message.GetProperty("data").GetString()!); break;
+                    result = await HtmlAssets.SavePngAsync(Document.Path!, message.GetProperty("data").GetString()!); break;
                 case "save-image-as" when saveAsPath != null:
-                    result = HtmlAssets.SavePng(saveAsPath, message.GetProperty("data").GetString()!); break;
+                    result = await HtmlAssets.SavePngAsync(saveAsPath, message.GetProperty("data").GetString()!); break;
                 case "read-image": result = await HtmlAssets.ReadImageAsync(Document.Path, message.GetProperty("source").GetString()!); break;
+                case "reuse-image": result = await HtmlAssets.ReusePngAsync(Document.Path, message.GetProperty("data").GetString()!); break;
                 case "templates-load": result = App.Current.Store.Read<List<JsonElement>>("templates.json"); break;
                 case "templates-save": App.Current.Store.Write("templates.json", message.GetProperty("templates")); break;
                 case "test-mouse" when App.Current.TestMode:

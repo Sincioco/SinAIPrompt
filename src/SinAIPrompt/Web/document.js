@@ -1,8 +1,21 @@
 import { request, escapeHtml } from './bridge.js';
-import {wordDocumentStyles,documentStyleMode,setDocumentStyle} from './document-styles.js';
+import {modernDocumentStyles,setDocumentStyle} from './document-styles.js';
 
-export const documentStyles = `${wordDocumentStyles}body{margin:32px;background:#fff;overflow-wrap:break-word}img{max-width:100%;height:auto}pre[data-sin-code]{white-space:pre;overflow:auto;padding:18px;border:1px solid #d8dfe6;border-radius:6px;background:#f6f8fa;color:#24292f;font:14px/1.6 Consolas,monospace;tab-size:4}pre[data-sin-code] code{font:inherit}.rich-source-token-keyword,.rich-source-token-property{color:#0954b5}.rich-source-token-comment{color:#50784a;font-style:italic}.rich-source-token-string{color:#a12623}.rich-source-token-number{color:#8250a3}table{border-collapse:collapse}td,th{border:1px solid #aaa;padding:6px 10px}`;
-export const editingStyles = `body{min-height:calc(100vh - 80px);outline:none}img[data-sin-selected]{outline:3px solid #156bc1;outline-offset:3px}pre[data-sin-code]{cursor:pointer}a{cursor:text}::highlight(sin-search){background:#ffff72;color:#111}`;
+import {sourceColors} from './source-highlighting.js';
+
+export const documentStyles = `${modernDocumentStyles}body{background:#fff;overflow-wrap:break-word}img{max-width:100%;height:auto}table{border-collapse:collapse}td,th{border:1px solid #aaa;padding:6px 10px}`;
+export const codeStyles=`
+pre:is([data-sin-code],[data-sin-code-preview]){white-space:pre;overflow:auto;padding:18px;border:1px solid #d8dfe6;border-radius:6px;background:#fff;color:#000;font:14px/1.6 Consolas,monospace;tab-size:4}
+pre:is([data-sin-code],[data-sin-code-preview]) code{font:inherit;padding:0;background:transparent;white-space:inherit;overflow-wrap:normal}
+details[data-sin-code-display]{margin:1em 0;border:1px solid #d8dfe6;border-radius:6px;background:#fff;color:#1f2328}
+details[data-sin-code-display]>summary{cursor:pointer;padding:12px;font:14px/1.5 "Segoe UI",sans-serif;user-select:none}
+details[data-sin-code-display]>pre{margin:0;border:0;border-top:1px solid #d8dfe6;border-radius:0 0 6px 6px}
+details[data-sin-code-display] pre[data-sin-code-preview]{margin:10px 0 0;padding:0;border:0;user-select:text}
+details[data-sin-code-display][open] pre[data-sin-code-preview]{display:none}
+${sourceColors}`;
+export const editingStyles = `body{min-height:calc(100vh - 80px);outline:none}img[data-sin-selected]::selection{background:transparent}pre[data-sin-code]{cursor:pointer}a{cursor:text}::highlight(sin-search){background:#ffff72;color:#111}
+/* Keep a marker's actual color visible while highlighted text is selected. */
+:is(mark,span[style*="background-color"]:not([style*="transparent"]):not([style*="rgba(0, 0, 0, 0)"]))::selection{background:transparent;color:currentColor}`;
 
 export function normalizeIndent(code) {
   const lines = String(code).replace(/\r\n?/g, '\n').replace(/\t/g, '    ').split('\n');
@@ -15,12 +28,16 @@ export function normalizeIndent(code) {
 export function parseHtml(html) { return new DOMParser().parseFromString(html || '<!doctype html><html data-sin-style-mode="modern"><head><meta charset="utf-8"><title>Prompt</title></head><body><p><br></p></body></html>', 'text/html'); }
 export function ensureStyle(doc) {
   if (!doc.querySelector('style[data-sin-document]')) { const style = doc.createElement('style'); style.dataset.sinDocument = '1'; style.textContent = documentStyles; doc.head.append(style); }
-  if(documentStyleMode(doc)==='modern'&&!doc.querySelector('style[data-sin-theme]'))setDocumentStyle(doc,'modern');
+  let codeSheet=doc.querySelector('style[data-sin-code-styles]');
+  if(!codeSheet){codeSheet=doc.createElement('style');codeSheet.dataset.sinCodeStyles='1';doc.head.append(codeSheet);}
+  codeSheet.textContent=codeStyles;
+  if(!doc.querySelector('style[data-sin-theme]')||doc.documentElement.dataset.sinStyleMode!=='modern')setDocumentStyle(doc,'modern');
 }
 export function serialize(doc) {
   const clone = doc.documentElement.cloneNode(true);
   clone.querySelectorAll('[data-sin-runtime]').forEach(el => el.remove());
   clone.querySelectorAll('[data-sin-selected]').forEach(el => el.removeAttribute('data-sin-selected'));
+  clone.querySelectorAll('details[data-sin-code-display]').forEach(el=>el.removeAttribute('open'));
   clone.querySelector('body').removeAttribute('contenteditable');
   clone.querySelector('body').removeAttribute('spellcheck');
   return '<!DOCTYPE html>\n' + clone.outerHTML;
@@ -88,4 +105,3 @@ export function pasteSafeHtml(html) {
   doc.querySelectorAll('*').forEach(el => [...el.attributes].forEach(a => { if (/^on/i.test(a.name) || /javascript:/i.test(a.value)) el.removeAttribute(a.name); }));
   return doc.body.innerHTML;
 }
-export function codeHtml(text, language, highlighted) { return `<pre data-sin-code="${escapeHtml(language)}" contenteditable="false"><code>${highlighted || escapeHtml(text)}</code></pre>`; }

@@ -3,7 +3,7 @@ export function createImageSelection(frame,changed,onSelection){
   const overlay=document.createElement('div');overlay.className='image-selection';overlay.hidden=true;
   overlay.innerHTML=['nw','ne','se','sw'].map(corner=>`<button data-image-resize="${corner}" aria-label="Resize Image ${corner.toUpperCase()}" title="Drag to resize proportionately"></button>`).join('');
   document.body.append(overlay);
-  let image=null,gesture=null,observer=null,shield=null;
+  let image=null,gesture=null,observer=null,shield=null,draggedImage=null;
   function position(){
     if(!image?.isConnected){select(null);return;}
     const r=image.getBoundingClientRect(),f=frame.getBoundingClientRect();
@@ -25,7 +25,11 @@ export function createImageSelection(frame,changed,onSelection){
     doc.defaultView.addEventListener('scroll',()=>{if(image)position();},{passive:true});
     doc.defaultView.addEventListener('resize',()=>{if(image)position();});
     doc.addEventListener('input',()=>{if(image&&!gesture)position();});
-    doc.addEventListener('dragstart',event=>{if(event.target===image)event.preventDefault();});
+    doc.addEventListener('dragstart',event=>{draggedImage=event.target.closest('img');});
+    // Let Chromium move its original HTML, preserving storage and annotation data.
+    // An internal image drag must not enter the external dropped-file paste path.
+    doc.addEventListener('drop',event=>{if(draggedImage)event.stopImmediatePropagation();});
+    doc.addEventListener('dragend',()=>{if(draggedImage){draggedImage=null;select(null);changed();}});
   }
   overlay.addEventListener('pointerdown',event=>{
     if(event.button!==0||!image)return;

@@ -10,10 +10,12 @@ export async function clipboardCommand(doc,name,{changed,insertImage}) {
   if(name==='copy'||name==='cut'){
     if(range.collapsed)return;
     const wrapper=doc.createElement('div');wrapper.append(range.cloneContents());
+    wrapper.querySelectorAll('[data-sin-selected]').forEach(el=>el.removeAttribute('data-sin-selected'));
     Object.assign(wrapper.style,captureFormat(doc));
     const text=range.toString();
-    const html=wrapper.querySelector('img')?parseHtml(await portableHtml(wrapper.outerHTML,doc.baseURI)).body.innerHTML:wrapper.outerHTML;
-    await request('editor-copy',{html,text});
+    const hasImages=!!wrapper.querySelector('img');
+    const html=hasImages?parseHtml(await portableHtml(wrapper.outerHTML,doc.baseURI,true)).body.innerHTML:wrapper.outerHTML;
+    await request('editor-copy',{html,text,internalHtml:hasImages?wrapper.outerHTML:null});
     if(name==='copy')return;
     // Cut only after Windows accepted the copy, using the original selection.
   }else{

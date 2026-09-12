@@ -19,6 +19,7 @@ public partial class PromptExplorer : UserControl, IDisposable
     Settings settings = null!;
     Func<string, CancellationToken, Task> open = null!;
     Func<PromptEntry, string, Task> rename = null!;
+    Func<PromptEntry, Task> delete = null!;
     Action create = null!, changed = null!;
     Action<string> status = null!;
     FileSystemWatcher? watcher;
@@ -28,7 +29,7 @@ public partial class PromptExplorer : UserControl, IDisposable
     bool refreshing, disposed, changingFolder;
     string root = "";
     public bool ExplorerMode => settings.ExplorerMode;
-    internal Func<IReadOnlyList<string>> ManualOrder { get; set; } = () => [];
+    internal Func<IReadOnlyList<(string Path, string Html)>> OpenDocuments { get; set; } = () => [];
     internal IReadOnlyList<PromptEntry> Entries => roots.Select(r => (PromptEntry)r.Tag).ToArray();
 
     public PromptExplorer()
@@ -37,10 +38,10 @@ public partial class PromptExplorer : UserControl, IDisposable
         refreshTimer.Tick += async (_, _) => { refreshTimer.Stop(); await RefreshAsync(); };
     }
     internal void Initialize(Settings preferences, FrameworkElement openDocuments, string? initialFolder, Func<string, CancellationToken, Task> openFile,
-        Func<PromptEntry, string, Task> renameFile, Action newDocument, Action<string> showPath, Action saveSettings)
+        Func<PromptEntry, string, Task> renameFile, Func<PromptEntry, Task> deleteEntry, Action newDocument, Action<string> showPath, Action saveSettings)
     {
         settings = preferences; documentList = openDocuments; documentList.Margin = new Thickness(0, 40, 0, 0);
-        open = openFile; rename = renameFile; create = newDocument; status = showPath; changed = saveSettings;
+        open = openFile; rename = renameFile; delete = deleteEntry; create = newDocument; status = showPath; changed = saveSettings;
         Folders.IsChecked = settings.ExplorerShowFolders;
         root = settings.ExplorerDirectory.Length > 0 ? settings.ExplorerDirectory : initialFolder ?? "";
         SetMode(settings.ExplorerMode);
@@ -90,8 +91,10 @@ public partial class PromptExplorer : UserControl, IDisposable
         var label = new StackPanel { Orientation = Orientation.Horizontal };
         label.Children.Add(new Image { Source = icons?.GetValueOrDefault(entry.IsFolder ? 3 : entry.IsImage ? 72 : 0),
             Width = 16, Height = 16, Margin = new Thickness(0, 0, 6, 0), VerticalAlignment = VerticalAlignment.Center });
-        label.Children.Add(new TextBlock { Text = entry.Name, VerticalAlignment = VerticalAlignment.Center });
-        var row = new TreeViewItem { Tag = entry, Header = label, ToolTip = entry.Path, Padding = new Thickness(2, 5, 2, 5) };
+        var text = new TextBlock { Text = entry.Name, VerticalAlignment = VerticalAlignment.Center };
+        if (entry.IsUnused) text.Foreground = Brushes.Red;
+        label.Children.Add(text);
+        var row = new TreeViewItem { Tag = entry, Header = label, ToolTip = entry.Path + (entry.IsUnused ? "\nNot used in the parent document" : ""), Padding = new Thickness(2, 5, 2, 5) };
         System.Windows.Automation.AutomationProperties.SetName(row, entry.Name);
         if (entry.IsFolder || entry.ImageFolder != null) row.Items.Add(new TreeViewItem { Header = "Loading…", IsEnabled = false });
         row.Expanded += async (_, e) => { if (e.OriginalSource == row) { await ExpandAsync(row); e.Handled = true; } };
@@ -105,9 +108,7 @@ public partial class PromptExplorer : UserControl, IDisposable
         {
             if (FindRow(e.OriginalSource as DependencyObject) != row) return;
             e.Handled = true;
-            if (!entry.IsImage && !entry.IsHtml) return;
-            var menu = new ContextMenu(); var item = new MenuItem { Header = "Rename…", InputGestureText = "F2" };
-            item.Click += (_, _) => Rename(entry); menu.Items.Add(item); menu.PlacementTarget = row; menu.IsOpen = true;
+            var menu = CreateFileMenu(entry); menu.PlacementTarget = row; menu.IsOpen = true;
         };
         row.ContextMenu = new ContextMenu();
         return row;
@@ -147,19 +148,46 @@ public partial class PromptExplorer : UserControl, IDisposable
         finally { SetBusy(false); }
     }
     void Rename(PromptEntry entry) => Dialogs.RenameFile(Window.GetWindow(this), entry.Name, async name => { await rename(entry, name); await RefreshAsync(); });
+    internal ContextMenu CreateFileMenu(PromptEntry entry)
+    {
+        var menu = new ContextMenu();
+        void Add(string label, Action action, string shortcut = "")
+        {
+            var item = new MenuItem { Header = label, InputGestureText = shortcut };
+            item.Click += (_, _) => { try { action(); } catch (Exception ex) { Notice.Text = ex.Message; } };
+            menu.Items.Add(item);
+        }
+        if (entry.IsImage || entry.IsHtml) Add("Rename…", () => Rename(entry), "F2");
+        if (!entry.IsFolder || entry.ParentHtml != null) Add("Delete to Recycle Bin…", () => Delete(entry), "Delete");
+        if (menu.Items.Count > 0) menu.Items.Add(new Separator());
+        Add("Show in File Explorer", () => ExplorerFileOperations.ShowLocation(entry.Path, true));
+        Add("Open Containing Folder", () => ExplorerFileOperations.ShowLocation(entry.Path, false));
+        return menu;
+    }
+    async void Delete(PromptEntry entry)
+    {
+        SetBusy(true); Notice.Text = "";
+        try { await delete(entry); await RefreshAsync(); }
+        catch (OperationCanceledException) { }
+        catch (Exception ex) { MessageBox.Show(Window.GetWindow(this), ex.Message, "Delete to Recycle Bin", MessageBoxButton.OK, MessageBoxImage.Information); }
+        finally { SetBusy(false); }
+    }
     void TreeKeyDown(object sender, KeyEventArgs e)
     {
         if (e.Key == Key.F5) { e.Handled = true; QueueRefresh(); }
         if (e.Key == Key.F2 && Tree.SelectedItem is TreeViewItem { Tag: PromptEntry entry } && (entry.IsImage || entry.IsHtml)) { e.Handled = true; Rename(entry); }
+        if (e.Key == Key.Delete && Tree.SelectedItem is TreeViewItem { Tag: PromptEntry selected } && (!selected.IsFolder || selected.ParentHtml != null)) { e.Handled = true; Delete(selected); }
     }
     async void FoldersClick(object sender, RoutedEventArgs e) { settings.ExplorerShowFolders = Folders.IsChecked == true; changed(); await RefreshAsync(); }
     async void RefreshClick(object sender, RoutedEventArgs e) => await RefreshAsync();
     void Watch(object sender, FileSystemEventArgs e) => QueueRefresh();
     Task<IReadOnlyList<PromptEntry>> ReadAsync(string folder, string? parent = null)
     {
-        var order = ManualOrder(); bool folders = settings.ExplorerShowFolders; string sort = settings.DocumentSort;
-        return Task.Run(() => PromptDirectory.Read(folder, folders, sort, parent, order));
+        var documents = OpenDocuments(); bool folders = settings.ExplorerShowFolders; string sort = settings.DocumentSort;
+        var html = documents.DistinctBy(d => d.Path, StringComparer.OrdinalIgnoreCase).ToDictionary(d => d.Path, d => d.Html, StringComparer.OrdinalIgnoreCase);
+        return Task.Run(() => PromptDirectory.Read(folder, folders, sort, parent, documents.Select(d => d.Path).ToArray(), html));
     }
+    internal void QueueUsageRefresh() { if (ExplorerMode) QueueRefresh(); }
     internal void QueueRefresh()
     {
         if (disposed) return;
@@ -175,14 +203,16 @@ public partial class PromptExplorer : UserControl, IDisposable
             void Remember(IEnumerable<TreeViewItem> rows) { foreach (var row in rows) if (row.IsExpanded && row.Tag is PromptEntry item) { expanded.Add(item.Path); Remember(row.Items.Cast<TreeViewItem>()); } }
             Remember(roots);
             string? selected = (Tree.SelectedItem as TreeViewItem)?.Tag is PromptEntry selectionEntry ? selectionEntry.Path : null;
-            var order = ManualOrder(); bool folders = settings.ExplorerShowFolders; string sort = settings.DocumentSort;
+            var documents = OpenDocuments(); bool folders = settings.ExplorerShowFolders; string sort = settings.DocumentSort;
+            var order = documents.Select(d => d.Path).ToArray();
+            var html = documents.DistinctBy(d => d.Path, StringComparer.OrdinalIgnoreCase).ToDictionary(d => d.Path, d => d.Html, StringComparer.OrdinalIgnoreCase);
             // Read all expanded branches off-thread, then replace the tree in one UI update.
             var snapshot = await Task.Run(() =>
             {
                 var loaded = new Dictionary<string, IReadOnlyList<PromptEntry>>(StringComparer.OrdinalIgnoreCase);
                 void Read(string folder, string? parent)
                 {
-                    var entries = PromptDirectory.Read(folder, folders, sort, parent, order); loaded[folder] = entries;
+                    var entries = PromptDirectory.Read(folder, folders, sort, parent, order, html); loaded[folder] = entries;
                     foreach (var item in entries)
                     {
                         if (item.IsFolder && expanded.Contains(item.Path)) Read(item.Path, parent);

@@ -14,7 +14,7 @@ input[type=number]{width:76px}
 input[type=checkbox]{accent-color:var(--accent)}
 label{display:flex;align-items:center;gap:6px}
 #document{flex:1;width:100%;border:0;background:white;min-height:0}
-.image-selection{position:fixed;pointer-events:none;z-index:2}
+.image-selection{position:fixed;pointer-events:none;z-index:2;outline:2px solid #156bc1;outline-offset:1px;background:transparent}
 .image-resize-shield{position:fixed;inset:0;z-index:3;touch-action:none}
 .image-selection button{position:absolute;padding:0;min-height:0;width:10px;height:10px;border:1px solid #156bc1;background:white;border-radius:0;pointer-events:auto;transform:translate(-50%,-50%)}
 .image-selection [data-image-resize=nw]{left:0;top:0;cursor:nwse-resize}.image-selection [data-image-resize=ne]{left:100%;top:0;cursor:nesw-resize}
@@ -31,6 +31,10 @@ h2{font-size:18px;margin:0;font-weight:600}
 .dialog-content textarea{width:100%;height:330px;resize:vertical;tab-size:4;font:14px/1.55 Consolas,monospace}
 .dialog-content p{margin:0;line-height:1.6}
 .dialog-content label{justify-content:space-between}
+.dialog-content label:has(input[type=checkbox]){justify-content:flex-start}
+.dialog-content .stacked-field{display:flex;flex-direction:column;align-items:stretch;gap:6px}
+.dialog-content .stacked-field input{width:100%;min-width:0}
+.dialog-content [hidden]{display:none!important}
 .dialog-content select{min-width:180px}
 footer{display:flex;justify-content:flex-end;gap:8px;padding:14px 20px;border-top:1px solid var(--line);background:var(--soft)}
 .hint{color:#647588;font-size:12px;line-height:1.5}

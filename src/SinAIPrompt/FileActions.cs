@@ -61,6 +61,41 @@ public partial class MainWindow
         else if (entry.IsImage) await RenameExplorerImage(entry, name);
     }
 
+    internal async Task<bool> DeleteExplorerEntry(PromptEntry entry, Func<string, bool, bool>? confirm = null)
+    {
+        if (IsAnnotating) return false;
+        var windows = Application.Current.Windows.OfType<MainWindow>().ToArray();
+        foreach (var window in windows) window.fileOperationDepth++;
+        try
+        {
+            var references = OpenReferences(entry.Path);
+            foreach (var (window, doc) in references) if (window.editors.TryGetValue(doc.Id, out var view)) await view.FlushAsync();
+            confirm ??= (path, dirty) => Dialogs.DeleteFile(this, path, dirty, entry.IsFolder);
+            if (!confirm(entry.Path, references.Any(r => r.Doc.Dirty))) return false;
+            if (entry.IsFolder)
+            {
+                // Capture live HTML after the confirmation; queued browser edits must
+                // reach their document before deciding whether a folder is unused.
+                foreach (var window in windows)
+                    foreach (var view in window.editors.Values) await view.FlushAsync();
+                var documents = windows.SelectMany(w => w.Documents).Where(d => d.Path != null).Select(d => (d.Path!, d.Text)).ToArray();
+                await Task.Run(() => { ExplorerFileOperations.RequireUnusedFolder(entry, documents); ExplorerFileOperations.Recycle(entry.Path, true); });
+            }
+            else await Task.Run(() => ExplorerFileOperations.Recycle(entry.Path, false));
+            foreach (var (window, doc) in OpenReferences(entry.Path)) window.RemoveDocument(doc, fileDeleted: true);
+            foreach (var window in windows)
+            {
+                if (window.EditorHost.Content is ExplorerPreview preview && (string.Equals(preview.FilePath, entry.Path, StringComparison.OrdinalIgnoreCase) ||
+                    entry.IsFolder && preview.FilePath.StartsWith(Path.TrimEndingDirectorySeparator(entry.Path) + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase)))
+                    window.CloseExplorerPreview();
+                window.Explorer.QueueRefresh();
+            }
+            Preferences.Recent.RemoveAll(path => string.Equals(path, entry.Path, StringComparison.OrdinalIgnoreCase));
+            App.Current.MarkChanged(); return true;
+        }
+        finally { foreach (var window in windows) window.fileOperationDepth--; }
+    }
+
     void NavigationContextMenuOpening(object sender, ContextMenuEventArgs e)
     {
         e.Handled = true;
@@ -155,13 +190,7 @@ public partial class MainWindow
         finally { fileOperationDepth--; }
     }
 
-    internal static ProcessStartInfo ContainingFolderCommand(string path)
-    {
-        string folder = Path.GetDirectoryName(Path.GetFullPath(path))!;
-        if (!Directory.Exists(folder)) throw new DirectoryNotFoundException("The containing folder no longer exists.");
-        return new ProcessStartInfo(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Windows), "explorer.exe"))
-        { UseShellExecute = true, Arguments = File.Exists(path) ? $"/select,\"{path}\"" : $"\"{folder}\"" };
-    }
+    internal static ProcessStartInfo ContainingFolderCommand(string path) => ExplorerFileOperations.LocationCommand(path, true);
     static void OpenContainingFolder(string path) => Process.Start(ContainingFolderCommand(path));
     internal static string FullPathText(string path) => path.Contains(' ') ? $"\"{path}\"" : path;
     internal static string AiInstructionText(string path) => $"Read and execute the instructions in the \"{path}\" file.";
@@ -182,8 +211,7 @@ public partial class MainWindow
         {
             if (!confirm(path, references.Any(r => r.Doc.Dirty))) return false;
             if (recycle != null) recycle(path);
-            else Microsoft.VisualBasic.FileIO.FileSystem.DeleteFile(path, Microsoft.VisualBasic.FileIO.UIOption.OnlyErrorDialogs,
-                Microsoft.VisualBasic.FileIO.RecycleOption.SendToRecycleBin, Microsoft.VisualBasic.FileIO.UICancelOption.ThrowException);
+            else ExplorerFileOperations.Recycle(path, false);
             if (File.Exists(path)) throw new IOException("The file was not deleted. Its documents are still open.");
             // Another window can Save as or open this file while a modal dialog is displayed.
             // Close only references that still point at the deleted path, including newly opened ones.

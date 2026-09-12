@@ -1,5 +1,6 @@
 using System.IO;
 using System.Text;
+using System.Text.Json;
 using System.Windows;
 using System.Windows.Media.Imaging;
 
@@ -10,7 +11,9 @@ internal static class EditorClipboard
 {
     internal static DataObject? TestData { get; set; }
 
-    internal static void Copy(string html, string text)
+    const string imageFormat = "SinAIPrompt.DocumentImages.v1";
+    sealed record DocumentFragment(string Document, string Html);
+    internal static void Copy(string html, string text, string? internalHtml = null, string? documentKey = null)
     {
         const string header = "Version:1.0\r\nStartHTML:{0:D10}\r\nEndHTML:{1:D10}\r\nStartFragment:{2:D10}\r\nEndFragment:{3:D10}\r\n";
         const string prefix = "<html><head><meta charset=\"utf-8\"></head><body><!--StartFragment-->";
@@ -21,15 +24,25 @@ internal static class EditorClipboard
         int endHtml = endFragment + Encoding.UTF8.GetByteCount(suffix);
         var data = new DataObject();
         data.SetText(text, TextDataFormat.UnicodeText);
+        if (internalHtml != null && documentKey != null) data.SetData(imageFormat, JsonSerializer.Serialize(new DocumentFragment(documentKey, internalHtml)));
         data.SetData(DataFormats.Html, string.Format(header, startHtml, endHtml, startFragment, endFragment) + prefix + html + suffix);
         if (App.Current.TestMode) TestData = data;
         else Clipboard.SetDataObject(data, true);
     }
 
-    internal static async Task<object?> ReadAsync()
+    internal static async Task<object?> ReadAsync(string? documentKey = null)
     {
         var data = App.Current.TestMode ? TestData : Clipboard.GetDataObject();
         if (data == null) return null;
+        if (documentKey != null && data.GetData(imageFormat) is string internalJson)
+        {
+            try
+            {
+                var fragment = JsonSerializer.Deserialize<DocumentFragment>(internalJson);
+                if (fragment?.Document == documentKey) return new { html = fragment.Html, text = data.GetData(DataFormats.UnicodeText) as string ?? "" };
+            }
+            catch (JsonException) { }
+        }
         if (data.GetData(DataFormats.FileDrop) is string[] files && files.FirstOrDefault(path => Path.GetExtension(path).ToLowerInvariant() is ".md" or ".markdown") is { } markdown)
             return new { markdown = await File.ReadAllTextAsync(markdown), @base = new Uri(Path.GetDirectoryName(markdown)! + Path.DirectorySeparatorChar).AbsoluteUri };
         string text = data.GetData(DataFormats.UnicodeText) as string ?? "";

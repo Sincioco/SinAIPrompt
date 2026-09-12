@@ -12,13 +12,21 @@ Keep the entire `app` folder together. Its .NET runtime is included; it uses the
 - Create, open, edit, and save `.html` / `.htm` files. New documents are named Prompt 1, Prompt 2, and so on.
 - Use the toolbar to choose fonts, pixel sizes, foreground and selection background colors, bold, italic, underline, and strikethrough. Headings, lists, alignment, and links are included.
 - **View Source** opens the native HTML source editor. Return using **Visual editor**, or **View → Visual editor / View source**. `Ctrl+Shift+U` switches views.
-- **Paste Code** supports C#, HTML, JavaScript, CSS, SQL/T-SQL, TypeScript, JSON, and Java. Common leading indentation is removed while internal indentation is retained. Double-click a code block to change its code or language.
+- **Paste Code** supports C#, HTML, JavaScript, CSS, SQL/T-SQL, TypeScript, JSON, and Java. Choose full code (default), a first-lines preview, or a collapsed block with a required caption. Click a disclosure to expand it; double-click to edit. Colors follow Visual Studio 2026 Light, with IntelliJ Default for Java. Coloring is lexical, without project/compiler symbol resolution.
+- The ribbon uses Modern paragraph styles, a large Save button with New / Save As / Close, and a Tools group for Editor / Capture. The text marker starts yellow and remembers the chosen color; highlighting stays visible while the text remains selected.
+- **Link** provides a full-width address, optional name and **URL only, no thumbnail**. Available YouTube/page thumbnails are fetched when inserting, then embedded. Missing thumbnails fall back to a text link.
 - Find and replace (`Ctrl+F` / `Ctrl+H`) open the source view, where you can search the complete HTML.
 - HTML head content and script source are retained. Document scripts and inline event handlers do not run inside the editor.
 
 ## Images and annotation
 
 Pasting an image asks whether to embed a Base64 PNG or store a separate PNG. For `D:\Prompts\Example.html`, separate images go in `D:\Prompts\Example\` and use relative references. An unsaved document must be saved before creating a separate image.
+
+Separate PNGs use a SHA-256 content hash. Repeated pastes reuse the matching file,
+including a file you renamed. Cut/copy and paste within the same document preserve
+its image references and storage choices. Applying a permanent crop hashes the new
+rendered PNG; earlier image files remain available. A transparent blank annotation
+canvas exports its artwork's bounds. To trim an older saved canvas, edit and Apply it.
 
 Select an image for width/height controls and optional aspect-ratio locking. Double-click it, or choose **Annotate / Crop**, to edit its layers. **Insert an Image** opens a blank drawing canvas; paste or add images there.
 
@@ -77,6 +85,14 @@ the document area. Text, Markdown, images and PDF have read-only previews, outsi
 the open-document collection. **Return to document** or `Ctrl+W` returns to the last
 HTML editor. PDF uses the installed offline WebView2 viewer.
 
+Unused image filenames appear red, using current unsaved HTML when open. Right-click
+files for **Delete to Recycle Bin**, **Show in File Explorer** (select the item), or
+**Open Containing Folder**. Delete also works from the keyboard. A document's image
+folder can be recycled only when no existing file beneath it is referenced by the
+current parent document or another open document. Broken references do not block
+deletion. Other folders have only the location actions. Open-file deletion warns
+about unsaved edits and closes its open copies after Windows successfully recycles it.
+
 Select an image and press **F2**, or right-click **Rename**, to rename it while keeping
 its extension. Its parent HTML's local image references update on disk and in open
 editors; unsaved edits remain unsaved. Name collisions and externally changed parent
@@ -115,5 +131,5 @@ Startup registers Windows file associations in the background, streams recovery 
 
 - Application artwork: the original supplied PNG is preserved at `src/SinAIPrompt/Assets/SinAIPrompt.png`; `SinAIPrompt.ico` beside it contains transparent 16–256 pixel Windows icon sizes and is embedded in the executable and WPF window.
 - Native shell and document persistence: Sin - Notepad at `b4e1197c43935b32be53a0de19dc5a4cbe162503`.
-- Code highlighting: PMT's `wwwroot/js/shared/source-highlighting.js`, copied from the local codebase at `fbeeadd769d6785d194b48940640c35afddefa8f`.
+- Code highlighting originally followed PMT's `wwwroot/js/shared/source-highlighting.js`; its current standalone lexer uses Visual Studio 2026 Light and IntelliJ Default colors.
 - Annotation behavior and template schema: PMT Diagram 2 and its shared image-annotation implementation at that same reference commit. The focused annotation editor here excludes PMT's database features.

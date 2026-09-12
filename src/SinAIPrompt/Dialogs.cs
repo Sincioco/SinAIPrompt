@@ -101,13 +101,13 @@ public static class Dialogs
         panel.Children.Add(buttons); window.Content = panel; window.ShowDialog();
         return absolute;
     }
-    public static bool DeleteFile(Window owner, string path, bool dirty)
+    public static bool DeleteFile(Window owner, string path, bool dirty, bool folder = false)
     {
-        bool confirmed = false; var w = Create(owner, "Delete File - Sin - AI Prompt", 520);
+        bool confirmed = false; var w = Create(owner, folder ? "Delete Folder - Sin - AI Prompt" : "Delete File - Sin - AI Prompt", 520);
         var panel = new StackPanel { Margin = new Thickness(24) };
-        panel.Children.Add(new TextBlock { Text = "Move this file to the Recycle Bin?", FontSize = 20, TextWrapping = TextWrapping.Wrap });
+        panel.Children.Add(new TextBlock { Text = folder ? "Move this folder to the Recycle Bin?" : "Move this file to the Recycle Bin?", FontSize = 20, TextWrapping = TextWrapping.Wrap });
         panel.Children.Add(new TextBlock { Text = path, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 12, 0, 12) });
-        panel.Children.Add(new TextBlock { Text = "This closes every tab for this file." + (dirty ? " Unsaved changes in those tabs will be discarded." : ""), TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 0, 0, 20) });
+        panel.Children.Add(new TextBlock { Text = folder ? "The folder and its contents will be recycled only if no existing file in it is still referenced by the document." : "This closes every tab for this file." + (dirty ? " Unsaved changes in those tabs will be discarded." : ""), TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 0, 0, 20) });
         var buttons = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right };
         buttons.Children.Add(Button("Delete", () => { confirmed = true; w.Close(); }));
         buttons.Children.Add(Button("Cancel", () => w.Close(), primary: true, cancel: true)); panel.Children.Add(buttons);

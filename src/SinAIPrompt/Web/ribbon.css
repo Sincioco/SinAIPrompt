@@ -1,9 +1,9 @@
 #toolbar{flex:none;background:var(--surface);border-bottom:1px solid var(--line);padding:6px 8px 0;user-select:none}
 .ribbon-groups{display:flex;flex-wrap:wrap;gap:0;align-items:stretch}
-.file-group{width:180px}.clipboard-group{width:152px}.font-group{width:278px}.paragraph-group{width:166px}.styles-group{flex:0 1 auto;max-width:570px;min-width:150px}.editor-group{width:64px}.capture-group{width:75px}
-.file-controls{display:flex;align-items:stretch;min-height:66px;gap:2px}
-#toolbar .file-controls button,#toolbar #screenCapture{display:flex;flex-direction:column;justify-content:center;align-items:center;gap:4px;font-size:11px;flex:1}
-#toolbar .file-controls svg,#toolbar #screenCapture svg{width:27px;height:29px}
+.file-group{width:128px}.clipboard-group{width:152px}.font-group{width:278px}.paragraph-group{width:166px}.styles-group{flex:0 1 auto;max-width:570px;min-width:150px}.tools-group{width:128px}
+.tools-controls{display:flex;align-items:stretch;min-height:66px;gap:3px}
+#toolbar .tools-controls button,#toolbar #screenCapture{display:flex;flex-direction:column;justify-content:center;align-items:center;gap:4px;font-size:11px;flex:1}
+#toolbar .save-large svg,#toolbar #screenCapture svg{width:27px;height:29px}
 .ribbon-group{min-width:0;padding:3px 8px 0;border-right:1px solid var(--line);display:flex;flex-direction:column}
 .ribbon-group:last-child{border-right:0;padding-right:0}
 .group-caption{text-align:center;font-size:11px;color:var(--text);padding:5px 0 3px;margin-top:auto}
@@ -15,8 +15,8 @@
 .clipboard-controls{display:flex;align-items:stretch;gap:3px;min-height:66px}
 .clipboard-small{display:flex;flex-direction:column;justify-content:center;min-width:0}
 #toolbar .clipboard-small button{display:flex;align-items:center;gap:5px;text-align:left;font-size:11px;padding:0 2px;min-height:22px}
-#toolbar .paste-large{display:flex;flex-direction:column;align-items:center;justify-content:center;min-width:40px;gap:3px}
-#toolbar .paste-large svg{width:29px;height:31px;stroke:#806840}
+#toolbar .paste-large,#toolbar .save-large{display:flex;flex-direction:column;align-items:center;justify-content:center;min-width:40px;gap:3px}
+#toolbar .paste-large svg,#toolbar .save-large svg{width:29px;height:31px}#toolbar .paste-large svg{stroke:#806840}
 #formatPainter svg{stroke:#a86f35}
 .font-top,.font-bottom,.paragraph-row{display:flex;align-items:center;gap:2px;height:33px}
 .font-top input,.font-top select{border-radius:2px;height:25px;padding:2px 4px;min-width:0;font-size:12px}
@@ -35,9 +35,7 @@
 .style-strip{display:flex;flex:1;min-width:0;overflow:auto;scrollbar-width:none;gap:3px;scroll-snap-type:x mandatory}
 #toolbar .style-tile,.styles-popup .style-tile{flex:none;min-width:96px;min-height:55px;border:1px solid transparent;border-radius:0;padding:5px 9px;font-weight:400;background:var(--surface);color:#000;scroll-snap-align:start}
 #toolbar .style-tile[aria-pressed=true]{border-color:#949494;box-shadow:inset 0 0 0 2px #dedede;background:var(--surface);color:#000}
-.style-tile span{display:block;font-family:Aptos,"Segoe UI",Arial,sans-serif;font-size:14px;line-height:1.1;font-weight:400}
-.style-heading span,.style-heading2 span,.style-title span{font-family:"Aptos Display",Aptos,"Segoe UI",Arial,sans-serif}
-.style-heading span{font-size:24px;color:#0f4761}.style-heading2 span{font-size:21px;color:#0f4761}.style-title span{font-size:32px;letter-spacing:-.5px}
+.style-tile span{display:block;font-family:"Segoe UI",Arial,sans-serif;color:#1f2328;font-size:14px;line-height:1.1;font-weight:400}
 #toolbar #moreStyles{width:21px;flex:none;border-left:1px solid var(--line);border-radius:0;padding:0}
 .styles-popup{position:fixed;inset:auto;margin:0;padding:8px;display:grid;grid-template-columns:repeat(3,1fr);gap:5px;border:1px solid var(--line);border-radius:3px;background:var(--surface);color:var(--text);box-shadow:0 5px 18px #0003;max-width:calc(100vw - 16px)}
 .styles-popup:not(:popover-open){display:none}
@@ -47,18 +45,15 @@
 .action-divider{height:18px;width:1px;background:var(--line);margin:0 3px}
 #source{margin-left:auto}.ribbon-hint{font-size:11px;color:#5a6974;margin-left:8px}
 .ribbon-actions{flex-wrap:wrap}
-#documentStyle{height:27px;padding:2px 5px;font-size:12px}
 #toolbar #insertImage{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;flex:1;padding:3px 0;font-size:12px}
-#toolbar .editor-group{padding-left:5px}
 #toolbar .text-color .color-arrow{font-size:9px;color:var(--text)}
 #toolbar #fontColor svg{width:20px;height:20px}
 #toolbar #fontColor .color-sample{width:16px;left:6px}
 #toolbar #insertImage svg{color:#185abd;width:27px;height:27px;stroke-width:1.7}
-#toolbar[data-style-mode=modern] .style-tile span{font-family:"Segoe UI",Arial,sans-serif;color:#1f2328}
-#toolbar[data-style-mode=modern] :is(.style-heading,.style-heading2,.style-title) span{font-weight:600}
-#toolbar[data-style-mode=modern] .style-heading span{font-size:22px}
-#toolbar[data-style-mode=modern] .style-heading2 span{font-size:18px}
-#toolbar[data-style-mode=modern] .style-title span{font-size:34px}
+:is(.style-heading,.style-heading2,.style-title) span{font-weight:600}
+.style-heading span{font-size:22px}
+.style-heading2 span{font-size:18px}
+.style-title span{font-size:34px}
 #toolbar .highlight-color svg{width:20px;height:20px}
 @media(max-width:1100px){.styles-group{max-width:360px}.ribbon-hint{display:none}}
 @media(max-width:700px){.styles-group{max-width:calc(100% - 139px)}.style-gallery{height:55px}.group-caption{padding-top:2px}}

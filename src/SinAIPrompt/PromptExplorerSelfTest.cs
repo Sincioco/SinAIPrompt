@@ -59,6 +59,11 @@ internal static class PromptExplorerSelfTest
             var assetRow = (TreeViewItem)htmlRow.Items[0]; await explorer.ExpandAsync(assetRow); assetRow.IsExpanded = true;
             check(((PromptEntry)assetRow.Tag).Path == assets && ((PromptEntry)((TreeViewItem)assetRow.Items[0]).Tag).Path == imagePath,
                 "Expanding HTML reveals its indented image folder and image children");
+            check(!((PromptEntry)((TreeViewItem)assetRow.Items[0]).Tag).IsUnused, "Referenced image files are not marked unused");
+            var unusedSnapshot = PromptDirectory.Read(assets, true, "newest", parent, openHtml: new Dictionary<string, string> { [parent] = "<p>Cut image; not saved yet</p>" });
+            check(unusedSnapshot.Single().IsUnused, "Unused image detection uses current unsaved document contents");
+            var baseReferences = ImageReferences.LocalPaths($"<base href='Prompt%20%231/'><img src='image%20%231.png?v=1#test'><script>var x=\"<img src='fake.png'>\"</script>", parent);
+            check(baseReferences.SetEquals([imagePath]), "Usage detection handles encoded paths, explicit bases and suffixes while ignoring scripts");
             window.UpdateLayout(); assetRow.IsSelected = true;
             check(window.CurrentView!.PathStatus.Text == assets, "Folder navigation displays its path in the muted status bar: " + window.CurrentView.PathStatus.Text);
             await window.OpenExplorerFile(imagePath, CancellationToken.None);
@@ -114,6 +119,17 @@ internal static class PromptExplorerSelfTest
             await explorer.RefreshAsync();
             htmlRow = tree.Items.Cast<TreeViewItem>().Single(r => ((PromptEntry)r.Tag).Path == parent);
             check(htmlRow.IsExpanded && ((TreeViewItem)htmlRow.Items[0]).IsExpanded, "Explorer refresh preserves expanded branches");
+            assetRow = (TreeViewItem)htmlRow.Items[0];
+            var unusedRow = assetRow.Items.Cast<TreeViewItem>().Single(r => ((PromptEntry)r.Tag).Path == occupied);
+            check(((PromptEntry)unusedRow.Tag).IsUnused && ((StackPanel)unusedRow.Header).Children.OfType<TextBlock>().Single().Foreground == Brushes.Red,
+                "Prompt Explorer renders an unreferenced image filename in red");
+            string liveHtml = opened.Text; opened.Text = "<p>Image removed without saving</p>";
+            await explorer.RefreshAsync();
+            htmlRow = tree.Items.Cast<TreeViewItem>().Single(r => ((PromptEntry)r.Tag).Path == parent);
+            check(((TreeViewItem)htmlRow.Items[0]).Items.Cast<TreeViewItem>().All(r => ((PromptEntry)r.Tag).IsUnused),
+                "Explorer updates image usage from an unsaved open document without creating editors");
+            opened.Text = liveHtml; await explorer.RefreshAsync();
+            await FileActions(window, explorer, folder, check);
             explorer.SetMode(false);
             check(((ListBox)window.FindName("DocumentList")).IsVisible && !tree.IsVisible && window.Documents.Contains(original), "Mode toggle restores the original open Document List");
             explorer.SetMode(true); window.UpdateLayout(); await Task.Delay(100);
@@ -128,6 +144,54 @@ internal static class PromptExplorerSelfTest
             explorer.SetMode(oldMode); settings.ExplorerShowFolders = oldFolders;
             await explorer.SetFolderAsync(oldRoot); window.SetDocumentList(oldVisible);
         }
+    }
+
+    static async Task FileActions(MainWindow window, PromptExplorer explorer, string folder, Action<bool, string> check)
+    {
+        string path = Path.Combine(folder, "Recycle # fixture.html"), assets = Path.Combine(folder, "Recycle # fixture");
+        Directory.CreateDirectory(assets);
+        string image = Path.Combine(assets, "used.png"); File.Copy(Path.Combine(folder, "Prompt #1", "renamed #2.png"), image);
+        string reference = "Recycle%20%23%20fixture/used.png";
+        File.WriteAllText(path, $"<img src='{reference}'>");
+        var assetEntry = new PromptEntry(assets, true, path);
+        var items = explorer.CreateFileMenu(new(path, false)).Items.OfType<MenuItem>().Select(i => i.Header.ToString()).ToArray();
+        check(items.SequenceEqual(["Rename…", "Delete to Recycle Bin…", "Show in File Explorer", "Open Containing Folder"]), "Explorer file menu exposes rename, recycle and both Windows Explorer actions");
+        check(explorer.CreateFileMenu(assetEntry).Items.OfType<MenuItem>().Any(i => i.Header.ToString() == "Delete to Recycle Bin…") &&
+            !explorer.CreateFileMenu(new(folder, true)).Items.OfType<MenuItem>().Any(i => i.Header.ToString() == "Delete to Recycle Bin…"), "Folder deletion is offered only within a document's asset tree");
+        check(ExplorerFileOperations.LocationCommand(path, true).Arguments == $"/select,\"{path}\"" &&
+            ExplorerFileOperations.LocationCommand(path, false).Arguments == $"\"{folder}\"", "Show in Explorer selects the file; Open Containing Folder opens its parent");
+        foreach (string html in new[] { $"<img src='{reference}'>", $"<div style=\"background:url('{reference}')\"></div>", $"<a href='{reference}'>Image</a>", $"<style>p{{background:url('{reference}')}}</style>" })
+        {
+            bool blocked = false;
+            try { ExplorerFileOperations.RequireUnusedFolder(assetEntry, [(path, html)]); } catch (IOException) { blocked = true; }
+            check(blocked && File.Exists(image), "Valid image, CSS and link references block recycling the asset folder");
+        }
+        bool outside = false;
+        try { ExplorerFileOperations.RequireUnusedFolder(new(folder, true, path), [(path, "")]); } catch (IOException) { outside = true; }
+        check(outside, "Folder deletion rejects a target outside the document asset directory");
+        check(!await window.DeleteExplorerEntry(assetEntry, (_, _) => false) && Directory.Exists(assets), "Cancel leaves the folder and files intact");
+        var previous = window.ActiveDocument!;
+        window.OpenPaths([path]); var document = window.ActiveDocument!; var view = window.CurrentView!;
+        try
+        {
+            await view.ExportAsync();
+            bool blocked = false;
+            try { await window.DeleteExplorerEntry(assetEntry, (_, _) => true); } catch (IOException) { blocked = true; }
+            check(blocked && Directory.Exists(assets), "Live valid references prevent actual folder recycling");
+            await view.Browser.ExecuteScriptAsync("window.editor.command('selectAll');window.editor.command('insertHTML'," + JsonSerializer.Serialize("<p>Removed image</p><img src='Recycle%20%23%20fixture/missing.png'>") + ")");
+            check(await window.DeleteExplorerEntry(assetEntry, (_, _) => true) && !Directory.Exists(assets) && File.Exists(path),
+                "Removing the last valid live reference allows recycling the folder; broken references do not block it and parent HTML remains");
+            bool dirtyWarning = false;
+            check(!await window.DeleteExplorerEntry(new(path, false), (_, dirty) => { dirtyWarning = dirty; return false; }) && dirtyWarning && window.Documents.Contains(document),
+                "Cancelling file deletion preserves an unsaved open document and reports its dirty state");
+            check(await window.DeleteExplorerEntry(new(path, false), (_, _) => true) && !File.Exists(path) && !window.Documents.Contains(document),
+                "Confirmed Explorer deletion recycles an open file and closes its document");
+            string text = Path.Combine(folder, "recycle-preview.txt"); File.WriteAllText(text, "Preview fixture");
+            await window.OpenExplorerFile(text, CancellationToken.None);
+            check(await window.DeleteExplorerEntry(new(text, false), (_, _) => true) && !File.Exists(text) && window.CurrentView != null,
+                "Deleting a previewed file closes its preview and returns to the editor");
+        }
+        finally { window.ActiveDocument = previous; if (window.Documents.Contains(document)) window.RemoveDocument(document); }
     }
 
     static void WritePdf(string path)

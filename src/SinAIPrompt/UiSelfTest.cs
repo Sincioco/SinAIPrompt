@@ -16,6 +16,8 @@ internal static class UiSelfTest
         void Check(bool condition, string name) { if (!condition) throw new Exception(name); results.Add("PASS " + name); File.WriteAllLines(Path.Combine(folder, "ui-test-results.txt"), results); }
         try
         {
+            await LinkPreviewSelfTest.Run(Check);
+            await HtmlAssetsSelfTest.Run(folder, Check);
             string documents = Path.Combine(folder, "documents"); Directory.CreateDirectory(documents);
             var settings = new Settings { AutoSaveDirectory = documents };
             var first = DocumentFactory.Create(settings); settings.NextDocumentNumber = 1;

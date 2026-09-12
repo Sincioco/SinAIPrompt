@@ -84,8 +84,8 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         else navigation.SavedWidth = Math.Clamp(Preferences.ListWidth, 150, 650);
         if (Documents.Count == 0) NewDocument();
         SetDocumentList(Preferences.ExplorerMode || (session?.DocumentList ?? Preferences.DocumentList), false);
-        Explorer.Initialize(Preferences, DocumentList, ActiveDocument?.Path == null ? Preferences.AutoSaveDirectory : Path.GetDirectoryName(ActiveDocument.Path), OpenExplorerFile, RenameExplorerFile, () => NewDocument(), ShowExplorerPath, App.Current.MarkChanged);
-        Explorer.ManualOrder = () => Documents.Where(d => d.Path != null).Select(d => d.Path!).ToArray();
+        Explorer.Initialize(Preferences, DocumentList, ActiveDocument?.Path == null ? Preferences.AutoSaveDirectory : Path.GetDirectoryName(ActiveDocument.Path), OpenExplorerFile, RenameExplorerFile, entry => DeleteExplorerEntry(entry), () => NewDocument(), ShowExplorerPath, App.Current.MarkChanged);
+        Explorer.OpenDocuments = () => Documents.Where(d => d.Path != null).Select(d => (d.Path!, d.Text)).ToArray();
         SourceInitialized += (_, _) => ApplyTheme();
         StateChanged += (_, _) => App.Current.MarkChanged();
         SizeChanged += (_, _) => { UpdateTabWidths(); navigation.Clamp(); App.Current.MarkChanged(); };
@@ -125,7 +125,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         var view = new EditorView(doc) { HostWindow = this };
         editors[doc.Id] = view;
         view.Editor.SelectionChanged += (_, _) => { if (doc == ActiveDocument) UpdateStatus(); };
-        void ContentChanged(object? sender, EventArgs args) { if (doc.AutoSave) { pendingAutoSaves[doc.Id] = DateTime.UtcNow; autoSaveErrors.Remove(doc.Id); } if (doc == ActiveDocument) { UpdateStatus(); UpdateSearchStatus(); } }
+        void ContentChanged(object? sender, EventArgs args) { if (doc.AutoSave) { pendingAutoSaves[doc.Id] = DateTime.UtcNow; autoSaveErrors.Remove(doc.Id); } if (doc == ActiveDocument) { UpdateStatus(); UpdateSearchStatus(); } Explorer.QueueUsageRefresh(); }
         view.Editor.TextChanged += ContentChanged;
         view.HtmlChanged += ContentChanged;
         view.Editor.PreviewMouseWheel += (_, e) => { if (Keyboard.Modifiers.HasFlag(ModifierKeys.Control)) { ChangeZoom(e.Delta > 0 ? 10 : -10); e.Handled = true; } };

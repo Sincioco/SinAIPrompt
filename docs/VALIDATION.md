@@ -83,3 +83,55 @@ The tests and screenshots are generated under ignored `work` by `Test.ps1`; user
 Windows x64 only. The runtime supplied with Windows is required; the app never installs it automatically. PMT database/entity/relationship/mapping objects and rich-text canvas objects are excluded. Document scripts remain inert during editing. Annotation PNG rendering is capped at 100 megapixels to avoid memory exhaustion. Arbitrary external document assets must be available to export them; this is unrelated to the fully offline application build.
 
 No separate clean-machine VM was available. Offline packaging was checked locally with machine-runtime discovery disabled and local runtime loading verified in the .NET host trace.
+
+## Prompt 33, image identity, Explorer actions and highlight visibility (September 12)
+
+Source build and integration: `work/prompt33-tests-13.log`, isolated profile `work/smoke-6f0288d175de49adb63ddefd3f513582`.
+
+- Release build: zero compiler warnings/errors.
+- Native/browser integration passed, including actual Recycle Bin operations on disposable fixtures, cancel and unsaved-state handling, valid-reference rejection and preview closure.
+- Image reuse, renamed image reuse, overwritten content, permanent crop hashes, same-document clipboard references and selection borders passed.
+- Toolbar, Modern styles, eight-language token/source preservation, full/preview/collapsed code, required captions, edit/Undo, Markdown export, URL-only links and cancellation passed.
+- Offline HTTP fixtures cover YouTube and page metadata, PNG conversion, size limits and unavailable-thumbnail fallback. Real websites can deny previews.
+- Highlight screenshot visually inspected: selected text retains yellow; toolbar marker is yellow. Drag event checks preserve native image movement; manual pointer-drag acceptance remains with the user.
+- JavaScript syntax: 29 modules passed. Architecture: 93 handwritten files; 16 checker fixtures passed. Existing MainWindow warning reviewed at its unchanged 564-line ceiling. No exceptions or dependency additions.
+- `git diff --check` passed. `Build.ps1 -Package` assembled the offline package, and `Test.ps1 -Packaged` passed all 430 checks (`work/prompt33-packaged-tests.log`, isolated profile `work/smoke-240df23738104e7cb159d6509883f890`).
+
+Ownership and limits are recorded in `ARCHITECTURE.md`. No new feature state in bootstrap; current file-operation window integration remains documented legacy coupling. Local reference scans cover HTML attributes and inline/style CSS, not scripts or fetched external stylesheets, and do not scan unrelated unopened documents.
+
+Physical changed-file sizes (new owners have a zero baseline):
+
+| File | Before | After | Delta |
+| --- | ---: | ---: | ---: |
+| `src/SinAIPrompt.Core/ImageReferences.cs` | 0 | 51 | 51 |
+| `src/SinAIPrompt.Core/PromptDirectory.cs` | 38 | 45 | 7 |
+| `src/SinAIPrompt/Dialogs.cs` | 116 | 116 | 0 |
+| `src/SinAIPrompt/EditorClipboard.cs` | 66 | 79 | 13 |
+| `src/SinAIPrompt/ExplorerFileOperations.cs` | 0 | 49 | 49 |
+| `src/SinAIPrompt/FileActions.cs` | 196 | 224 | 28 |
+| `src/SinAIPrompt/HtmlAssets.cs` | 55 | 77 | 22 |
+| `src/SinAIPrompt/HtmlAssetsSelfTest.cs` | 0 | 38 | 38 |
+| `src/SinAIPrompt/HtmlEditorHost.cs` | 281 | 283 | 2 |
+| `src/SinAIPrompt/LinkPreview.cs` | 0 | 122 | 122 |
+| `src/SinAIPrompt/LinkPreviewSelfTest.cs` | 0 | 48 | 48 |
+| `src/SinAIPrompt/MainWindow.xaml.cs` | 564 | 564 | 0 |
+| `src/SinAIPrompt/PromptExplorer.xaml.cs` | 217 | 247 | 30 |
+| `src/SinAIPrompt/PromptExplorerSelfTest.cs` | 145 | 209 | 64 |
+| `src/SinAIPrompt/UiSelfTest.cs` | 182 | 184 | 2 |
+| `src/SinAIPrompt/Web/annotation-model.js` | 83 | 85 | 2 |
+| `src/SinAIPrompt/Web/bridge.js` | 35 | 37 | 2 |
+| `src/SinAIPrompt/Web/code-block-self-test.js` | 0 | 48 | 48 |
+| `src/SinAIPrompt/Web/code-blocks.js` | 0 | 64 | 64 |
+| `src/SinAIPrompt/Web/document-styles.js` | 61 | 45 | -16 |
+| `src/SinAIPrompt/Web/document.js` | 91 | 107 | 16 |
+| `src/SinAIPrompt/Web/editor-clipboard.js` | 32 | 34 | 2 |
+| `src/SinAIPrompt/Web/editor.css` | 83 | 87 | 4 |
+| `src/SinAIPrompt/Web/editor.js` | 179 | 168 | -11 |
+| `src/SinAIPrompt/Web/image-selection.js` | 55 | 59 | 4 |
+| `src/SinAIPrompt/Web/link-insertion.js` | 0 | 39 | 39 |
+| `src/SinAIPrompt/Web/markdown.js` | 137 | 138 | 1 |
+| `src/SinAIPrompt/Web/ribbon-self-test.js` | 132 | 131 | -1 |
+| `src/SinAIPrompt/Web/ribbon.css` | 67 | 62 | -5 |
+| `src/SinAIPrompt/Web/ribbon.js` | 142 | 139 | -3 |
+| `src/SinAIPrompt/Web/self-test.js` | 262 | 277 | 15 |
+| `src/SinAIPrompt/Web/source-highlighting.js` | 210 | 125 | -85 |

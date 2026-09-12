@@ -24,7 +24,9 @@ export function union(items) {
 }
 export function outputBounds(state) {
   const visible=state.objects.filter(o=>o.visible!==false).map(o=>bounds(o));
-  if(state.blankCanvas) visible.push({x:0,y:0,width:state.width,height:state.height});
+  // A transparent starter canvas is a workspace, not padding in the exported image.
+  if(state.blankCanvas&&(!visible.length||(state.background&&state.background!=='none')))
+    visible.push({x:0,y:0,width:state.width,height:state.height});
   return union(visible);
 }
 export function move(o,dx,dy) {

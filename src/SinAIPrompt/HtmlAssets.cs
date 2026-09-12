@@ -21,10 +21,32 @@ internal static class HtmlAssets
         string folderName = Path.GetFileNameWithoutExtension(documentPath);
         string folder = Path.Combine(Path.GetDirectoryName(documentPath)!, folderName);
         Directory.CreateDirectory(folder);
-        string name = "image-" + Guid.NewGuid().ToString("N") + ".png";
+        string hash = Core.TextFiles.Hash(bytes);
+        // Compare bytes only for plausible matches. Keep a user's renamed filename.
+        string? existing = FindPng(folder, bytes, hash);
+        if (existing != null) return Uri.EscapeDataString(folderName) + "/" + Uri.EscapeDataString(existing);
+        string name = "image-" + hash.ToLowerInvariant() + ".png";
+        if (File.Exists(Path.Combine(folder, name))) name = "image-" + Guid.NewGuid().ToString("N") + ".png";
         Core.TextFiles.AtomicWrite(Path.Combine(folder, name), bytes);
         return Uri.EscapeDataString(folderName) + "/" + name;
     }
+    public static Task<string> SavePngAsync(string documentPath, string data) => Task.Run(() => SavePng(documentPath, data));
+    static string? FindPng(string folder, byte[] bytes, string hash)
+    {
+        if (!Directory.Exists(folder)) return null;
+        foreach (var existing in new DirectoryInfo(folder).EnumerateFiles("*.png"))
+            if (existing.Length == bytes.Length && Core.TextFiles.Hash(File.ReadAllBytes(existing.FullName)) == hash) return existing.Name;
+        return null;
+    }
+    public static Task<string?> ReusePngAsync(string? documentPath, string data) => Task.Run(() =>
+    {
+        if (documentPath == null) return null;
+        string name = Path.GetFileNameWithoutExtension(documentPath), folder = Path.Combine(Path.GetDirectoryName(documentPath)!, name);
+        if (!Directory.Exists(folder)) return null;
+        var bytes = Png(Convert.FromBase64String(data[(data.IndexOf(',') + 1)..]));
+        string? existing = FindPng(folder, bytes, Core.TextFiles.Hash(bytes));
+        return existing == null ? null : Uri.EscapeDataString(name) + "/" + Uri.EscapeDataString(existing);
+    });
     public static async Task<string> ReadImageAsync(string? documentPath, string source)
     {
         if (source.StartsWith("data:image/", StringComparison.OrdinalIgnoreCase)) return source;

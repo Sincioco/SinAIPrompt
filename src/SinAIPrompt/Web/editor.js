@@ -1,11 +1,12 @@
 import {send,request,native,blobData,escapeHtml,ask,report} from './bridge.js';
-import {parseHtml,ensureStyle,editingStyles,serialize,normalizeIndent,codeHtml,toPng,portableHtml,pasteSafeHtml,renameImageFolder} from './document.js';
+import {parseHtml,ensureStyle,editingStyles,serialize,toPng,portableHtml,pasteSafeHtml,renameImageFolder} from './document.js';
 import {renameImageFile} from './asset-references.js';
 import {createDocumentSearch} from './document-search.js';
 import {attachListNumbering,toggleNumbering} from './list-numbering.js';
 import {createImageSelection} from './image-selection.js';
 import {pasteMarkdown,looksLikeMarkdown,htmlToMarkdown} from './markdown.js';
-import {prepareRichSourceHighlight,RICH_SOURCE_TEXT_TYPES} from './source-highlighting.js';
+import {editCodeBlock} from './code-blocks.js';
+import {insertLink} from './link-insertion.js';
 import {annotate} from './annotation-ui.js';
 import {id,outputBounds} from './annotation-model.js';
 import {createRibbon} from './ribbon.js';
@@ -53,7 +54,7 @@ async function load(raw,newBase=base){
     images.attach(doc);
     doc.addEventListener('selectionchange',()=>{saveSelection();syncFormatting();});doc.addEventListener('input',changed);
     doc.addEventListener('click',event=>{if(event.target.closest('a'))event.preventDefault();selectImage(event.target.closest('img'));});
-    doc.addEventListener('dblclick',event=>{const image=event.target.closest('img'),code=event.target.closest('pre[data-sin-code]');if(image){selectImage(image);openAnnotation(image).catch(report);}else if(code)pasteCode(code).catch(report);});
+    doc.addEventListener('dblclick',event=>{const image=event.target.closest('img'),code=event.target.closest('pre[data-sin-code]')||event.target.closest('details[data-sin-code-display]')?.querySelector('pre[data-sin-code]');if(image){selectImage(image);openAnnotation(image).catch(report);}else if(code)pasteCode(code).catch(report);});
     doc.addEventListener('pointerover',event=>imageStatus(event.target.closest('img')?.src||images.selected?.src||''));
     doc.addEventListener('pointerout',event=>{if(event.target.closest('img'))imageStatus(images.selected?.src||'');});
     doc.addEventListener('keydown',shortcuts);doc.addEventListener('paste',paste);
@@ -84,8 +85,14 @@ function syncFormatting(){ribbon.sync();}
 function selectImage(image){images.select(image);}
 async function storageChoice(){const answer=await ask('Store Image','<p>Choose how this image is stored with your HTML Document.</p><p><b>Inline:</b> embed the lossless PNG in the HTML file.<br><b>Separate file:</b> store a PNG in a folder named after the HTML file.</p>',[{value:'inline',label:'Inline (Base64)'},{value:'separate',label:'Separate PNG File'}]);return ['inline','separate'].includes(answer.choice)?answer.choice:null;}
 async function storeImage(png,mode){const source=mode==='separate'?await request('save-image',{data:png}):png;await loading;return source;}
-async function insertImage(source){saveSelection();const mode=await storageChoice();if(!mode)return;const png=await toPng(source),src=await storeImage(png.data,mode);restoreSelection();command('insertHTML',`<img src="${escapeHtml(src)}" data-sin-storage="${mode}" style="width:${png.width}px;max-width:100%;height:auto" alt=""><p><br></p>`);}
+async function insertImage(source){
+  saveSelection();const png=await toPng(source),existing=await request('reuse-image',{data:png.data});
+  const mode=existing?'separate':await storageChoice();if(!mode)return;
+  const src=existing||await storeImage(png.data,mode);
+  restoreSelection();command('insertHTML',`<img src="${escapeHtml(src)}" data-sin-storage="${mode}" style="width:${png.width}px;max-width:100%;height:auto" alt=""><p><br></p>`);
+}
 async function paste(event){
+  if(native&&event.isTrusted){event.preventDefault();await clipboardCommand(doc,'paste',{changed,insertImage}).catch(report);return;}
   const files=[...event.clipboardData.files],text=event.clipboardData.getData('text/plain');
   if(files.some(file=>/\.(md|markdown)$/i.test(file.name))){event.preventDefault();await clipboardCommand(doc,'paste',{changed,insertImage}).catch(report);return;}
   if(!doc.body.textContent.trim()&&!doc.body.querySelector('img,pre,table')&&looksLikeMarkdown(text)){
@@ -96,26 +103,7 @@ async function paste(event){
   const markup=event.clipboardData.getData('text/html');
   if(markup){event.preventDefault();command('insertHTML',pasteSafeHtml(markup));}
 }
-async function pasteCode(existing=null){
-  saveSelection();const value=existing?.textContent||'',language=existing?.dataset.sinCode||'csharp';
-  const options=RICH_SOURCE_TEXT_TYPES.filter(t=>t.value).map(t=>`<option value="${t.value}" ${t.value===language?'selected':''}>${escapeHtml(t.value==='tsql'?'SQL / T-SQL':t.label)}</option>`).join('');
-  const answer=await ask(existing?'Edit Code Block':'Paste Code',`<label>Language <select name="language">${options}</select></label><textarea name="code" aria-label="Code" spellcheck="false" autofocus>${escapeHtml(value)}</textarea><p class="hint">Common indentation is trimmed; indentation inside the code is preserved. Double-click the rendered block to edit it again.</p>`,[{value:'ok',label:existing?'Update Code':'Insert Code'}]);
-  if(answer.choice!=='ok')return;
-  const text=normalizeIndent(answer.values.code),highlight=prepareRichSourceHighlight(text,answer.values.language);
-  const previousBlocks=new Set(doc.querySelectorAll('pre[data-sin-code]'));
-  const previousIndex=existing?[...previousBlocks].indexOf(existing):-1;
-  if(existing){restoreSelection();const range=doc.createRange();range.selectNode(existing);const s=doc.getSelection();s.removeAllRanges();s.addRange(range);selection=range;}
-  command('insertHTML',codeHtml(text,answer.values.language,highlight.html)+(existing?'':'<p><br></p>'));
-  const afterBlocks=[...doc.querySelectorAll('pre[data-sin-code]')];
-  const inserted=previousIndex>=0?afterBlocks[previousIndex]:afterBlocks.find(block=>!previousBlocks.has(block));
-  if(inserted){
-    let next=inserted.nextElementSibling;
-    if(!next||next.tagName!=='P'){next=doc.createElement('p');next.innerHTML='<br>';inserted.after(next);}
-    const range=doc.createRange();range.selectNodeContents(next);range.collapse(true);
-    const current=doc.getSelection();current.removeAllRanges();current.addRange(range);saveSelection();
-  }
-  if(highlight.error)report(highlight.error);
-}
+function pasteCode(existing=null){return editCodeBlock(existing,{getDocument:()=>doc,saveSelection,restoreSelection,command});}
 async function openAnnotation(image=null,capturedSource=null){
   saveSelection();let mode=image?.dataset.sinStorage||(image?(/^data:/.test(image.getAttribute('src'))?'inline':'separate'):null);
   let state;
@@ -136,6 +124,7 @@ async function openAnnotation(image=null,capturedSource=null){
 }
 function shortcuts(event){
   const ctrl=event.ctrlKey||event.metaKey,key=event.key.toLowerCase();let action=null;
+  if(native&&ctrl&&!event.shiftKey&&['c','x'].includes(key)){event.preventDefault();saveSelection();command(key==='c'?'copy':'cut');return;}
   if(ctrl){const map={s:event.shiftKey?'saveAs':'save',n:'new',t:'new',o:'open',w:'close',f:'find',h:'replace',d:'longDate',l:'separator',tab:event.shiftKey?'previous':'next','+':'zoomIn','=':'zoomIn','-':'zoomOut','0':'zoomReset'};action=map[key];if(key==='l'&&event.shiftKey)action='documentList';if(key==='u'&&event.shiftKey){event.preventDefault();send('source');return;}}
   if(event.key==='F5')action='date';
   if(event.key==='F3')action=event.shiftKey?'findPrevious':'findNext';
@@ -154,7 +143,7 @@ $('#toolbar').addEventListener('click',event=>{
   if(action)send('command',{command:action,html:html(true)});
 });
 $('#source').onclick=async()=>{if(native){send('source');return;}const answer=await ask('HTML Source',`<textarea name="source" aria-label="HTML Source" spellcheck="false">${escapeHtml(html())}</textarea>`);if(answer.choice==='ok'){await load(answer.values.source);changed();}};
-$('#link').onclick=async()=>{saveSelection();const answer=await ask('Insert Link','<label>Address <input name="url" type="url" required placeholder="https://…"></label>');if(answer.choice==='ok')command('createLink',answer.values.url);};
+$('#link').onclick=()=>insertLink({getDocument:()=>doc,saveSelection,command}).catch(report);
 $('#notice').onclick=()=>$('#notice').hidden=true;
 window.editor={load,html,setBase,focus,command,insertImage,openAnnotation,pasteCode,renameImageFolder,ready:()=>loading,
   renameImageFile,

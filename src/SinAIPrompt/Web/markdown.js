@@ -100,6 +100,7 @@ export async function htmlToMarkdown(doc,saveImage){
     if(node.nodeType===3)return escape(node.data.replace(/\s+/g,' '));
     if(node.nodeType!==1||node.matches('script,style,noscript,[data-sin-runtime]'))return '';
     const tag=node.tagName,content=()=>children(node);
+    if(node.matches('details[data-sin-code-display]'))return write(node.querySelector('pre[data-sin-code]'));
     const heading=/^H([1-6])$/.exec(tag)?.[1]??({heading:1,heading2:2,title:1}[node.dataset.sinStyle]);
     if(heading)return '\n\n'+'#'.repeat(Number(heading))+' '+content().trim()+'\n\n';
     if(tag==='PRE'){

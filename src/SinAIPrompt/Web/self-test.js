@@ -6,6 +6,7 @@ import {request} from './bridge.js';
 import {runRibbonTests} from './ribbon-self-test.js';
 import {runDocumentToolsTests} from './document-tools-self-test.js';
 import {runNumberingTests} from './numbering-self-test.js';
+import {runCodeBlockTests} from './code-block-self-test.js';
 
 export async function run(){
   const results=[];const check=(value,name)=>{if(!value)throw Error(name);results.push(name);};
@@ -19,6 +20,7 @@ export async function run(){
   await window.editor.ready();
   await runDocumentToolsTests(check);
   await runNumberingTests(check);
+  await runCodeBlockTests(check);
   check(doc().body.isContentEditable,'Visual HTML is editable');
   const renamed=parseHtml(renameImageFolder('<p>Old folder/photo.png</p><img src="./Old%20folder/photo.png?size=1#preview"><img src="https://example.invalid/Old%20folder/photo.png"><img src="Other/photo.png">','Old folder','New # folder'));
   check(renamed.images[0].getAttribute('src')==='New%20%23%20folder/photo.png?size=1#preview'&&renamed.images[1].getAttribute('src').startsWith('https://example.invalid/')&&renamed.images[2].getAttribute('src')==='Other/photo.png'&&renamed.querySelector('p').textContent==='Old folder/photo.png','Folder rename updates encoded local image references without replacing other text or URLs');
@@ -45,6 +47,17 @@ export async function run(){
   const insertion=window.editor.insertImage(png);await waitFor('dialog button[value=separate]');click('dialog button[value=separate]');await insertion;
   const image=doc().querySelector('img');check(image&&image.getAttribute('src').includes('/image-'),'Image storage dialog creates separate PNG reference');
   await image.decode();check(image.naturalWidth===360,'Separate PNG is visible immediately after saving the prompt');
+  const dragData=new DataTransfer(),dragStart=new DragEvent('dragstart',{bubbles:true,cancelable:true,dataTransfer:dragData});
+  image.click();image.dispatchEvent(dragStart);
+  const imageDrop=new DragEvent('drop',{bubbles:true,cancelable:true,dataTransfer:dragData});doc().body.dispatchEvent(imageDrop);
+  check(!dragStart.defaultPrevented&&!imageDrop.defaultPrevented&&!document.querySelector('dialog[open]'),'An internal image drag keeps Chromium native move behavior without asking for storage');
+  image.dispatchEvent(new DragEvent('dragend',{bubbles:true,dataTransfer:dragData}));
+  const afterDrag=doc().createRange();afterDrag.selectNodeContents(doc().body);afterDrag.collapse(false);doc().getSelection().removeAllRanges();doc().getSelection().addRange(afterDrag);
+  await window.editor.insertImage(png);
+  check(doc().images.length===2&&doc().images[1].getAttribute('src')===image.getAttribute('src')&&!document.querySelector('dialog[open]'),'Pasting the same image reuses its file without another storage prompt');
+  doc().images[1].click();await delay(40);await window.editor.command('cut');await window.editor.command('paste');
+  check(doc().images.length===2&&doc().images[1].getAttribute('src')===image.getAttribute('src')&&doc().images[1].dataset.sinStorage==='separate'&&!document.querySelector('dialog[open]'),'Cut and paste within a document retains its separate image reference without a storage prompt');
+  doc().images[1].click();await delay(40);window.editor.command('delete');
   image.dispatchEvent(new PointerEvent('pointerover',{bubbles:true}));
   const imagePath=await request('test-path-status');
   check(imagePath.endsWith(decodeURIComponent(image.getAttribute('src')).replaceAll('/','\\')),'Hovering an image displays its decoded local file path in the status bar');
@@ -216,6 +229,8 @@ export async function run(){
   const croppedLayer=document.querySelector('#canvas image'),bakedPixels=croppedLayer.getAttribute('href');
   const bakedImage=new Image();bakedImage.src=bakedPixels;await bakedImage.decode();
   check(bakedPixels!==originalPixels&&bakedImage.naturalWidth===340&&bakedImage.naturalHeight===170&&Number(croppedLayer.getAttribute('x'))===20,'Permanently Apply Crop replaces source pixels with the cropped image and preserves its canvas position');
+  const originalAsset=await request('save-image',{data:originalPixels}),croppedAsset=await request('save-image',{data:bakedPixels});
+  check(croppedAsset!==originalAsset&&await request('reuse-image',{data:bakedPixels})===croppedAsset&&await request('reuse-image',{data:originalPixels})===originalAsset,'Permanent cropping calculates a new image hash and independently reuses the original and cropped files');
   const laterCrop=document.querySelector('[data-crop-value=left]');laterCrop.value='5';laterCrop.dispatchEvent(new Event('change',{bubbles:true}));
   click('[data-action=resetAllCrops]');
   check([...document.querySelectorAll('[data-crop-value],[data-radius]')].every(el=>Number(el.value)===0)&&document.querySelector('#canvas image').getAttribute('href')===bakedPixels,'Reset All Crops removes reversible changes while keeping permanently applied pixels');

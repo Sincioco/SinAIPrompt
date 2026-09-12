@@ -15,7 +15,7 @@ Paths below are relative to `src/`; unqualified native filenames are under
 | Documents and window UI | `SinAIPrompt/MainWindow.xaml.cs`: document list, active document, lazy editor instances, autosave queues and navigation state | Calls Core, `EditorView`, search pane and document ordering. Native navigation, 100-document startup, save/conflict checks. |
 | Find/Replace | `SearchBar.xaml/.cs` owns the left Find pane, query/options/debounce/status and virtualized result list; `EditorSearch.cs` adapts one editor; `Web/document-search.js` owns visible text mapping, excerpts, highlights and smooth match navigation, with a disposable `search-worker.js` matcher; Core `SearchEngine.cs` owns source-text matching | No search operation switches view modes. Explicit editor callbacks and request/result values; no window reference in search UI/model. Browser highlights never enter saved HTML. Source behavior passed before extraction; visual/native checks cover regex, timeouts, inline formatting, replacement and Ctrl+F. |
 | Document order | `DocumentOrder.cs` owns sorting subscriptions and cached metadata loading; each `Document` persists pin/created/modified values and Settings persists sort mode | Reorders existing models without editor creation. Missing legacy timestamps load on a worker after window construction. A narrow callback restores selection after moves. Native order/persistence and 100-document lazy-loading checks. |
-| Prompt Explorer | `PromptExplorer.xaml/.cs` owns the working folder, loaded branches, selection cancellation, folder visibility and debounced filesystem refresh; Core `PromptDirectory.cs` reads one directory's metadata | Explicit open/rename/new/path callbacks and a snapshot of manually ordered paths. Enumeration runs on workers, never creates editors, and omits hidden/system/reparse entries. Existing Document List remains its own collection/control. Native checks cover filtering, grouping, order, navigation and mode switching. |
+| Prompt Explorer | `PromptExplorer.xaml/.cs` owns the working folder, loaded branches, selection cancellation, folder visibility and debounced refresh; Core `PromptDirectory.cs` reads directory metadata, using `ImageReferences.cs` for local references | Explicit open/rename/delete/new/path callbacks and immutable path/HTML snapshots. Enumeration and usage checks run on workers and never create editors. `ExplorerFileOperations.cs` owns Windows location commands, recycle calls and folder eligibility; the existing FileActions integration flushes editors and pauses autosave. Native checks cover live usage colors, valid-reference rejection, recycle/cancel, previews and navigation. |
 | Navigation layout and file previews | `NavigationLayout.cs` owns pane visibility/width; `ExplorerPreview.cs` owns one disposable, read-only image/text/PDF preview; `ExplorerIcons.cs` caches three frozen Windows Shell stock icons | Layout extracted under passing existing navigation/startup checks. Previews are outside the document/save/recovery collection; the existing host delegates selection and preserves its last active document. PDF uses installed WebView2 with scripts, external requests and downloads disabled. No new window reference or application dependency in these owners. |
 | Image-file rename | `ImageFileRename.cs` owns destination validation and the file/parent-save transaction; `Web/asset-references.js` rewrites matching local image sources relative to the explicit parent HTML | Existing `HtmlFileRename.cs` coordinates open copies, paused autosaves and conflicts; `HtmlEditorHost.cs` is the parser/live-editor adapter. Checks cover encoded/absolute/base-relative URLs, unsaved edits, collision rejection and rollback. No parent editor is created for an unopened file. |
 | Markdown and list numbering | `Web/markdown.js` owns safe Markdown conversion and empty-document paste; `list-numbering.js` owns current-list operations. `EditorClipboard` reads file/text clipboard data and `MarkdownExport.cs` coordinates one editor's existing asset export path | No libraries or runtime downloads. Browser checks cover common structures, nested numbering and Undo; native checks paste a real local Markdown file and export independent PNG assets. |
@@ -25,7 +25,9 @@ Paths below are relative to `src/`; unqualified native filenames are under
 | Platform services | `HtmlAssets.cs`, `AnnotationClipboard.cs`, `FileAssociations.cs`, `StorageLocation.cs`; `Dialogs.cs` builds native dialogs | Narrow Windows/file operations. Clipboard, PNG, storage and native dialog tests. |
 | Screen capture | `ScreenCapture.cs` owns Win32 monitor/window enumeration and physical-pixel capture; each `ScreenCaptureDialog` owns its picker, cancellable countdown and window restoration; `CaptureRegionWindow` owns selection over one frozen bitmap | The host passes only its owner window and receives an in-memory PNG. Capture/encoding run on workers; the browser reuses annotation and image storage. `ScreenCaptureSelfTest` covers actual window pixels, picker initialization, cursor option, delay, cancellation, scaling and negative coordinates. |
 | Browser editor | `SinAIPrompt/Web/editor.js`: live document, caret/selection, pending synchronization and exports | Uses `document.js`, annotation UI, highlighting, and bridge. Browser integration suite. |
-| Document styling and formatting | `Web/document-styles.js` owns Office/Modern presets and CSS; the HTML root owns its persisted style mode. `ribbon.js` owns gallery/painter UI state; `word-styles.js` owns paragraph operations; `text-formatting.js` owns a document's pending insertion font | Editor supplies document/selection/change callbacks. `ribbon-self-test.js` covers paragraph scope, spacing, fonts, undo, Enter, mode persistence, painter and clipboard. No imports back into the editor. |
+| Document styling and formatting | `Web/document-styles.js` owns Modern presets and CSS. `ribbon.js` owns gallery/painter and marker color state; `word-styles.js` owns paragraph operations; `text-formatting.js` owns a document's pending insertion font | Editor supplies document/selection/change callbacks. `ribbon-self-test.js` covers paragraph scope, spacing, fonts, undo, Enter, painter, clipboard and selected highlight visibility. No imports back into the editor. |
+| Code and link insertion | `Web/code-blocks.js` owns the temporary code form and full/preview/collapsed markup; `link-insertion.js` owns one insert-link form. `LinkPreview.cs` owns bounded asynchronous HTTP metadata/image reads and PNG conversion | Narrow document/command callbacks, no imports back to editor. `source-highlighting.js` remains a pure lexical formatter. Browser checks cover code modes, persistence, Undo, escaping and link cancellation; offline native HTTP fixtures validate preview extraction and fallback. |
+| Image content identity | `HtmlAssets.cs` hashes normalized PNG bytes on a worker, reusing matching assets without a persistent index. `EditorClipboard.cs` owns Windows clipboard formats; custom fragments carry document identity and original image references | Current image bytes determine the hash after crop/annotation. Standard clipboard HTML remains portable with embedded images. Native/browser checks cover reuse, renamed files, replaced content, crop hashes and same-document cut/paste. No shared mutable hash cache or new startup scan. |
 | Color palettes | `Web/color-picker.js` owns each temporary popup; callers own color values. `annotation-colors.js` adapts existing inspector values/events | Annotation retains scene/history ownership. Native color inputs replaced without moving annotation state. Browser palette/transparency checks. |
 | Annotation crops | `Web/annotation-crop.js` owns crop controls, inset/radius calculations and baking one image layer; `annotation-ui.js` retains scene, selection and undo history | Explicit object arguments; no import back into the UI or editor. Existing crop behavior passed before extraction; browser checks cover synchronized/independent radii, reset, baked pixels, positioning and undo. |
 | Settings and editor chrome | `SettingsDialog.cs` owns tabbed settings controls; `Settings.ShowToolbar` persists visibility. `ToolbarVisibility` filters blank-menu double clicks with an explicit settings object and apply callback. `EditorPathStatus` owns one editor's hovered/selected image source and displayed path | The native host binds the status text and receives image-status messages. Browser/native checks cover settings save, toolbar visibility, local image paths and document fallback. No new state in MainWindow. |
@@ -127,16 +129,13 @@ state, application entry-point logic, or dependency is introduced. The Editor
 button reuses the existing selected-image/blank annotation entry point. New blank
 canvases ask for image storage when applied, so opening the editor is immediate.
 
-Preset data was separated from paragraph operations into `document-styles.js`
-when adding Modern. New blank documents use Modern; existing HTML without a mode
-keeps the prior Office defaults. Switching modes updates the document stylesheet
-and known paragraph presets without recreating the editor or rewriting its body.
-Saved/exported HTML carries the selected mode and CSS, with no reference to the
-supplied sample's path. Modern matches the supplied Segoe UI, 16px text, 1.65 line
-spacing, heading dividers, and paragraph/list spacing. Arbitrary imported HTML
-can still have its own CSS or character formatting. The document-wide mode is
-reversed using the style selector; native Undo remains for paragraph/content
-edits, not stylesheet changes. Extending that history is outside this iteration.
+Preset data lives in `document-styles.js`. The 17:06 request removes the Office
+choice and uses Modern for new and existing documents; known style presets migrate
+when loaded. Saved/exported HTML includes its CSS without a reference to the sample.
+Modern uses Segoe UI, 16px text, 1.65 line spacing, heading dividers and paragraph/list
+spacing. Arbitrary imported CSS and character formatting can still override it.
+Paragraph/content changes retain native Undo; stylesheet initialization does not
+create a document-wide Undo operation.
 
 The Insert Link regression is fixed in the shared form dialog: Cancel bypasses
 constraint validation, while Apply still validates the address. Its browser
@@ -283,6 +282,30 @@ latency, with metadata work and the progress indicator separate from editing.
 The numbering test's fixed 20 ms dialog delay occasionally expired before the
 close handler applied its operation under load. Its helper now waits for the actual
 dialog close event before checking results; numbering implementation is unchanged.
+
+## Prompt 33 and image/file workflow additions
+
+The existing editor orchestrator delegates code and link dialogs to focused owners.
+Expandable code uses native HTML details/summary and saves the full source once;
+preview text is omitted from Markdown export. Large snippets retain a plain-text
+fallback. The lexer cannot reproduce compiler/project-specific symbol coloring.
+Palette values were compared with the running Visual Studio 2026 Light editors
+and installed color definitions; Java uses IntelliJ Default.
+
+Image identity belongs to the asset writer, so permanent crops and annotation
+updates cannot retain a stale hash. The clipboard holds the same-document fragment;
+there is no application-wide fragment cache. Unused-file checks parse local image,
+source-set, link and inline/style-sheet URL references in supplied HTML; they do not
+execute scripts or fetch linked stylesheets. Folder deletion checks current parent
+HTML (disk only if unopened) and other open documents. Unopened unrelated documents
+are outside this document-owned folder workflow. Shell recycling preserves a folder
+as a unit; no permanent deletion fallback exists. Full paths must stay within the
+parent's asset directory, and linked ancestor folders are rejected.
+
+The existing window file-operation integration pauses autosaves, flushes affected
+editors and closes deleted document/preview views. Native filesystem and reference
+algorithms live outside MainWindow. Its reviewed 564-line baseline is unchanged;
+no guardrail exceptions, new dependencies, cycles or entry-point feature state.
 
 ## Template adoption
 
