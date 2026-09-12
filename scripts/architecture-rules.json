@@ -1,0 +1,17 @@
+{
+  "version": 1,
+  "entryFiles": ["src/SinAIPrompt/App.xaml.cs"],
+  "limits": {
+    "entry": { "warning": 200, "maximum": 300 },
+    "module": { "warning": 500, "maximum": 800 }
+  },
+  "legacy": [
+    {
+      "id": "main-window-ui",
+      "path": "src/SinAIPrompt/MainWindow.xaml.cs",
+      "maximum": 616,
+      "reason": "Existing window UI, document lifecycle, commands, and search share state. This is legacy debt, not an approved model for new modules.",
+      "nextReview": "Before the next substantive change here, extract only the affected responsibility with behavior coverage; carry this record across renames and lower the baseline after reviewed reductions."
+    }
+  ]
+}

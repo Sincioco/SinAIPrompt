@@ -2,6 +2,16 @@
 
 Validated on September 12, 2026 using the local Windows / Visual Studio 2026 installation.
 
+## Architecture guardrail adoption
+
+- Ingested the five local generic guardrail templates and adapted the shared policy, existing-project workflow, and routine reminder. No application feature or source refactor was performed.
+- `scripts/Test-Architecture.ps1` owns measurements and declared dependency checks; its JSON owns the reviewed limits. Build and test entry points invoke the check. The checker is 95 lines, its isolated fixture suite 84, and its rules 17; `Build.ps1` grew by one line and `Test.ps1` by two. Application source growth is zero.
+- Added the module/state map and review triggers in `docs/ARCHITECTURE.md` (186 lines). Moved the existing full policy there and shortened repository `AGENTS.md` from 100 to 44 lines while retaining a required link. General preferences remain in the Codex home; project budgets remain in the repository.
+- The checker passed against 37 handwritten files, retaining one explicit legacy warning: `MainWindow.xaml.cs` is 616 lines and cannot grow above that baseline. No new growth exception, dependency, runtime feature, or CI service was introduced.
+- All 16 checker cases passed, including warning/hard boundaries, legacy growth/reduction/rename handling, narrow output exclusions, new source directories, and Core dependency failures (including MSBuild XML namespaces).
+- `Build.ps1 -Package` succeeded offline with zero compiler warnings/errors; `Test.ps1 -Packaged` passed the 16 guardrail cases plus 125 native/browser checks under `work/smoke-956ea3a5884a4e108db9c0b6b360f798`. The four changed/new PowerShell scripts and all nine browser JavaScript modules passed syntax checks; `git diff --check` passed.
+- Ownership/cohesion, dense-function complexity, semantic dependency cycles, imported MSBuild properties, and future rule changes remain manual review items. The recorded warning and structural debt are not resolved by passing the gate. See the architecture map for bounded future triggers.
+
 ## Full-area annotation, clipboard, and startup
 
 - Release build and `Build.ps1 -Package` completed with zero warnings/errors. The packaged native/browser suite passed 125 checks in `work/smoke-11c8686fbcf143e29f1690ad83d611ad`; all nine JavaScript modules passed syntax checks and `git diff --check` passed.

@@ -2,6 +2,8 @@ param([switch]$Packaged)
 $ErrorActionPreference = 'Stop'
 Push-Location $PSScriptRoot
 try {
+    & (Join-Path $PSScriptRoot 'scripts\Test-Architecture.Tests.ps1')
+    if ($Packaged) { & (Join-Path $PSScriptRoot 'scripts\Test-Architecture.ps1') }
     if (!$Packaged) { & .\Build.ps1 }
     $exe = if ($Packaged) { Join-Path $PSScriptRoot 'app\Sin - AI Prompt.exe' } else { Join-Path $PSScriptRoot 'src\SinAIPrompt\bin\Release\net10.0-windows\Sin - AI Prompt.exe' }
     $testData = Join-Path $PSScriptRoot ('work\smoke-' + [Guid]::NewGuid().ToString('N'))

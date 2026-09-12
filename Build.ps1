@@ -2,6 +2,7 @@ param([switch]$Package, [string]$VisualStudioWebViewPath)
 $ErrorActionPreference = 'Stop'
 Push-Location $PSScriptRoot
 try {
+    & (Join-Path $PSScriptRoot 'scripts\Test-Architecture.ps1')
     if (!$VisualStudioWebViewPath) {
         $vswhere = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio\Installer\vswhere.exe'
         if (Test-Path -LiteralPath $vswhere) {

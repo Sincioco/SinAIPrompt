@@ -81,6 +81,8 @@ The editor uses two WebView2 virtual host names mapped to local folders. These a
 
 `Test.ps1` uses the real WPF app and Windows WebView2, including native browser input for drag checks. There is no Playwright, Selenium, npm, or test-library dependency. Tests use isolated profiles under ignored `work` and avoid normal settings and documents. See [validation](docs/VALIDATION.md).
 
+Architecture checks run through both build and test entry points. Run `scripts\Test-Architecture.ps1 -Report` for file sizes and `scripts\Test-Architecture.Tests.ps1` for the checker's pass/fail fixtures. See the [module map, enforced limits, and growth triggers](docs/ARCHITECTURE.md); existing architectural debt remains visible even when checks pass.
+
 After code, CSS, or image changes, rebuild/package and restart the desktop application. Browser Ctrl+F5 is not required; the app loads its bundled local files at startup.
 
 Startup registers Windows file associations in the background, streams recovery JSON without an extra full-file text copy, and creates only the last active editor. Other documents remain in the list; their editors and saved files load when first selected. Hidden source editors are populated when you switch to HTML source.
