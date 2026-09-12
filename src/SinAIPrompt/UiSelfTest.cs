@@ -95,6 +95,7 @@ internal static class UiSelfTest
             Check(await window.SaveDocument(first), "Save after source edits succeeds");
             await DocumentCommandSelfTest.DuplicateAndRevert(window, Check);
             await DocumentWorkflowSelfTest.Run(window, Check);
+            await PromptExplorerSelfTest.Run(window, Check);
             string saved = File.ReadAllText(first.Path!); File.AppendAllText(first.Path!, "<!-- external -->");
             bool conflict = false;try { TextFiles.Save(first, first.Path!); } catch (IOException) { conflict = true; }
             Check(conflict, "External file conflict prevents silent overwrite");

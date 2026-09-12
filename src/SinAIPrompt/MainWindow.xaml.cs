@@ -30,10 +30,11 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         get => activeDocument;
         set
         {
-            if (value == null || value == activeDocument || IsAnnotating || documentOrder?.IsSorting == true || !Documents.Contains(value)) return;
+            if (value == null || (value == activeDocument && EditorHost.Content is EditorView) || IsAnnotating || documentOrder?.IsSorting == true || !Documents.Contains(value)) return;
             activeDocument = value;
             if (EditorHost != null)
             {
+                if (EditorHost.Content is ExplorerPreview preview) preview.Dispose();
                 EditorHost.Content = GetEditor(value);
                 ExternalNotice.Visibility = Visibility.Collapsed;
                 UpdateStatus(); UpdateSearchStatus();
@@ -44,11 +45,11 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             App.Current.MarkChanged();
         }
     }
-    public EditorView? CurrentView => ActiveDocument == null ? null : editors.GetValueOrDefault(ActiveDocument.Id);
+    public EditorView? CurrentView => (IsAnnotating ? AnnotationHost.Content : EditorHost.Content) as EditorView;
     internal int CreatedEditorCount => editors.Count;
     public TextBox? Editor => CurrentView?.Editor;
-    public bool IsDocumentList { get; private set; }
-    double savedListWidth = 250;
+    public bool IsDocumentList => navigation.Visible;
+    readonly NavigationLayout navigation;
     Point dragOrigin;
     Document? dragDocument;
     bool dragging;
@@ -62,12 +63,13 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     public MainWindow(WindowSession? session = null)
     {
         InitializeComponent(); DataContext = this; SearchPanel.GetEditor = () => CurrentView;
+        navigation = new(Workspace, DocumentPane, DocumentSplitter, HorizontalNavigation, TabRow, ListColumn, SplitterColumn, Preferences, App.Current.MarkChanged);
         documentOrder = new(Documents, Preferences, Dispatcher, App.Current.MarkChanged, () => PropertyChanged?.Invoke(this, new(nameof(ActiveDocument))));
         if (session != null)
         {
             Width = Math.Clamp(session.Width, MinWidth, Math.Max(MinWidth, SystemParameters.WorkArea.Width));
             Height = Math.Clamp(session.Height, MinHeight, Math.Max(MinHeight, SystemParameters.WorkArea.Height));
-            savedListWidth = Math.Clamp(session.ListWidth, 150, 650);
+            navigation.SavedWidth = Math.Clamp(session.ListWidth, 150, 650);
             foreach (var doc in session.Documents)
             {
                 if (Documents.Any(d => d.Id == doc.Id)) doc.Id = Guid.NewGuid();
@@ -79,16 +81,18 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             if (Documents.Count > 0) ActiveDocument = Documents[Math.Clamp(session.ActiveIndex, 0, Documents.Count - 1)];
             if (session.Maximized) WindowState = WindowState.Maximized;
         }
-        else savedListWidth = Math.Clamp(Preferences.ListWidth, 150, 650);
+        else navigation.SavedWidth = Math.Clamp(Preferences.ListWidth, 150, 650);
         if (Documents.Count == 0) NewDocument();
-        SetDocumentList(session?.DocumentList ?? Preferences.DocumentList, false);
+        SetDocumentList(Preferences.ExplorerMode || (session?.DocumentList ?? Preferences.DocumentList), false);
+        Explorer.Initialize(Preferences, DocumentList, ActiveDocument?.Path == null ? Preferences.AutoSaveDirectory : Path.GetDirectoryName(ActiveDocument.Path), OpenExplorerFile, RenameExplorerFile, () => NewDocument(), ShowExplorerPath, App.Current.MarkChanged);
+        Explorer.ManualOrder = () => Documents.Where(d => d.Path != null).Select(d => d.Path!).ToArray();
         SourceInitialized += (_, _) => ApplyTheme();
         StateChanged += (_, _) => App.Current.MarkChanged();
-        SizeChanged += (_, _) => { UpdateTabWidths(); ClampSidebar(); App.Current.MarkChanged(); };
+        SizeChanged += (_, _) => { UpdateTabWidths(); navigation.Clamp(); App.Current.MarkChanged(); };
         Loaded += (_, _) => { initialized = true; UpdateTabWidths(); ApplyPreferences(); CurrentView?.FocusEditing(); };
         autoSaveTimer.Tick += (_, _) => FlushAutoSaves(false);
         autoSaveTimer.Start();
-        Closed += (_, _) => { documentOrder.Dispose(); autoSaveTimer.Stop(); if (Application.Current.Windows.OfType<MainWindow>().Any() && !App.Current.Exiting) { App.Current.MarkChanged(); App.Current.SaveState(); } };
+        Closed += (_, _) => { Explorer.Dispose(); (EditorHost.Content as ExplorerPreview)?.Dispose(); documentOrder.Dispose(); autoSaveTimer.Stop(); if (Application.Current.Windows.OfType<MainWindow>().Any() && !App.Current.Exiting) { App.Current.MarkChanged(); App.Current.SaveState(); } };
     }
     public Document NewDocument(string? excludedPath = null)
     {
@@ -256,34 +260,13 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     public WindowSession Snapshot()
     {
         var bounds = WindowState == WindowState.Normal ? new Rect(Left, Top, Width, Height) : RestoreBounds;
-        return new() { Documents = Documents.ToList(), ActiveIndex = Math.Max(0, Documents.IndexOf(ActiveDocument!)), Width = bounds.Width, Height = bounds.Height, Maximized = WindowState == WindowState.Maximized, DocumentList = IsDocumentList, ListWidth = IsDocumentList ? ListColumn.ActualWidth : savedListWidth };
+        return new() { Documents = Documents.ToList(), ActiveIndex = Math.Max(0, Documents.IndexOf(ActiveDocument!)), Width = bounds.Width, Height = bounds.Height, Maximized = WindowState == WindowState.Maximized, DocumentList = IsDocumentList, ListWidth = navigation.Width };
     }
     public void SetDocumentList(bool visible, bool persist = true)
     {
-        if (!visible && IsDocumentList && ListColumn.ActualWidth >= 150) savedListWidth = ListColumn.ActualWidth;
-        IsDocumentList = visible;
-        DocumentPane.Visibility = DocumentSplitter.Visibility = visible ? Visibility.Visible : Visibility.Collapsed;
-        HorizontalNavigation.Visibility = visible ? Visibility.Collapsed : Visibility.Visible;
-        TabRow.Height = new GridLength(visible ? 0 : 39);
-        ListColumn.MinWidth = visible ? 150 : 0;
-        ListColumn.Width = new GridLength(visible ? savedListWidth : 0);
-        SplitterColumn.Width = new GridLength(visible ? 5 : 0);
-        if (persist) { Preferences.DocumentList = visible; Preferences.ListWidth = savedListWidth; App.Current.MarkChanged(); }
-        ClampSidebar(); UpdateTabWidths(); FocusEditor();
+        navigation.SetVisible(visible, persist); UpdateTabWidths(); FocusEditor();
     }
-    void ClampSidebar()
-    {
-        if (!IsDocumentList || Workspace.ActualWidth <= 0) return;
-        double maximum = Math.Max(150, Math.Min(900, Workspace.ActualWidth - 245));
-        ListColumn.MaxWidth = maximum;
-        if (ListColumn.Width.Value > maximum) ListColumn.Width = new GridLength(maximum);
-    }
-    public void ResizeDocumentList(double width)
-    {
-        savedListWidth = Math.Clamp(width, 150, Math.Max(150, Workspace.ActualWidth - 245));
-        if (IsDocumentList) ListColumn.Width = new GridLength(savedListWidth);
-        Preferences.ListWidth = savedListWidth; App.Current.MarkChanged();
-    }
+    public void ResizeDocumentList(double width) => navigation.Resize(width);
     void SplitterDragCompleted(object sender, DragCompletedEventArgs e) => ResizeDocumentList(ListColumn.ActualWidth);
     void UpdateTabWidths()
     {
@@ -323,7 +306,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     {
         int index = Documents.IndexOf(doc); if (index < 0) return;
         documentOrder.SetMode("manual");
-        Documents.Move(index, Math.Clamp(target, 0, Documents.Count - 1)); ActiveDocument = doc; App.Current.MarkChanged();
+        Documents.Move(index, Math.Clamp(target, 0, Documents.Count - 1)); ActiveDocument = doc; Explorer.QueueRefresh(); App.Current.MarkChanged();
     }
     void NavigationDrop(object sender, DragEventArgs e)
     {
@@ -431,6 +414,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     async void WindowKeyDown(object sender, KeyEventArgs e)
     {
         if (IsAnnotating) return;
+        if (Explorer.IsKeyboardFocusWithin && e.Key is Key.F2 or Key.F5) return;
         ModifierKeys modifiers = e.KeyboardDevice.Modifiers;
         if (CurrentView?.IsVisual == false && TryInsertShortcut(e.Key, modifiers)) { e.Handled = true; return; }
         bool ctrl = modifiers.HasFlag(ModifierKeys.Control), shift = modifiers.HasFlag(ModifierKeys.Shift), alt = modifiers.HasFlag(ModifierKeys.Alt);
@@ -442,8 +426,8 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                 case Key.N: if (shift) NewWindowClick(this, e); else NewDocument(); break;
                 case Key.T: NewDocument(); break;
                 case Key.O: OpenClick(this, e); break;
-                case Key.S: if (alt) SaveAllClick(this, e); else if (ActiveDocument != null) await SaveDocument(ActiveDocument, shift); break;
-                case Key.W: if (shift) Close(); else if (ActiveDocument != null) await CloseDocument(ActiveDocument); break;
+                case Key.S: if (alt) SaveAllClick(this, e); else if (CurrentView != null && ActiveDocument != null) await SaveDocument(ActiveDocument, shift); break;
+                case Key.W: if (shift) Close(); else if (!CloseExplorerPreview() && ActiveDocument != null) await CloseDocument(ActiveDocument); break;
                 case Key.U when shift: CurrentView?.ToggleSource(); break;
                 case Key.L when shift: SetDocumentList(!IsDocumentList); break;
                 case Key.F: ShowFind(); break;
@@ -522,10 +506,10 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         if (dialog.ShowDialog(this) == true)
         { if (Preferences.OpenInNewWindow) { var window = new MainWindow(); window.Show(); window.OpenPaths(dialog.FileNames); } else OpenPaths(dialog.FileNames); }
     }
-    async void SaveClick(object sender, RoutedEventArgs e) { if (ActiveDocument != null) await SaveDocument(ActiveDocument); }
-    async void SaveAsClick(object sender, RoutedEventArgs e) { if (ActiveDocument != null) await SaveDocument(ActiveDocument, true); }
+    async void SaveClick(object sender, RoutedEventArgs e) { if (CurrentView != null && ActiveDocument != null) await SaveDocument(ActiveDocument); }
+    async void SaveAsClick(object sender, RoutedEventArgs e) { if (CurrentView != null && ActiveDocument != null) await SaveDocument(ActiveDocument, true); }
     async void SaveAllClick(object sender, RoutedEventArgs e) => await SaveAllDocuments();
-    async void CloseTabClick(object sender, RoutedEventArgs e) { if (ActiveDocument != null) await CloseDocument(ActiveDocument); }
+    async void CloseTabClick(object sender, RoutedEventArgs e) { if (!CloseExplorerPreview() && ActiveDocument != null) await CloseDocument(ActiveDocument); }
     void WindowCloseClick(object sender, RoutedEventArgs e) => Close();
     void ExitClick(object sender, RoutedEventArgs e) => App.Current.ExitAll();
     void UndoClick(object sender, RoutedEventArgs e) { if (CurrentView?.IsVisual == true) CurrentView.Command("undo"); else Editor?.Undo(); FocusEditor(); }

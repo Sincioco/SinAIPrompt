@@ -58,6 +58,30 @@ The chosen location is recorded in `app\data-location.json`. Keep that file and 
 
 ## Sin - Notepad foundation
 
+Prompt Explorer is the default left pane. Its folder button (left of **+**) chooses
+the working directory. Use **Show folders** to filter normal folders and the header's
+list button to switch back to the existing Document List. `Ctrl+Shift+L` switches
+between the left navigation pane and horizontal tabs.
+
+Explorer uses Windows Shell icons and expandable folder rows. It lists only normal
+`.html`, `.txt`, `.md`, `.png`, `.jpg`, `.gif`, and `.pdf` entries; hidden/system
+entries and filesystem links are omitted. **View → Sort Documents** also controls
+Explorer ordering. Manual mode follows open-document order, then sorts other files
+newest first. Folder contents load on demand and refresh after filesystem changes;
+**F5** refreshes while the tree has focus. Startup still loads only the last active
+HTML editor, independently of folder enumeration.
+
+Selecting HTML opens the existing editor. Double-click an HTML row to reveal its
+matching image folder, then expand that folder and select an image to preview it in
+the document area. Text, Markdown, images and PDF have read-only previews, outside
+the open-document collection. **Return to document** or `Ctrl+W` returns to the last
+HTML editor. PDF uses the installed offline WebView2 viewer.
+
+Select an image and press **F2**, or right-click **Rename**, to rename it while keeping
+its extension. Its parent HTML's local image references update on disk and in open
+editors; unsaved edits remain unsaved. Name collisions and externally changed parent
+HTML are rejected. If the parent save fails, the image keeps its original name.
+
 The clone retains the native title bar, horizontal tabs / resizable Document List (`Ctrl+Shift+L`), tab reordering, recent files, rename/delete/path actions, document numbering, autosave, encoding choices, external-file conflict checks, and session recovery. Deletion uses the Windows Recycle Bin.
 
 Common shortcuts: `Ctrl+N` new, `Ctrl+O` open, `Ctrl+S` save, `Ctrl+Shift+S` Save As, `Ctrl+W` close, `Ctrl+Tab` next document, and `Ctrl+Plus` / `Ctrl+Minus` zoom. `Ctrl+B`, `Ctrl+I`, and `Ctrl+U` apply rich text formatting. The Date/Time menu and F5 are retained; `Ctrl+D` inserts the long date/time and `Ctrl+L` inserts the separator. Date/time plus separator remains available in the Edit menu.

@@ -224,6 +224,16 @@ public sealed partial class EditorView
         finally { saveAsPath = null; }
     }
     public void ReloadSavedHtml() { if (ready) LoadHtml(); }
+    internal async Task<string> RenameImageFileAsync(string html, string parent, string oldPath, string destination, bool live = false)
+    {
+        await initialized.Task;
+        string args = $"{Json(new Uri(parent).AbsoluteUri)},{Json(new Uri(oldPath).AbsoluteUri)},{Json(new Uri(destination).AbsoluteUri)}";
+        string expression = live ? $"window.editor.renameOpenImageFile({args})" : $"window.editor.renameImageFile({Json(html)},{args})";
+        string response = await Browser.CoreWebView2.CallDevToolsProtocolMethodAsync("Runtime.evaluate", Json(new { expression, awaitPromise = true, returnByValue = true }));
+        using var result = JsonDocument.Parse(response);
+        if (!result.RootElement.GetProperty("result").TryGetProperty("value", out var value)) throw new IOException("Could not update the image references.");
+        return value.GetString() ?? throw new IOException("Could not update the image references.");
+    }
     internal async Task<string> RenameImageFolderAsync(string html, string oldName, string newName)
     {
         await initialized.Task;

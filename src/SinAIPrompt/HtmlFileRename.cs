@@ -8,6 +8,44 @@ public partial class MainWindow
 {
     void RenameDocument(Document doc) => Dialogs.RenameFile(this, doc.Name, name => RenameDocumentFile(doc, name));
 
+    internal async Task RenameExplorerImage(PromptEntry entry, string name)
+    {
+        string destination = ImageFileRename.Destination(entry.Path, name);
+        if (entry.Path == destination) return;
+        var references = entry.ParentHtml == null ? [] : OpenReferences(entry.ParentHtml);
+        var windows = references.Select(r => r.Window).Append(this).Distinct().ToArray();
+        foreach (var window in windows) window.fileOperationDepth++;
+        try
+        {
+            foreach (var (window, doc) in references) if (window.editors.TryGetValue(doc.Id, out var view)) await view.FlushAsync();
+            Document? disk = entry.ParentHtml == null ? null : await Task.Run(() => TextFiles.Open(entry.ParentHtml));
+            if (disk != null && references.Any(r => r.Doc.Fingerprint != null && r.Doc.Fingerprint != disk.Fingerprint))
+                throw new IOException("The parent HTML changed outside Sin - AI Prompt. Reload it before renaming its image.");
+            // Reuse the already loaded editor as a pure HTML parser; no parent editor is created.
+            var converter = editors.GetValueOrDefault(ActiveDocument!.Id)!;
+            if (disk != null) disk.Text = await converter.RenameImageFileAsync(disk.Text, disk.Path!, entry.Path, destination);
+            await Task.Run(() => ImageFileRename.Commit(entry.Path, destination, disk));
+            foreach (var (window, doc) in references)
+            {
+                var view = window.editors.GetValueOrDefault(doc.Id);
+                doc.SavedText = await converter.RenameImageFileAsync(doc.SavedText, doc.Path!, entry.Path, destination);
+                if (view?.IsVisual == true)
+                    view.AcceptHtml(await view.RenameImageFileAsync("", doc.Path!, entry.Path, destination, live: true));
+                else
+                {
+                    string original, updated;
+                    do { original = doc.Text; updated = await converter.RenameImageFileAsync(original, doc.Path!, entry.Path, destination); } while (doc.Text != original);
+                    if (view == null) doc.Text = updated; else view.AcceptHtml(updated);
+                }
+                doc.Fingerprint = disk!.Fingerprint; doc.ModifiedUtc = disk.ModifiedUtc; doc.Notify(); window.noticedVersions.Remove(doc.Id);
+            }
+            if (EditorHost.Content is ExplorerPreview preview && string.Equals(preview.FilePath, entry.Path, StringComparison.OrdinalIgnoreCase))
+                await OpenExplorerFile(destination, CancellationToken.None);
+            App.Current.MarkChanged();
+        }
+        finally { foreach (var window in windows) window.fileOperationDepth--; }
+    }
+
     internal async Task RenameDocumentFile(Document doc, string name)
     {
         if (!Documents.Contains(doc)) throw new IOException("The document is no longer open.");

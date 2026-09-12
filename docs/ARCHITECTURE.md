@@ -15,6 +15,9 @@ Paths below are relative to `src/`; unqualified native filenames are under
 | Documents and window UI | `SinAIPrompt/MainWindow.xaml.cs`: document list, active document, lazy editor instances, autosave queues and navigation state | Calls Core, `EditorView`, search pane and document ordering. Native navigation, 100-document startup, save/conflict checks. |
 | Find/Replace | `SearchBar.xaml/.cs` owns the left Find pane, query/options/debounce/status and virtualized result list; `EditorSearch.cs` adapts one editor; `Web/document-search.js` owns visible text mapping, excerpts, highlights and smooth match navigation, with a disposable `search-worker.js` matcher; Core `SearchEngine.cs` owns source-text matching | No search operation switches view modes. Explicit editor callbacks and request/result values; no window reference in search UI/model. Browser highlights never enter saved HTML. Source behavior passed before extraction; visual/native checks cover regex, timeouts, inline formatting, replacement and Ctrl+F. |
 | Document order | `DocumentOrder.cs` owns sorting subscriptions and cached metadata loading; each `Document` persists pin/created/modified values and Settings persists sort mode | Reorders existing models without editor creation. Missing legacy timestamps load on a worker after window construction. A narrow callback restores selection after moves. Native order/persistence and 100-document lazy-loading checks. |
+| Prompt Explorer | `PromptExplorer.xaml/.cs` owns the working folder, loaded branches, selection cancellation, folder visibility and debounced filesystem refresh; Core `PromptDirectory.cs` reads one directory's metadata | Explicit open/rename/new/path callbacks and a snapshot of manually ordered paths. Enumeration runs on workers, never creates editors, and omits hidden/system/reparse entries. Existing Document List remains its own collection/control. Native checks cover filtering, grouping, order, navigation and mode switching. |
+| Navigation layout and file previews | `NavigationLayout.cs` owns pane visibility/width; `ExplorerPreview.cs` owns one disposable, read-only image/text/PDF preview; `ExplorerIcons.cs` caches three frozen Windows Shell stock icons | Layout extracted under passing existing navigation/startup checks. Previews are outside the document/save/recovery collection; the existing host delegates selection and preserves its last active document. PDF uses installed WebView2 with scripts, external requests and downloads disabled. No new window reference or application dependency in these owners. |
+| Image-file rename | `ImageFileRename.cs` owns destination validation and the file/parent-save transaction; `Web/asset-references.js` rewrites matching local image sources relative to the explicit parent HTML | Existing `HtmlFileRename.cs` coordinates open copies, paused autosaves and conflicts; `HtmlEditorHost.cs` is the parser/live-editor adapter. Checks cover encoded/absolute/base-relative URLs, unsaved edits, collision rejection and rollback. No parent editor is created for an unopened file. |
 | Markdown and list numbering | `Web/markdown.js` owns safe Markdown conversion and empty-document paste; `list-numbering.js` owns current-list operations. `EditorClipboard` reads file/text clipboard data and `MarkdownExport.cs` coordinates one editor's existing asset export path | No libraries or runtime downloads. Browser checks cover common structures, nested numbering and Undo; native checks paste a real local Markdown file and export independent PNG assets. |
 | File operations and annotation hosting | `FileActions.cs`, `HtmlFileActions.cs`, `HtmlFileRename.cs`, `AnnotationHost.cs`: partial `MainWindow` implementations sharing that window's state | Existing legacy integration boundaries, not independent state owners. Native file/asset and modal-layout checks. |
 | Visual/source editing adapter | `EditorView.cs` + `HtmlEditorHost.cs`: one document's WPF source view, WebView lifecycle, synchronization, mapping, native messages | Calls the window and platform adapters. Existing reverse coupling must not spread. Source/visual, immediate save, image, typing tests. |
@@ -50,13 +53,13 @@ existing CI configuration to connect; these local entry points are the gate.
 | --- | ---: | ---: |
 | Application entry/composition (`App.xaml.cs`) | 200 physical lines | 300 |
 | Other handwritten modules, markup, tooling, and tests | 500 | 800 |
-| Legacy `MainWindow.xaml.cs` | 500 | **580 (no growth; reviewed reduction from 616)** |
+| Legacy `MainWindow.xaml.cs` | 500 | **564 (no growth; reviewed reductions from 616 and 580)** |
 
 Physical lines include blank lines and comments; a final newline does not create
 an extra line. Files without a final newline are counted too. Tests use the same
 file budget for now. `MainWindow.xaml.cs` is classified by its actual window-UI
 role, not the word "Main" in its name; its mixed responsibilities require the
-stricter 580-line legacy ceiling recorded with a stable ID and review trigger.
+stricter 564-line legacy ceiling recorded with a stable ID and review trigger.
 
 The checker covers `.cs`, `.js`, `.xaml`, `.css`, `.html`, `.ps1`, `.csproj`,
 `.props`, and `.targets` anywhere in the checkout, including new directories.
@@ -258,6 +261,28 @@ inline resize corners, native Find results/highlight cleanup, capture within the
 annotation dialog, native rename selection, and both Markdown path modes.
 MainWindow.xaml.cs remains at its reviewed 580-line baseline. No dependency,
 guardrail exception, expanded exclusion, or new bootstrap responsibility was added.
+
+## Prompt Explorer (16:34)
+
+The 16:34 Prompt Explorer change separates directory metadata/navigation, read-only
+previews and image-file transactions. Navigation visibility/width moved out of the
+window after the existing packaged suite passed; the expanded suite also preserves
+100-document lazy restoration and original Document List operations. MainWindow's
+reviewed ceiling drops from 580 to 564; no exclusions or limits increased.
+`FileActions` and `HtmlFileRename` remain legacy window integration points, now
+delegating the new operations to their owners. There are no new partial families,
+entry-point algorithms, dependency cycles or runtime packages.
+
+Image renaming changes matching local `img[src]` references in the corresponding
+parent HTML, preserving URL form and query/fragment suffixes. References in other
+documents, CSS, or arbitrary user scripts are outside this parent-image workflow.
+PNG/JPG/GIF previews show a still image; TXT/Markdown are read-only text, and PDF is
+the built-in offline viewer. Very large/network folders remain dependent on disk
+latency, with metadata work and the progress indicator separate from editing.
+
+The numbering test's fixed 20 ms dialog delay occasionally expired before the
+close handler applied its operation under load. Its helper now waits for the actual
+dialog close event before checking results; numbering implementation is unchanged.
 
 ## Template adoption
 

@@ -153,6 +153,9 @@ public sealed class Settings
     public bool OpenInNewWindow { get; set; }
     public bool RecentFiles { get; set; } = true;
     public bool DocumentList { get; set; }
+    public bool ExplorerMode { get; set; } = true;
+    public bool ExplorerShowFolders { get; set; } = true;
+    public string ExplorerDirectory { get; set; } = "";
     public string DocumentSort { get; set; } = "newest";
     public double ListWidth { get; set; } = 250;
     public int DateTimeFormat { get; set; } = DateTimeFormats.Default;

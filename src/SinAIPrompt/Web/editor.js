@@ -1,5 +1,6 @@
 import {send,request,native,blobData,escapeHtml,ask,report} from './bridge.js';
 import {parseHtml,ensureStyle,editingStyles,serialize,normalizeIndent,codeHtml,toPng,portableHtml,pasteSafeHtml,renameImageFolder} from './document.js';
+import {renameImageFile} from './asset-references.js';
 import {createDocumentSearch} from './document-search.js';
 import {attachListNumbering,toggleNumbering} from './list-numbering.js';
 import {createImageSelection} from './image-selection.js';
@@ -156,6 +157,8 @@ $('#source').onclick=async()=>{if(native){send('source');return;}const answer=aw
 $('#link').onclick=async()=>{saveSelection();const answer=await ask('Insert Link','<label>Address <input name="url" type="url" required placeholder="https://…"></label>');if(answer.choice==='ok')command('createLink',answer.values.url);};
 $('#notice').onclick=()=>$('#notice').hidden=true;
 window.editor={load,html,setBase,focus,command,insertImage,openAnnotation,pasteCode,renameImageFolder,ready:()=>loading,
+  renameImageFile,
+  async renameOpenImageFile(documentUrl,oldUrl,newUrl){await loading;const updated=renameImageFile(html(true),documentUrl,oldUrl,newUrl);await load(updated);return updated;},
   search:options=>search.run(options),
   beginMarkdown(folder=null){const key=id();(async()=>{await loading;return await htmlToMarkdown(doc,async png=>{const path=await request('save-image-as',{data:png});return folder?new URL(path,folder).href:path;});})().then(html=>exports.set(key,{html})).catch(error=>exports.set(key,{error:error.message}));return key;},
   renameOpenImageFolder(oldName,newName){const updated=renameImageFolder(html(true),oldName,newName);load(updated);return updated;},

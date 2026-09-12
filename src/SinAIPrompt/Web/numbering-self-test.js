@@ -12,8 +12,9 @@ export async function runNumberingTests(check){
   const options=async mode=>{
     document.querySelector('#listNumbering').click();
     for(let i=0;i<100&&!document.querySelector(`dialog button[value="${mode}"]`);i++)await new Promise(resolve=>setTimeout(resolve,10));
-    document.querySelector(`dialog button[value="${mode}"]`).click();
-    await new Promise(resolve=>setTimeout(resolve,20));
+    const button=document.querySelector(`dialog button[value="${mode}"]`),dialog=button.closest('dialog');
+    const closed=new Promise(resolve=>dialog.addEventListener('close',()=>setTimeout(resolve,0),{once:true}));
+    button.click();await closed;
   };
   try{
     await load('<ol><li>One</li><li>Two</li></ol><h2>Next section</h2><ol id="second"><li>Three</li><li value="3">Four</li><li value="3">Five</li></ol>');

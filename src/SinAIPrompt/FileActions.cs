@@ -10,7 +10,56 @@ namespace SinAIPrompt;
 public partial class MainWindow
 {
     int fileOperationDepth;
-    void SortDocumentsClick(object sender, RoutedEventArgs e) => documentOrder.SetMode((string)((MenuItem)sender).Tag);
+    void SortDocumentsClick(object sender, RoutedEventArgs e) { documentOrder.SetMode((string)((MenuItem)sender).Tag); Explorer.QueueRefresh(); }
+
+    internal async Task OpenExplorerFile(string path, CancellationToken token)
+    {
+        if (IsAnnotating) return;
+        if (Path.GetExtension(path).Equals(".html", StringComparison.OrdinalIgnoreCase))
+        {
+            var existing = Documents.FirstOrDefault(d => string.Equals(d.Path, path, StringComparison.OrdinalIgnoreCase));
+            if (existing != null) ActiveDocument = existing;
+            else
+            {
+                var document = await Task.Run(() => TextFiles.Open(path), token);
+                if (token.IsCancellationRequested || IsAnnotating) return;
+                AddDocument(document); AddRecent(path);
+            }
+            CurrentView?.PathStatus.SetImage("");
+        }
+        else
+        {
+            (EditorHost.Content as ExplorerPreview)?.Dispose();
+            var preview = new ExplorerPreview(path, App.Current.Store.DirectoryPath, () => ActiveDocument = activeDocument);
+            EditorHost.Content = preview; ExternalNotice.Visibility = Visibility.Collapsed;
+            Title = "Sin - AI Prompt - " + Path.GetFileName(path);
+            PositionStatus.Text = "Preview"; CountStatus.Text = "Read-only";
+            try { await preview.LoadAsync(token); }
+            catch (OperationCanceledException) { preview.ShowError("Select a file to preview."); }
+            catch (Exception ex) { preview.ShowError(ex.Message); throw; }
+        }
+    }
+    void ShowExplorerPath(string path)
+    {
+        if (CurrentView != null) CurrentView.PathStatus.SetImage(new Uri(path).AbsoluteUri);
+        else if (EditorHost.Content is ExplorerPreview preview) preview.PathStatus.Text = path;
+    }
+
+    bool CloseExplorerPreview()
+    {
+        if (EditorHost.Content is not ExplorerPreview) return false;
+        ActiveDocument = activeDocument; return true;
+    }
+
+    internal async Task RenameExplorerFile(PromptEntry entry, string name)
+    {
+        if (entry.IsHtml)
+        {
+            await OpenExplorerFile(entry.Path, CancellationToken.None);
+            await RenameDocumentFile(ActiveDocument!, name);
+        }
+        else if (entry.IsImage) await RenameExplorerImage(entry, name);
+    }
 
     void NavigationContextMenuOpening(object sender, ContextMenuEventArgs e)
     {
