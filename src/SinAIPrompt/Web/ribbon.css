@@ -1,5 +1,9 @@
 #toolbar{flex:none;background:var(--surface);border-bottom:1px solid var(--line);padding:6px 8px 0;user-select:none}
-.ribbon-groups{display:grid;grid-template-columns:152px 278px 166px minmax(150px,max-content) 64px;gap:0;align-items:stretch}
+.ribbon-groups{display:flex;flex-wrap:wrap;gap:0;align-items:stretch}
+.file-group{width:180px}.clipboard-group{width:152px}.font-group{width:278px}.paragraph-group{width:166px}.styles-group{flex:0 1 auto;max-width:570px;min-width:150px}.editor-group{width:64px}.capture-group{width:75px}
+.file-controls{display:flex;align-items:stretch;min-height:66px;gap:2px}
+#toolbar .file-controls button,#toolbar #screenCapture{display:flex;flex-direction:column;justify-content:center;align-items:center;gap:4px;font-size:11px;flex:1}
+#toolbar .file-controls svg,#toolbar #screenCapture svg{width:27px;height:29px}
 .ribbon-group{min-width:0;padding:3px 8px 0;border-right:1px solid var(--line);display:flex;flex-direction:column}
 .ribbon-group:last-child{border-right:0;padding-right:0}
 .group-caption{text-align:center;font-size:11px;color:var(--text);padding:5px 0 3px;margin-top:auto}
@@ -56,8 +60,8 @@
 #toolbar[data-style-mode=modern] .style-heading2 span{font-size:18px}
 #toolbar[data-style-mode=modern] .style-title span{font-size:34px}
 #toolbar .highlight-color svg{width:20px;height:20px}
-@media(max-width:800px){.ribbon-groups{grid-template-columns:152px 278px minmax(140px,1fr)}.styles-group{grid-column:1/3;border-top:1px solid var(--line);padding-top:5px}.style-gallery{height:55px}.group-caption{padding-top:2px}.ribbon-group.paragraph-group{border-right:0}.ribbon-hint{display:none}.editor-group{grid-column:3;grid-row:2}}
-@media(max-width:580px){.ribbon-groups{grid-template-columns:140px minmax(270px,1fr)}.paragraph-group{grid-column:1/-1;flex-direction:row;align-items:center;gap:10px;border-top:1px solid var(--line)}.paragraph-row{gap:6px}.paragraph-group .group-caption{margin:0 0 0 auto}.ribbon-actions{flex-wrap:wrap}.styles-group{grid-column:1}.editor-group{grid-column:2;grid-row:3;max-width:64px}}
+@media(max-width:1100px){.styles-group{max-width:360px}.ribbon-hint{display:none}}
+@media(max-width:700px){.styles-group{max-width:calc(100% - 139px)}.style-gallery{height:55px}.group-caption{padding-top:2px}}
 :root[data-theme=dark] .style-tile{background:#fff!important;color:#000!important}
 :root[data-theme=dark] #toolbar button:hover{background:#394d60;border-color:#63798d}
 :root[data-theme=dark] #toolbar button[aria-pressed=true]{background:#3d5163;color:#e2e9f0}

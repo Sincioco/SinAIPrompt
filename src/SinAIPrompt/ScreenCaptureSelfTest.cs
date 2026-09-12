@@ -107,6 +107,36 @@ internal static class ScreenCaptureSelfTest
                     "Region capture displays the frozen image and Cancel restores the editor without inserting");
             }
             finally { closeRegion.Stop(); }
+            if (owner is MainWindow main)
+            {
+                var view = main.CurrentView!;
+                async Task WaitFor(string expression)
+                {
+                    for (int i = 0; i < 150; i++)
+                    {
+                        if (await view.Browser.ExecuteScriptAsync(expression) == "true") return;
+                        await Task.Delay(20);
+                    }
+                    throw new TimeoutException("Image-editor capture did not finish: " + expression);
+                }
+                await view.Browser.ExecuteScriptAsync("window.editor.openAnnotation()");
+                await WaitFor("!!document.querySelector('dialog.annotation [data-action=screenCapture]')");
+                await view.Browser.ExecuteScriptAsync("document.querySelector('dialog.annotation [data-action=screenCapture]').click()");
+                picker = await Picker(Task.FromResult<string?>(null));
+                TargetButton(picker, handle).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                ((ComboBox)picker.FindName("CaptureDelay")).SelectedItem = 0;
+                ((Button)picker.FindName("CaptureNow")).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                await WaitFor("document.querySelectorAll('#canvas image').length===1 && document.querySelectorAll('#canvas [data-crop]').length===8");
+                check(main.IsAnnotating && !main.Shell.IsEnabled, "Screen Capture inside Image Editor returns a selected image with crop handles and keeps the annotation session open");
+                using (var capture = File.Create(Path.Combine(App.Current.Store.DirectoryPath, "capture-in-editor.png")))
+                    await view.Browser.CoreWebView2.CapturePreviewAsync(Microsoft.Web.WebView2.Core.CoreWebView2CapturePreviewImageFormat.Png, capture);
+                await view.Browser.ExecuteScriptAsync("document.querySelector('dialog.annotation [data-action=screenCapture]').click()");
+                picker = await Picker(Task.FromResult<string?>(null)); picker.Close();
+                await WaitFor("!document.querySelector('dialog.annotation [data-action=screenCapture]').disabled");
+                check(await view.Browser.ExecuteScriptAsync("document.querySelectorAll('#canvas image').length===1") == "true", "Canceling a capture from Image Editor preserves its existing layers");
+                await view.Browser.ExecuteScriptAsync("document.querySelector('dialog.annotation [data-action=cancel]').click()");
+                for (int i = 0; i < 100 && main.IsAnnotating; i++) await Task.Delay(20);
+            }
         }
         finally { fixture.Close(); }
     }

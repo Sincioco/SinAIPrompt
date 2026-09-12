@@ -63,7 +63,8 @@ export async function runRibbonTests(check) {
     document.querySelector('#documentStyle').value='modern';document.querySelector('#documentStyle').dispatchEvent(new Event('change'));
     const modern=window.editor.html();await window.editor.load(modern);
     check(doc().documentElement.dataset.sinStyleMode==='modern'&&document.querySelector('#documentStyle').value==='modern'&&doc().body.textContent===content&&doc().defaultView.getComputedStyle(doc().querySelector('p')).fontWeight==='600','Modern styling and toolbar choice survive HTML save and reload');
-    check([...document.querySelectorAll('[data-native-command]')].map(button=>button.textContent).join(',')==='Save,Save All,Rename'&&document.querySelector('#insertImage').textContent==='Editor','Toolbar includes Save, Save All, Rename and the image Editor');
+    check([...document.querySelectorAll('.file-group [data-native-command]')].map(button=>button.textContent).join(',')==='New,Save,Save As,Close'&&document.querySelector('#insertImage').getAttribute('aria-label')==='Image Editor','File ribbon contains New, Save, Save As, Close and a picture-edit icon');
+    check(document.querySelector('.editor-group').nextElementSibling?.contains(document.querySelector('#screenCapture')),'Screen Capture follows Image Editor on the main ribbon');
     await load();
     check(!document.querySelector('input[type=color]')&&document.querySelectorAll('.style-strip [data-style]').length===5,'Ribbon exposes five Word paragraph styles and replaces native color inputs');
     const fontCss=await request('editor-fonts');

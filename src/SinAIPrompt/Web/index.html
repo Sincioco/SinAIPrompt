@@ -2,7 +2,6 @@
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Sin - AI Prompt editor</title><link rel="stylesheet" href="editor.css"><link rel="stylesheet" href="ribbon.css"><link rel="stylesheet" href="color-picker.css"></head>
 <body>
 <div id="toolbar" role="toolbar" aria-label="Rich Text Formatting"></div>
-<div id="imagebar" hidden><strong>Image</strong><label>Width <input id="imageWidth" type="number" min="1" max="30000"> px</label><label>Height <input id="imageHeight" type="number" min="1" max="30000"> px</label><label><input id="lockRatio" type="checkbox" checked> Lock Ratio</label><button id="annotate">Annotate / Crop…</button><button id="deleteImage">Remove Image</button><span>Double-click an image to edit its layers.</span></div>
 <div id="notice" hidden role="alert"></div>
 <iframe id="document" title="HTML Document" sandbox="allow-same-origin"></iframe>
 <script type="module" src="editor.js"></script>

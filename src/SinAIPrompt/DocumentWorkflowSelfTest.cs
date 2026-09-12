@@ -12,6 +12,34 @@ internal static class DocumentWorkflowSelfTest
 {
     internal static async Task Run(MainWindow window, Action<bool, string> check)
     {
+        foreach (string name in new[] { "2026-09-12 1520 - Topic.html", "2026-09-12 - Topic.html", "2026-09-12-1520 - Topic.html", "Topic.html" })
+        {
+            string? selection = null;
+            var choose = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(25) };
+            choose.Tick += (_, _) =>
+            {
+                var dialog = Application.Current.Windows.Cast<Window>().SingleOrDefault(w => w.Title == "Rename File - Sin - AI Prompt");
+                if (dialog?.IsLoaded != true) return;
+                choose.Stop(); selection = ScreenCaptureSelfTest.Controls(dialog).OfType<TextBox>().Single().SelectedText; dialog.Close();
+            };
+            try { choose.Start(); Dialogs.RenameFile(window, name, _ => Task.CompletedTask); }
+            finally { choose.Stop(); }
+            check(selection == "Topic", "Rename selects the title without its date/time or extension: " + name);
+        }
+        foreach (string label in new[] { "Relative Paths", "Absolute Paths", "Cancel" })
+        {
+            var choose = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(25) };
+            choose.Tick += (_, _) =>
+            {
+                var dialog = Application.Current.Windows.Cast<Window>().SingleOrDefault(w => w.Title == "Export as Markdown - Image References");
+                if (dialog?.IsLoaded != true) return;
+                choose.Stop(); ScreenCaptureSelfTest.Controls(dialog).OfType<Button>().Single(b => b.Content.ToString() == label).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            };
+            bool? result;
+            try { choose.Start(); result = Dialogs.MarkdownImagePaths(window); }
+            finally { choose.Stop(); }
+            check(label == "Cancel" ? result == null : result == (label == "Absolute Paths"), "Markdown export image-path dialog supports " + label);
+        }
         var original = window.ActiveDocument!;
         var now = DateTime.UtcNow;
         var old = new Document { DraftName = "Old", CreatedUtc = now.AddDays(-3), ModifiedUtc = now };
@@ -64,6 +92,12 @@ internal static class DocumentWorkflowSelfTest
                 "Save As Markdown writes referenced PNG assets beside its .md file");
             check(renamed.Path!.EndsWith("After # rename.html") && renamed.Dirty && File.Exists(renamed.Path),
                 "Markdown export preserves the open HTML path and unsaved edit state");
+            string absoluteMarkdown = Path.Combine(folder, "Absolute # export.md");
+            await view.SaveMarkdownAsync(absoluteMarkdown, absoluteImages: true);
+            string absoluteOutput = File.ReadAllText(absoluteMarkdown);
+            var reference = System.Text.RegularExpressions.Regex.Match(absoluteOutput, @"!\[[^\]]*\]\((file:[^\)]+)\)");
+            check(reference.Success && File.Exists(new Uri(reference.Groups[1].Value).LocalPath) && reference.Groups[1].Value.Contains("Absolute%20%23%20export"),
+                "Absolute Markdown image references resolve to exported PNG files with encoded spaces and hash signs");
             string input = Path.Combine(folder, "Clipboard.md");
             File.WriteAllText(input, "# Clipboard Markdown\n\n**Text**\n\n![Picture](After%20%23%20rename/picture.png)");
             var previousClipboard = EditorClipboard.TestData;

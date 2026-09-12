@@ -7,7 +7,7 @@ namespace SinAIPrompt;
 
 public sealed partial class EditorView
 {
-    internal async Task SaveMarkdownAsync(string path)
+    internal async Task SaveMarkdownAsync(string path, bool absoluteImages = false)
     {
         if (string.Equals(Path.GetFullPath(path), Document.Path, StringComparison.OrdinalIgnoreCase))
             throw new IOException("Choose a separate .md file so the HTML document is preserved.");
@@ -16,7 +16,8 @@ public sealed partial class EditorView
         saveAsPath = path;
         try
         {
-            string key = JsonSerializer.Deserialize<string>(await Browser.ExecuteScriptAsync("window.editor.beginMarkdown()"))!;
+            string? folder = absoluteImages ? new Uri(Path.GetDirectoryName(Path.GetFullPath(path))! + Path.DirectorySeparatorChar).AbsoluteUri : null;
+            string key = JsonSerializer.Deserialize<string>(await Browser.ExecuteScriptAsync($"window.editor.beginMarkdown({Json(folder)})"))!;
             string markdown = await AwaitExportAsync(key);
             await Task.Run(() => TextFiles.AtomicWrite(path, new UTF8Encoding(false).GetBytes(markdown)));
         }

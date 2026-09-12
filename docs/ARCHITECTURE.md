@@ -12,8 +12,8 @@ Paths below are relative to `src/`; unqualified native filenames are under
 | Responsibility | Current owner and state | Dependencies / validation |
 | --- | --- | --- |
 | Application lifetime | `SinAIPrompt/App.xaml.cs`: windows, single-instance pipe, profile store, settings, recovery scheduling | Composes WPF windows and Core. Startup, session, and storage smoke checks. |
-| Documents and window UI | `SinAIPrompt/MainWindow.xaml.cs`: document list, active document, lazy editor instances, autosave queues and navigation state | Calls Core, `EditorView`, search bar and document ordering. Native navigation, 100-document startup, save/conflict checks. |
-| Find/Replace | `SearchBar.xaml/.cs` owns query/options/debounce/status; `EditorSearch.cs` adapts one editor; `Web/document-search.js` owns visible text mapping and match selection, with a disposable `search-worker.js` matcher; Core `SearchEngine.cs` owns source-text matching | No search operation switches view modes. Explicit editor callbacks and request/result values; no window reference in search UI/model. Browser highlights never enter saved HTML. Source behavior passed before extraction; visual/native checks cover regex, timeouts, inline formatting, replacement and Ctrl+F. |
+| Documents and window UI | `SinAIPrompt/MainWindow.xaml.cs`: document list, active document, lazy editor instances, autosave queues and navigation state | Calls Core, `EditorView`, search pane and document ordering. Native navigation, 100-document startup, save/conflict checks. |
+| Find/Replace | `SearchBar.xaml/.cs` owns the left Find pane, query/options/debounce/status and virtualized result list; `EditorSearch.cs` adapts one editor; `Web/document-search.js` owns visible text mapping, excerpts, highlights and smooth match navigation, with a disposable `search-worker.js` matcher; Core `SearchEngine.cs` owns source-text matching | No search operation switches view modes. Explicit editor callbacks and request/result values; no window reference in search UI/model. Browser highlights never enter saved HTML. Source behavior passed before extraction; visual/native checks cover regex, timeouts, inline formatting, replacement and Ctrl+F. |
 | Document order | `DocumentOrder.cs` owns sorting subscriptions and cached metadata loading; each `Document` persists pin/created/modified values and Settings persists sort mode | Reorders existing models without editor creation. Missing legacy timestamps load on a worker after window construction. A narrow callback restores selection after moves. Native order/persistence and 100-document lazy-loading checks. |
 | Markdown and list numbering | `Web/markdown.js` owns safe Markdown conversion and empty-document paste; `list-numbering.js` owns current-list operations. `EditorClipboard` reads file/text clipboard data and `MarkdownExport.cs` coordinates one editor's existing asset export path | No libraries or runtime downloads. Browser checks cover common structures, nested numbering and Undo; native checks paste a real local Markdown file and export independent PNG assets. |
 | File operations and annotation hosting | `FileActions.cs`, `HtmlFileActions.cs`, `HtmlFileRename.cs`, `AnnotationHost.cs`: partial `MainWindow` implementations sharing that window's state | Existing legacy integration boundaries, not independent state owners. Native file/asset and modal-layout checks. |
@@ -193,7 +193,7 @@ exclusions are unchanged. Fixture tests now derive boundary cases from that
 record so a reviewed reduction does not leave hard-coded obsolete test sizes.
 
 Visual search maps text nodes once per content revision, uses binary lookup for
-match ranges, and paints at most 2,000 highlights without inserting markup.
+match ranges, and paints highlights without inserting markup. Since 15:20 all matches are highlighted; range construction yields between batches of 2,000.
 Matching runs in a worker that is terminated after 750 ms; .NET source regex uses
 a 250 ms timeout on a worker. Count/navigation remain available beyond the paint
 limit. Regex follows JavaScript syntax in visual mode and .NET syntax in source
@@ -219,6 +219,45 @@ arbitrary fonts, colors, canvas editing metadata, or page layout; this is a focu
 implementation rather than a full CommonMark parser. Numbering changes use an
 explicit li value and an undoable replacement of the current list, avoiding
 Chromium's loss of outer ol start attributes during list merging.
+
+
+The 15:20 iteration keeps numbering in `list-numbering.js`, Find in the existing
+search UI/browser/Core owners, and capture/annotation state in their existing
+owners. `image-selection.js` owns the selected inline image, four corner handles,
+its resize gesture and a temporary drag shield over the iframe. The editor only
+wires selection, change and path-status callbacks. The shield prevents pointer
+routing into the child frame during a drag; handles never enter saved HTML.
+
+List operations select from inside the first item to inside the last item so
+Chromium cannot absorb the following heading. Bullet conversion includes the
+whole list. Explicit numbers remain standard li values; small per-item metadata
+records continuation/restart intent and distinguishes an anchor from a clone
+created by Enter or Redo. A single pass updates linked section numbers. Enter at
+the start of an item transfers the anchor to the preceding blank item. HTML
+reopening retains this intent, and subsequent Numbering commands can continue it.
+Plain paragraphs use a valid div container during native list conversion so
+saved/reopened HTML cannot turn an invalid nested paragraph/list into orphan items.
+
+Find displays paragraph excerpts and counts in a virtualized left pane. Selecting
+an excerpt smoothly scrolls to its range. Runtime CSS highlights use yellow and
+are removed on close or content invalidation. Source search uses corresponding
+line excerpts. Image annotation fits visible artwork on opening, selects its image
+layer, and starts captured images in Crop mode; capture inside an existing
+annotation adds a layer through the same Windows picker and Undo history.
+
+Markdown export offers relative references or absolute file URIs to the exported
+PNGs. Both modes create independent assets beside the Markdown file and preserve
+the open HTML document. Absolute references are specific to the export location
+on this computer. The native export adapter owns the choice of destination base;
+the browser converter still receives only a callback that saves one image.
+File ribbon icons are local SVG drawings following the supplied Word reference.
+
+Regression coverage includes real browser pointer/keyboard editing, the numbering
+dialog, continuation across sections and reopening, Enter/Undo/Redo, all four
+inline resize corners, native Find results/highlight cleanup, capture within the
+annotation dialog, native rename selection, and both Markdown path modes.
+MainWindow.xaml.cs remains at its reviewed 580-line baseline. No dependency,
+guardrail exception, expanded exclusion, or new bootstrap responsibility was added.
 
 ## Template adoption
 

@@ -14,8 +14,11 @@ input[type=number]{width:76px}
 input[type=checkbox]{accent-color:var(--accent)}
 label{display:flex;align-items:center;gap:6px}
 #document{flex:1;width:100%;border:0;background:white;min-height:0}
-#imagebar{display:flex;align-items:center;flex-wrap:wrap;gap:12px;padding:8px 12px;background:#eaf3fb;border-bottom:1px solid #c4d9ec}
-#imagebar span{color:#516578}
+.image-selection{position:fixed;pointer-events:none;z-index:2}
+.image-resize-shield{position:fixed;inset:0;z-index:3;touch-action:none}
+.image-selection button{position:absolute;padding:0;min-height:0;width:10px;height:10px;border:1px solid #156bc1;background:white;border-radius:0;pointer-events:auto;transform:translate(-50%,-50%)}
+.image-selection [data-image-resize=nw]{left:0;top:0;cursor:nwse-resize}.image-selection [data-image-resize=ne]{left:100%;top:0;cursor:nesw-resize}
+.image-selection [data-image-resize=sw]{left:0;top:100%;cursor:nesw-resize}.image-selection [data-image-resize=se]{left:100%;top:100%;cursor:nwse-resize}
 #notice{padding:10px 16px;background:#fff1d6;color:#774500;border-bottom:1px solid #e6c98d}
 [hidden]{display:none!important}
 dialog{color:var(--text);background:var(--surface);border:1px solid var(--line);border-radius:9px;padding:0;box-shadow:0 15px 60px #0004}
@@ -49,12 +52,16 @@ h3{font-size:11px;letter-spacing:1.1px;text-transform:uppercase;color:#63768a;ma
 .pair label{display:flex;flex-direction:column;align-items:stretch;gap:4px;font-size:12px}
 .pair input{width:100%}
 .canvas-viewport{overflow:auto;position:relative;background:white;overscroll-behavior:contain}
-.canvas-stage{position:relative;min-width:100%;min-height:100%;padding:50px;width:max-content}
+.canvas-stage{position:relative;min-width:100%;min-height:100%;padding:50px;width:max-content;display:flex;align-items:center;justify-content:center}
 .canvas-stage svg{display:block;outline:1px solid #e5e5e5;background:white;touch-action:none;user-select:none}
 .canvas-stage svg [data-object]{cursor:move}
 .canvas-stage svg [data-handle]{fill:white;stroke:#0874c9;stroke-width:1.5;cursor:nwse-resize}
 .canvas-stage svg [data-end]{cursor:crosshair}
-.canvas-stage svg [data-crop]{fill:#fff7d9;stroke:#b27a05;cursor:crosshair}
+.canvas-stage svg [data-crop]{fill:#fff7d9;stroke:#b27a05}
+.canvas-stage svg :is([data-handle=nw],[data-handle=se],[data-crop=nw],[data-crop=se]){cursor:nwse-resize}
+.canvas-stage svg :is([data-handle=ne],[data-handle=sw],[data-crop=ne],[data-crop=sw]){cursor:nesw-resize}
+.canvas-stage svg :is([data-handle=n],[data-handle=s],[data-crop=n],[data-crop=s]){cursor:ns-resize}
+.canvas-stage svg :is([data-handle=e],[data-handle=w],[data-crop=e],[data-crop=w]){cursor:ew-resize}
 .layer{width:100%;display:flex;align-items:center;text-align:left;gap:6px;margin-bottom:4px;overflow:hidden}
 .layer span{overflow:hidden;text-overflow:ellipsis}
 .layer.selected{background:#dcecf9;border-color:#7aadd4}

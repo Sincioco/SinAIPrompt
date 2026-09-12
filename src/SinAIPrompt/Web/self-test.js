@@ -5,6 +5,7 @@ import {renderPng,outputBounds,move,id} from './annotation-model.js';
 import {request} from './bridge.js';
 import {runRibbonTests} from './ribbon-self-test.js';
 import {runDocumentToolsTests} from './document-tools-self-test.js';
+import {runNumberingTests} from './numbering-self-test.js';
 
 export async function run(){
   const results=[];const check=(value,name)=>{if(!value)throw Error(name);results.push(name);};
@@ -13,8 +14,11 @@ export async function run(){
   const selectText=(selector)=>{const range=doc().createRange();range.selectNodeContents(doc().querySelector(selector));const s=doc().getSelection();s.removeAllRanges();s.addRange(range);doc().dispatchEvent(new Event('selectionchange'));};
   const click=selector=>{const element=document.querySelector(selector);if(!element)throw Error('Missing control: '+selector);element.click();};
   const waitFor=async selector=>{for(let i=0;i<100;i++){const el=document.querySelector(selector);if(el)return el;await delay(50);}throw Error('Timed out: '+selector);};
+  const pointer=async(type,x,y,modifiers=0)=>request('test-mouse',{parameters:{type,x,y,modifiers,button:type==='mouseMoved'?'none':'left',buttons:type==='mouseReleased'?0:1,clickCount:1}});
+  const drag=async(from,to,modifiers=0)=>{await pointer('mousePressed',from.x,from.y,modifiers);await pointer('mouseMoved',to.x,to.y,modifiers);await pointer('mouseReleased',to.x,to.y,modifiers);};
   await window.editor.ready();
   await runDocumentToolsTests(check);
+  await runNumberingTests(check);
   check(doc().body.isContentEditable,'Visual HTML is editable');
   const renamed=parseHtml(renameImageFolder('<p>Old folder/photo.png</p><img src="./Old%20folder/photo.png?size=1#preview"><img src="https://example.invalid/Old%20folder/photo.png"><img src="Other/photo.png">','Old folder','New # folder'));
   check(renamed.images[0].getAttribute('src')==='New%20%23%20folder/photo.png?size=1#preview'&&renamed.images[1].getAttribute('src').startsWith('https://example.invalid/')&&renamed.images[2].getAttribute('src')==='Other/photo.png'&&renamed.querySelector('p').textContent==='Old folder/photo.png','Folder rename updates encoded local image references without replacing other text or URLs');
@@ -46,12 +50,25 @@ export async function run(){
   check(imagePath.endsWith(decodeURIComponent(image.getAttribute('src')).replaceAll('/','\\')),'Hovering an image displays its decoded local file path in the status bar');
   image.dispatchEvent(new PointerEvent('pointerout',{bubbles:true}));
   check((await request('test-path-status')).endsWith('Prompt 1.html'),'Leaving an image restores the document path in the status bar');
-  image.click();document.querySelector('#imageWidth').value='220';document.querySelector('#imageWidth').dispatchEvent(new Event('change'));
-  check(doc().querySelector('img').style.width==='220px','Image width control resizes selected image');
-  window.editor.command('undo');check(doc().querySelector('img').style.width!=='220px','Image resize is undoable');
+  check(!document.querySelector('#imagebar'),'Selecting an image no longer adds the blue image toolbar');
+  for(const corner of ['nw','ne','se','sw']){
+    const selected=doc().querySelector('img');selected.scrollIntoView({block:'center'});selected.click();await delay(30);
+    const before=selected.getBoundingClientRect(),handle=document.querySelector(`[data-image-resize=${corner}]`).getBoundingClientRect();
+    if(corner==='nw')await request('test-capture',{name:'inline-selection'});
+    await drag({x:handle.x+5,y:handle.y+5},{x:handle.x+5+(corner.includes('w')?35:-35),y:handle.y+5+(corner.includes('n')?5:-5)});
+    const after=doc().querySelector('img').getBoundingClientRect();
+    check(after.width<before.width&&Math.abs(after.width/after.height-before.width/before.height)<.02,'Inline image '+corner+' handle resizes proportionately');
+    window.editor.command('undo');check(Math.abs(doc().querySelector('img').getBoundingClientRect().width-before.width)<1,'Inline image '+corner+' resizing supports Undo');
+  }
+  check(!window.editor.html().includes('data-image-resize')&&!window.editor.html().includes('data-sin-selected'),'Inline image selection handles are absent from saved HTML');
+  doc().querySelector('img').click();doc().execCommand('delete');
+  check(!doc().querySelector('img'),'Selecting an inline image allows the standard Delete command');
+  doc().execCommand('undo');check(!!doc().querySelector('img'),'Deleting a selected inline image supports Undo');
   doc().querySelector('img').click();
   const dialogRun=document.querySelector('#insertImage').onclick();await waitFor('dialog.annotation');
   check(document.querySelectorAll('[data-layer]').length===1,'Editor button opens the selected image and its existing layer');
+  check(document.querySelectorAll('[data-handle]').length===8&&document.querySelector('#canvas image').getBoundingClientRect().width>360,'Opening an image selects it and zooms in to fit the available canvas');
+  document.querySelector('#canvasZoom').value='100';document.querySelector('#canvasZoom').dispatchEvent(new Event('change',{bubbles:true}));await delay(30);
   const fullLayout=await request('test-annotation-layout'),dialogBounds=document.querySelector('dialog.annotation').getBoundingClientRect();
   check(fullLayout.expanded&&!fullLayout.backgroundEnabled&&Math.abs(fullLayout.x)<1&&Math.abs(fullLayout.y)<1&&Math.abs(fullLayout.width-fullLayout.clientWidth)<1&&Math.abs(fullLayout.height-fullLayout.clientHeight)<1,'Annotation covers the native menu, document list, and status bar');
   check(dialogBounds.x===0&&dialogBounds.y===0&&dialogBounds.width===innerWidth&&dialogBounds.height===innerHeight,'Annotation fills its entire browser viewport');
@@ -60,9 +77,7 @@ export async function run(){
   check(document.querySelector('#canvas > rect').getAttribute('fill')==='#156082'&&!document.querySelector('#canvasTransparent').checked,'Canvas palette updates the background and clears transparency');
   click('#canvasColor');click('.color-palette [data-color=none]');
   check(document.querySelector('#canvasTransparent').checked&&document.querySelector('dialog.annotation').open,'No Color restores transparency without closing annotation');
-  const pointer=async(type,x,y,modifiers=0)=>request('test-mouse',{parameters:{type,x,y,modifiers,button:type==='mouseMoved'?'none':'left',buttons:type==='mouseReleased'?0:1,clickCount:1}});
   const canvasPoint=(x,y)=>{const matrix=document.querySelector('#canvas').getScreenCTM();return new DOMPoint(x,y).matrixTransform(matrix);};
-  const drag=async(from,to,modifiers=0)=>{await pointer('mousePressed',from.x,from.y,modifiers);await pointer('mouseMoved',to.x,to.y,modifiers);await pointer('mouseReleased',to.x,to.y,modifiers);};
   const imageWidth=()=>document.querySelector('#canvas image').getBoundingClientRect().width;
   const initialImageWidth=imageWidth();
   for(const [x,y] of [[-180,-100],[180,-100],[180,100],[-180,100]]){
@@ -92,7 +107,7 @@ export async function run(){
   check(zoomIn>zoomBefore&&geometry().width===360,'Mouse wheel zooms in without resizing objects: '+zoomBefore+' to '+zoomIn);
   await request('test-mouse',{parameters:{type:'mouseWheel',x:wheelPoint.x,y:wheelPoint.y,deltaX:0,deltaY:120}});await delay(50);
   check(document.querySelector('#canvas').getScreenCTM().a<zoomIn,'Mouse wheel zooms out');
-  document.querySelector('#canvasZoom').value='fit';document.querySelector('#canvasZoom').dispatchEvent(new Event('change',{bubbles:true}));
+  document.querySelector('#canvasZoom').value='100';document.querySelector('#canvasZoom').dispatchEvent(new Event('change',{bubbles:true}));
   click('[data-tool=arrow]');await drag(canvasPoint(50,150),canvasPoint(430,75));
   check(document.querySelectorAll('[data-layer]').length===2,'Dragging draws an arrow on a separate layer');
   const endpoint=document.querySelector('[data-end="2"]');const endRect=endpoint.getBoundingClientRect();
@@ -210,6 +225,8 @@ export async function run(){
   click('[data-action=cancel]');await cropSession;
   const canceledCapture=window.editor.openAnnotation(null,png);await waitFor('dialog.annotation');
   check(document.querySelectorAll('[data-layer]').length===1&&document.querySelector('#canvas image').getAttribute('width')==='360','Screen capture opens as one image layer at its original resolution');
+  check(document.querySelectorAll('[data-crop]').length===8&&document.querySelector('[data-action=crop]').classList.contains('active'),'Screen capture starts selected in Crop mode');
+  for(const [key,cursor] of [['nw','nwse-resize'],['ne','nesw-resize'],['n','ns-resize'],['e','ew-resize']])check(getComputedStyle(document.querySelector(`[data-crop=${key}]`)).cursor===cursor,'Crop '+key+' handle shows its directional resize cursor');
   click('[data-action=cancel]');await canceledCapture;
   check(window.editor.html()===beforeCapture,'Canceling a captured image leaves document content unchanged');
   selectText('p');doc().getSelection().collapseToStart();doc().dispatchEvent(new Event('selectionchange'));

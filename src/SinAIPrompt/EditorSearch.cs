@@ -4,13 +4,24 @@ using SinAIPrompt.Core;
 namespace SinAIPrompt;
 
 internal sealed record SearchRequest(string Query, bool MatchCase = false, bool WholeWord = false, bool Regex = false,
-    bool Wrap = true, string Action = "count", string? Replacement = null);
-internal sealed record SearchResult(int Count = 0, int Index = 0, string? Message = null);
+    bool Wrap = true, string Action = "count", string? Replacement = null, int Target = 0);
+internal sealed record SearchHit(int Index, string Before, string Match, string After)
+{
+    internal static SearchHit FromText(string text, int start, int length, int index)
+    {
+        int end = start + length, nextLine = text.IndexOf('\n', end), previousLine = start == 0 ? -1 : text.LastIndexOf('\n', start - 1);
+        return new(index, text[Math.Max(start - 45, previousLine + 1)..start].Replace('\r', ' '),
+            text.Substring(start, Math.Min(length, 100)).Replace('\r', ' ').Replace('\n', ' '),
+            text[end..Math.Min(end + 70, nextLine < 0 ? text.Length : nextLine)].Replace('\r', ' '));
+    }
+}
+internal sealed record SearchResult(int Count = 0, int Index = 0, string? Message = null, IReadOnlyList<SearchHit>? Results = null);
 
 public sealed partial class EditorView
 {
     internal async Task<SearchResult> SearchAsync(SearchRequest request)
     {
+        if (disposed) return new();
         if (IsVisual)
         {
             await initialized.Task;
@@ -34,7 +45,8 @@ public sealed partial class EditorView
                 Editor.BeginChange(); Editor.SelectAll(); Editor.SelectedText = replacement; Editor.EndChange();
                 return new(matches.Count, Message: $"Replaced {matches.Count} occurrences");
             }
-            if (request.Action == "count") return new(matches.Count);
+            var results = matches.Select((m, i) => SearchHit.FromText(snapshot, m.Index, m.Length, i + 1)).ToArray();
+            if (request.Action == "count") return new(matches.Count, Results: results);
             if (request.Action == "replace" && matches.Any(m => m.Index == Editor.SelectionStart && m.Length == Editor.SelectionLength))
             {
                 Editor.SelectedText = SearchEngine.ReplaceAll(Editor.SelectedText, request.Query, request.Replacement ?? "", request.MatchCase, request.WholeWord, out _, request.Regex);
@@ -43,10 +55,11 @@ public sealed partial class EditorView
             bool previous = request.Action == "previous";
             int origin = previous ? Editor.SelectionStart : Editor.SelectionStart + Editor.SelectionLength;
             int index = previous ? matches.FindLastIndex(m => m.Index < origin) : matches.FindIndex(m => m.Index >= origin);
+            if (request.Action == "select") index = request.Target > 0 && request.Target <= matches.Count ? request.Target - 1 : -1;
             if (index < 0 && request.Wrap) index = previous ? matches.Count - 1 : matches.Count == 0 ? -1 : 0;
             if (index < 0) return new(matches.Count, Message: matches.Count == 0 ? "No results" : "Reached the end of the search");
             var match = matches[index]; Editor.Select(match.Index, match.Length); Editor.ScrollToLine(Editor.GetLineIndexFromCharacterIndex(match.Index));
-            return new(matches.Count, index + 1);
+            return new(matches.Count, index + 1, Results: results);
         }
         catch (Exception ex) when (ex is ArgumentException or System.Text.RegularExpressions.RegexMatchTimeoutException)
         { return new(Message: ex is ArgumentException ? "Invalid regular expression." : "Search took too long. Try a simpler expression."); }

@@ -10,6 +10,8 @@ public partial class SearchBar : UserControl
     internal Func<EditorView?> GetEditor { get; set; } = () => null;
     readonly DispatcherTimer debounce = new() { Interval = TimeSpan.FromMilliseconds(160) };
     int revision;
+    bool updatingResults;
+    EditorView? searchedEditor;
 
     public SearchBar()
     {
@@ -26,26 +28,40 @@ public partial class SearchBar : UserControl
         if (Visibility != Visibility.Visible) return;
         revision++; debounce.Stop(); debounce.Start();
     }
-    internal async Task<SearchResult> ExecuteAsync(string action)
+    internal async Task<SearchResult> ExecuteAsync(string action, int target = 0)
     {
         if (action is "next" or "previous" && Visibility != Visibility.Visible) Show(false);
         debounce.Stop(); int current = ++revision;
         var editor = GetEditor(); if (editor == null) return new();
         var query = new SearchRequest(FindBox.Text, MatchCase.IsChecked == true, WholeWord.IsChecked == true,
-            Regex.IsChecked == true, Wrap.IsChecked == true, action, ReplaceBox.Text);
+            Regex.IsChecked == true, Wrap.IsChecked == true, action, ReplaceBox.Text, target);
         try
         {
+            if (searchedEditor != null && searchedEditor != editor) await searchedEditor.SearchAsync(new("", Action: "clear"));
+            searchedEditor = editor;
             var result = await editor.SearchAsync(query);
             if (current == revision && GetEditor() == editor)
-                Status.Text = result.Message ?? (query.Query.Length == 0 ? "" : result.Count == 0 ? "No results" : result.Index > 0 ? $"{result.Index} of {result.Count} matches" : $"{result.Count} matches");
+            {
+                Status.Text = result.Message ?? (query.Query.Length == 0 ? "" : result.Count == 0 ? "No results" : result.Index > 0 ? $"{result.Index} of {result.Count} results" : $"{result.Count} results");
+                updatingResults = true;
+                try { if (result.Results != null || result.Count == 0) Results.ItemsSource = result.Results; Results.SelectedIndex = result.Index - 1; }
+                finally { updatingResults = false; }
+                if (Results.SelectedItem != null) Results.ScrollIntoView(Results.SelectedItem);
+            }
             return result;
         }
         catch (Exception ex) { if (current == revision) Status.Text = ex.Message; return new(Message: ex.Message); }
     }
     internal async void Close()
     {
-        Visibility = Visibility.Collapsed; debounce.Stop(); revision++;
-        if (GetEditor() is { } editor) { await editor.SearchAsync(new("", Action: "clear")); editor.FocusEditing(); }
+        Visibility = Visibility.Collapsed; debounce.Stop(); revision++; Results.ItemsSource = null;
+        var editor = searchedEditor; searchedEditor = null;
+        if (editor != null) await editor.SearchAsync(new("", Action: "clear"));
+        GetEditor()?.FocusEditing();
+    }
+    async void ResultSelected(object sender, SelectionChangedEventArgs e)
+    {
+        if (!updatingResults && Results.SelectedItem is SearchHit hit) await ExecuteAsync("select", hit.Index);
     }
     async void NextClick(object sender, RoutedEventArgs e) => await ExecuteAsync("next");
     async void PreviousClick(object sender, RoutedEventArgs e) => await ExecuteAsync("previous");

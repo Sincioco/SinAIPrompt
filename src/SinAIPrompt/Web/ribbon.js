@@ -9,7 +9,12 @@ const icons={
   grow:'<path d="m3 20 5-14 5 14M5 15h6"/><path d="m15 7 3-4 3 4" stroke="#1996c4"/>',
   shrink:'<path d="m3 20 4-11 4 11M5 16h4"/><path d="m14 4 3 4 3-4" stroke="#1996c4"/>',
   fontColor:'<path d="m6 18 6-15 6 15M8 13h8" stroke="#444" stroke-width="1.35"/>',
-  editor:'<path d="m3 21 2-7L16 2l4 4L9 18zM5 14l4 4M3 21l6-3M13 9h9M12 14h7M11 19h5"/>',
+  editor:'<path d="M21 10V3H2v17h9"/><circle cx="7" cy="8" r="2" fill="#f4c95d" stroke="none"/><path d="m3 18 6-7 4 4 3-3" stroke="#438857"/><path d="m12 22 1-5 7-7 3 3-7 7zM18 12l3 3" fill="#dcecf9" stroke="#1876bd"/>',
+  new:'<path d="M4 2h10l6 6v14H4z"/><path d="M14 2v6h6"/>',
+  save:'<path d="M3 2h16l3 3v17H3z" fill="#c967c9" stroke="#855483"/><path d="M7 2h10v7H7zM7 14h11v8H7z" fill="white" stroke="#855483"/>',
+  saveAs:'<path d="M2 2h16l3 3v11H2zM6 2v6h10V2M6 16v-5h10"/><path d="m11 23 1-5 8-8 3 3-8 8zM18 12l3 3" stroke="#259ccc" fill="white"/>',
+  close:'<path d="M2 6h7l2 2h11v14H2zM2 8V4h8l2 2h8v2"/>',
+  capture:'<path d="M3 7h5l2-3h5l2 3h5v14H3z"/><circle cx="12" cy="14" r="4" stroke="#259ccc"/>',
   highlight:'<path d="m7 13 8-9a2 2 0 0 1 3 0l2 2a2 2 0 0 1 0 3l-9 8z" fill="#8c8c8c" stroke="#666"/><path d="m7 13 4 4-2 2-4-1z" fill="#fff" stroke="#666"/><path d="m5 18 4 1-4 2H2z" fill="#646464" stroke="none"/>',
   paste:'<path d="M8 5H4v17h15V5h-4M9 3h5v4H9z"/><path d="M8 11h7M8 15h7M8 19h5"/>',
   cut:'<circle cx="5" cy="18" r="3"/><circle cx="18" cy="18" r="3"/><path d="m7 16 12-13M16 16 3 3"/>',
@@ -31,6 +36,7 @@ const fontSizes=[8,9,10,11,12,14,16,18,20,22,24,26,28,36,48,72,96,144,200,300,40
 export function createRibbon(root,{getDocument,saveSelection,restoreSelection,command,changed}) {
   const styleTile=style=>`<button type="button" class="style-tile style-${style.id}" data-style="${style.id}" title="${style.name}: ${style.css.fontFamily.split(',')[0].replaceAll('"','')}, ${style.css.fontSize}" aria-label="${style.name}"><span>${style.name}</span></button>`;
   root.innerHTML=`<div class="ribbon-groups">
+    <section class="ribbon-group file-group" aria-label="File"><div class="file-controls">${[['new','New'],['save','Save'],['saveAs','Save As'],['close','Close']].map(([action,label])=>`<button data-native-command="${action}" title="${label}">${icon(action)}<span>${label}</span></button>`).join('')}</div><div class="group-caption">File</div></section>
     <section class="ribbon-group clipboard-group" aria-label="Clipboard"><div class="clipboard-controls">
       <button class="paste-large" data-cmd="paste" title="Paste (Ctrl+V)">${icon('paste')}<span>Paste</span></button>
       <div class="clipboard-small">${button('cut','Cut (Ctrl+X)',icon('cut')+'Cut')}${button('copy','Copy (Ctrl+C)',icon('copy')+'Copy')}
@@ -48,8 +54,9 @@ export function createRibbon(root,{getDocument,saveSelection,restoreSelection,co
       ${button('insertUnorderedList','Bullets',icon('bullets'))}${button('insertOrderedList','Numbering',icon('numbering'))}<button id="listNumbering" title="List Numbering Options" aria-label="List Numbering Options">⌄</button>${button('outdent','Decrease Indent',icon('outdent'))}${button('indent','Increase Indent',icon('indent'))}
     </div><div class="paragraph-row">${['Left','Center','Right','Full'].map((alignment,i)=>button('justify'+alignment,['Align Left','Center','Align Right','Justify'][i],icon(['left','center','right','justify'][i]))).join('')}</div><div class="group-caption">Paragraph</div></section>
     <section class="ribbon-group styles-group" aria-label="Styles"><div class="style-gallery"><div class="style-strip">${wordStyles.map(styleTile).join('')}</div><button id="moreStyles" aria-label="More Styles" title="More Styles" aria-expanded="false">⌄</button></div><div class="group-caption">Styles</div></section>
-    <section class="ribbon-group editor-group" aria-label="Image Editor"><button id="insertImage" title="Edit the selected image, or create a new image">${icon('editor')}<span>Editor</span></button><div class="group-caption">Editor</div></section>
-  </div><div class="ribbon-actions"><button data-native-command="save" title="Save (Ctrl+S)">Save</button><button data-native-command="saveAll" title="Save All (Ctrl+Alt+S)">Save All</button><button data-native-command="rename">Rename</button><span class="action-divider"></span>${button('undo','Undo (Ctrl+Z)','↶')}${button('redo','Redo (Ctrl+Y)','↷')}<button id="link">Link</button><button id="pasteCode">&lt;/&gt; Paste Code</button><select id="documentStyle" aria-label="Document Style" title="Document Style"><option value="modern">Modern</option><option value="office">MS Office Style</option></select><span class="ribbon-hint" id="painterHint" hidden>Select text to paint its formatting · Esc cancels</span><button id="source">View Source</button><button id="screenCapture">Screen Capture</button></div>`;
+    <section class="ribbon-group editor-group" aria-label="Image Editor"><button id="insertImage" aria-label="Image Editor" title="Edit the selected image, or create a new image">${icon('editor')}</button><div class="group-caption">Editor</div></section>
+    <section class="ribbon-group capture-group" aria-label="Screen Capture"><button id="screenCapture" title="Screen Capture">${icon('capture')}<span>Screen<br>Capture</span></button><div class="group-caption">Capture</div></section>
+  </div><div class="ribbon-actions"><button data-native-command="saveAll" title="Save All (Ctrl+Alt+S)">Save All</button><button data-native-command="rename">Rename</button><span class="action-divider"></span>${button('undo','Undo (Ctrl+Z)','↶')}${button('redo','Redo (Ctrl+Y)','↷')}<button id="link">Link</button><button id="pasteCode">&lt;/&gt; Paste Code</button><select id="documentStyle" aria-label="Document Style" title="Document Style"><option value="modern">Modern</option><option value="office">MS Office Style</option></select><span class="ribbon-hint" id="painterHint" hidden>Select text to paint its formatting · Esc cancels</span><button id="source">View Source</button></div>`;
   const $=selector=>root.querySelector(selector);
   let formatting=null,painter=null,locked=false,painterSheet=null,stylePopup=null,syncFrame=0;
   const colorPickers=[

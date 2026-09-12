@@ -77,8 +77,29 @@ public static class Dialogs
         buttons.Children.Add(Button("Cancel", () => w.Close(), cancel: true)); panel.Children.Add(buttons);
         w.Content = panel;
         w.Closing += (_, e) => e.Cancel = renaming;
-        w.Loaded += (_, _) => { input.Focus(); int dot = currentName.LastIndexOf('.'); input.Select(0, dot > 0 ? dot : currentName.Length); };
+        w.Loaded += (_, _) =>
+        {
+            input.Focus();
+            int dot = currentName.LastIndexOf('.'), end = dot > 0 ? dot : currentName.Length;
+            var prefix = System.Text.RegularExpressions.Regex.Match(currentName, @"^\d{4}-\d{2}-\d{2}(?:[ -]\d{4})?\s*-\s*");
+            int start = prefix.Success && prefix.Length < end ? prefix.Length : 0;
+            input.Select(start, end - start);
+        };
         w.ShowDialog();
+    }
+    internal static bool? MarkdownImagePaths(Window owner)
+    {
+        bool? absolute = null;
+        var window = Create(owner, "Export as Markdown - Image References", 530);
+        var panel = new StackPanel { Margin = new Thickness(24) };
+        panel.Children.Add(new TextBlock { Text = "Choose the image paths in the exported Markdown.", TextWrapping = TextWrapping.Wrap, FontSize = 18 });
+        panel.Children.Add(new TextBlock { Text = "Relative paths keep the Markdown and its image folder portable. Absolute paths point to the exported images on this computer.", TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 12, 0, 20) });
+        var buttons = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right };
+        buttons.Children.Add(Button("Relative Paths", () => { absolute = false; window.Close(); }, primary: true));
+        buttons.Children.Add(Button("Absolute Paths", () => { absolute = true; window.Close(); }));
+        buttons.Children.Add(Button("Cancel", () => window.Close(), cancel: true));
+        panel.Children.Add(buttons); window.Content = panel; window.ShowDialog();
+        return absolute;
     }
     public static bool DeleteFile(Window owner, string path, bool dirty)
     {

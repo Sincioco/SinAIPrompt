@@ -18,6 +18,11 @@ export async function runDocumentToolsTests(check){
     result=await window.editor.search({query:'beta',replacement:'delta',action:'replaceAll'});
     check(result.count===2&&doc.querySelector('b').textContent==='delta'&&doc.querySelector('[data-secret]').dataset.secret==='beta','Visual replacement preserves formatting and HTML attributes');
     check(!window.editor.html().includes('sin-search'),'Search highlighting is absent from saved HTML');
+    doc=await load('<p>match</p>'.repeat(2600));
+    result=await window.editor.search({query:'match',action:'count'});
+    check(result.results.length===2600&&doc.defaultView.CSS.highlights.get('sin-search').size===2600,'Find lists and highlights all results beyond the former 2000-match limit');
+    result=await window.editor.search({query:'match',action:'select',target:2600});
+    check(result.index===2600&&result.results[0].before===''&&result.results[0].after==='','Find navigates to a distant result and keeps excerpts within each paragraph');
     doc=await load('<p>'+'a'.repeat(5000)+'!</p>');
     check((await window.editor.search({query:'(a+)+$',regex:true,action:'count'})).message?.includes('too long'),'Slow regular expressions are terminated outside the editor UI thread');
     doc=await load('<ol start="5"><li>First</li><li>Second</li></ol><p>Between</p><ol><li>Third</li><li>Fourth</li><li>Fifth</li></ol>');

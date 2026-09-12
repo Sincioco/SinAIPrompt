@@ -15,12 +15,13 @@ public partial class MainWindow
         finally { fileOperationDepth--; }
     }
     void SourceClick(object sender, RoutedEventArgs e) => CurrentView?.ToggleSource();
-    async void SaveMarkdownClick(object sender, RoutedEventArgs e)
+    async void ExportMarkdownClick(object sender, RoutedEventArgs e)
     {
         if (CurrentView is not { } view) return;
-        var dialog = new Microsoft.Win32.SaveFileDialog { Title = "Save As Markdown", FileName = Path.GetFileNameWithoutExtension(view.Document.Name) + ".md", Filter = "Markdown Document|*.md", DefaultExt = ".md" };
+        var dialog = new Microsoft.Win32.SaveFileDialog { Title = "Export as Markdown", FileName = Path.GetFileNameWithoutExtension(view.Document.Name) + ".md", Filter = "Markdown Document|*.md", DefaultExt = ".md" };
         if (dialog.ShowDialog(this) != true) return;
-        await RunDocumentAction("Saving Markdown…", async () => await view.SaveMarkdownAsync(dialog.FileName));
+        if (Dialogs.MarkdownImagePaths(this) is not bool absolute) return;
+        await RunDocumentAction("Exporting Markdown…", async () => await view.SaveMarkdownAsync(dialog.FileName, absolute));
     }
     async Task SaveAllDocuments()
     {

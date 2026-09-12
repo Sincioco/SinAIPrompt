@@ -144,7 +144,8 @@ public sealed partial class EditorView
                     result = new { expanded = Owner.IsAnnotating, backgroundEnabled = Owner.Shell.IsEnabled, x = origin.X, y = origin.Y, width = Browser.ActualWidth, height = Browser.ActualHeight, clientWidth = Owner.ClientArea.ActualWidth, clientHeight = Owner.ClientArea.ActualHeight };
                     break;
                 case "test-capture" when App.Current.TestMode:
-                    using (var capture = File.Create(Path.Combine(App.Current.Store.DirectoryPath, "annotation.png")))
+                    string screenshot = message.TryGetProperty("name", out var name) ? Path.GetFileName(name.GetString()) + ".png" : "annotation.png";
+                    using (var capture = File.Create(Path.Combine(App.Current.Store.DirectoryPath, screenshot)))
                         await Browser.CoreWebView2.CapturePreviewAsync(CoreWebView2CapturePreviewImageFormat.Png, capture);
                     break;
                 case "export-template":
