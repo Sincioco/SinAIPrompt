@@ -53,13 +53,16 @@ public partial class App : Application
             MessageBox.Show(message, "Sin - AI Prompt", MessageBoxButton.OK, MessageBoxImage.Error);
         };
         if (TestMode) { await UiSelfTest.Run(this); return; }
-        try { FileAssociations.Register(); }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { }
         _ = ListenForFiles();
         var session = Preferences.RestoreSession ? Store.Read<Session>("session.json") : new Session();
         foreach (var saved in session.Windows.Where(w => w.Documents.Count > 0)) { var window = new MainWindow(saved); window.Show(); }
         if (Windows.OfType<MainWindow>().FirstOrDefault() is not { } main) { main = new MainWindow(); main.Show(); }
         MainWindow = main;
+        _ = Task.Run(() =>
+        {
+            try { FileAssociations.Register(); }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { }
+        });
         if (args.Count > 0) main.OpenPaths(args);
         timer.Tick += (_, _) => { if (sessionChanged) SaveState(); };
         timer.Start();

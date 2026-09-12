@@ -22,12 +22,13 @@ Pasting an image asks whether to embed a Base64 PNG or store a separate PNG. For
 
 Select an image for width/height controls and optional aspect-ratio locking. Double-click it, or choose **Annotate / Crop**, to edit its layers. **Insert an Image** opens a blank drawing canvas; paste or add images there.
 
-The annotation window provides:
+The annotation window fills the application's client area, covering its menu, document list, and status bar until you Apply, Cancel, or press Escape. It provides:
 
 - Arrows, lines, rectangles, ellipses/circles, and text objects.
 - Dragging to draw, move, resize, or adjust either endpoint of a line or arrow. Corner resize handles preserve the object's proportions by default; side handles change width or height freely. Hold Shift while drawing a rectangle or ellipse for equal dimensions.
 - Outline/fill colors, transparent outline/fill, thickness, arrow-head size, and opacity.
-- A layer list with multi-selection using Shift-click, visibility, duplication, deletion, and front/back ordering.
+- A layer list with multi-selection using Shift-click, visibility, duplication, deletion, and front/back ordering. In Select mode, drag empty canvas to marquee-select objects touched by the rectangle; Shift adds to the selection.
+- Copy selected objects with Ctrl+C or **Copy…**, then choose SVG or PNG. Ctrl+V or **Paste** inserts editable layers when copying between annotation canvases. Other applications receive the chosen SVG (also available as text) or PNG image format.
 - Reversible image cropping with draggable handles and numeric top/right/bottom/left insets. Each corner has its own radius control.
 - Multiple images on an expanding canvas, with undo and redo. Apply retains the image's document width, matching PMT, while fitting expanded artwork into it.
 
@@ -81,6 +82,8 @@ The editor uses two WebView2 virtual host names mapped to local folders. These a
 `Test.ps1` uses the real WPF app and Windows WebView2, including native browser input for drag checks. There is no Playwright, Selenium, npm, or test-library dependency. Tests use isolated profiles under ignored `work` and avoid normal settings and documents. See [validation](docs/VALIDATION.md).
 
 After code, CSS, or image changes, rebuild/package and restart the desktop application. Browser Ctrl+F5 is not required; the app loads its bundled local files at startup.
+
+Startup registers Windows file associations in the background, streams recovery JSON without an extra full-file text copy, and creates only the last active editor. Other documents remain in the list; their editors and saved files load when first selected. Hidden source editors are populated when you switch to HTML source.
 
 ## Source origins
 

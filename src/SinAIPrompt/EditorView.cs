@@ -37,7 +37,6 @@ public sealed partial class EditorView : Grid, IDisposable
             Padding = new Thickness(12, 12, 12, 12),
             HorizontalScrollBarVisibility = ScrollBarVisibility.Auto,
             VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
-            Text = doc.Text,
             TextWrapping = App.Current.Preferences.WordWrap ? TextWrapping.Wrap : TextWrapping.NoWrap,
             SelectionOpacity = 0.45,
             Cursor = Cursors.IBeam,
@@ -70,6 +69,7 @@ public sealed partial class EditorView : Grid, IDisposable
         Editor.SizeChanged += (_, _) => Gutter.RequestRefresh();
         Loaded += (_, _) =>
         {
+            if (IsVisual) return;
             int start = TextFiles.FromNormalizedOffset(Editor.Text, doc.Caret);
             int end = TextFiles.FromNormalizedOffset(Editor.Text, doc.Caret + doc.SelectionLength);
             Editor.Select(start, end - start);
@@ -84,7 +84,7 @@ public sealed partial class EditorView : Grid, IDisposable
         Editor.TextWrapping = App.Current.Preferences.WordWrap ? TextWrapping.Wrap : TextWrapping.NoWrap;
         Editor.HorizontalScrollBarVisibility = App.Current.Preferences.WordWrap ? ScrollBarVisibility.Disabled : ScrollBarVisibility.Auto;
         Editor.FontSize = 11.0 * 96 / 72 * Document.Zoom / 100;
-        Gutter.Rebuild();
+        if (!IsVisual) Gutter.Rebuild();
         ApplyHtmlPreferences();
     }
 }

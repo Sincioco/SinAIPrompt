@@ -42,9 +42,12 @@ export async function run(){
   check(doc().querySelector('img').style.width==='220px','Image width control resizes selected image');
   window.editor.command('undo');check(doc().querySelector('img').style.width!=='220px','Image resize is undoable');
   const dialogRun=window.editor.openAnnotation(doc().querySelector('img'));await waitFor('dialog.annotation');
-  const pointer=async(type,x,y)=>request('test-mouse',{parameters:{type,x,y,button:type==='mouseMoved'?'none':'left',buttons:type==='mouseReleased'?0:1,clickCount:1}});
+  const fullLayout=await request('test-annotation-layout'),dialogBounds=document.querySelector('dialog.annotation').getBoundingClientRect();
+  check(fullLayout.expanded&&!fullLayout.backgroundEnabled&&Math.abs(fullLayout.x)<1&&Math.abs(fullLayout.y)<1&&Math.abs(fullLayout.width-fullLayout.clientWidth)<1&&Math.abs(fullLayout.height-fullLayout.clientHeight)<1,'Annotation covers the native menu, document list, and status bar');
+  check(dialogBounds.x===0&&dialogBounds.y===0&&dialogBounds.width===innerWidth&&dialogBounds.height===innerHeight,'Annotation fills its entire browser viewport');
+  const pointer=async(type,x,y,modifiers=0)=>request('test-mouse',{parameters:{type,x,y,modifiers,button:type==='mouseMoved'?'none':'left',buttons:type==='mouseReleased'?0:1,clickCount:1}});
   const canvasPoint=(x,y)=>{const matrix=document.querySelector('#canvas').getScreenCTM();return new DOMPoint(x,y).matrixTransform(matrix);};
-  const drag=async(from,to)=>{await pointer('mousePressed',from.x,from.y);await pointer('mouseMoved',to.x,to.y);await pointer('mouseReleased',to.x,to.y);};
+  const drag=async(from,to,modifiers=0)=>{await pointer('mousePressed',from.x,from.y,modifiers);await pointer('mouseMoved',to.x,to.y,modifiers);await pointer('mouseReleased',to.x,to.y,modifiers);};
   const imageWidth=()=>document.querySelector('#canvas image').getBoundingClientRect().width;
   const initialImageWidth=imageWidth();
   for(const [x,y] of [[-180,-100],[180,-100],[180,100],[-180,100]]){
@@ -93,6 +96,33 @@ export async function run(){
   check(document.querySelector('[data-end="1"]'),'Line exposes independently draggable endpoints');
   click('[data-action=undo]');check(document.querySelectorAll('[data-layer]').length===4,'Annotation undo removes the last drawing');
   click('[data-action=redo]');check(document.querySelectorAll('[data-layer]').length===5,'Annotation redo restores the drawing');
+  click('[data-tool=select]');
+  await drag(canvasPoint(-40,-40),canvasPoint(280,145));
+  check(document.querySelectorAll('.layer.selected').length===4,'Marquee selects partially touched images, shapes, and arrows, excluding objects outside it');
+  await drag(canvasPoint(500,250),canvasPoint(400,80));
+  check(document.querySelectorAll('.layer.selected').length===1,'Reverse-direction marquee replaces the selection');
+  await drag(canvasPoint(-40,-40),canvasPoint(10,10),8);
+  check(document.querySelectorAll('.layer.selected').length===2,'Shift-marquee adds touched objects to the selection');
+  await drag(canvasPoint(-40,-40),canvasPoint(500,250));
+  const selectedIds=[...document.querySelectorAll('.layer.selected')].map(el=>el.dataset.layer);
+  check(selectedIds.length===5,'Marquee selects all five objects without changing their layers');
+  async function shortcut(key){await request('test-key',{parameters:{type:'keyDown',key,code:'Key'+key.toUpperCase(),windowsVirtualKeyCode:key.toUpperCase().charCodeAt(0),modifiers:2}});await request('test-key',{parameters:{type:'keyUp',key,code:'Key'+key.toUpperCase(),windowsVirtualKeyCode:key.toUpperCase().charCodeAt(0)}});}
+  for(const format of ['svg','png']){
+    if(format==='svg')await shortcut('c');else click('[data-action=copy]');
+    await waitFor('dialog.form-dialog button[value='+format+']');click('dialog.form-dialog button[value='+format+']');
+    const expected=format==='svg'?'image/svg+xml':'PNG';let formats=[];
+    for(let i=0;i<100;i++){formats=await request('test-clipboard-formats')||[];if(formats.includes(expected))break;await delay(20);}
+    check(formats.includes(expected)&&formats.includes('SinAIPrompt.AnnotationObjects'),'Copy '+format.toUpperCase()+' provides the selected format and editable object metadata');
+    if(format==='svg')await shortcut('v');else click('[data-action=paste]');
+    for(let i=0;i<100&&document.querySelectorAll('[data-layer]').length!==10;i++)await delay(20);
+    const pasted=[...document.querySelectorAll('.layer.selected')].map(el=>el.dataset.layer);
+    check(document.querySelectorAll('[data-layer]').length===10&&pasted.length===5&&pasted.every(key=>!selectedIds.includes(key)),'Paste after '+format.toUpperCase()+' copy inserts five independently editable objects with new IDs');
+    click('[data-action=undo]');check(document.querySelectorAll('[data-layer]').length===5,'Pasting '+format.toUpperCase()+' objects is one undo step');
+    await drag(canvasPoint(-40,-40),canvasPoint(500,250));
+  }
+  const copiedBeforeCancel=await request('annotation-paste');
+  click('[data-action=copy]');await waitFor('dialog.form-dialog button[value=cancel]');click('dialog.form-dialog button[value=cancel]');
+  check(JSON.stringify(await request('annotation-paste'))===JSON.stringify(copiedBeforeCancel),'Canceling the format choice preserves the clipboard');
   const original=[...document.querySelectorAll('[data-layer]')].find(el=>el.textContent.includes('Original image'));original.click();
   const crop=document.querySelector('[data-crop-value=left]');crop.value='20';crop.dispatchEvent(new Event('change',{bubbles:true}));
   const radius=document.querySelector('[data-radius=topLeft]');radius.value='16';radius.dispatchEvent(new Event('change',{bubbles:true}));
@@ -104,6 +134,8 @@ export async function run(){
   check(document.querySelector('[data-template]'),'Object template appears in library');
   const templateData=(await request('templates-load'))[0];const imported=await parseTemplate(templateJson(templateData));check(imported.objects[0].type==='embedded-image','PMT image template JSON round-trips');
   click('[data-action=apply]');await dialogRun;
+  const restoredLayout=await request('test-annotation-layout');
+  check(!restoredLayout.expanded&&restoredLayout.backgroundEnabled&&restoredLayout.width<fullLayout.width&&restoredLayout.height<fullLayout.height,'Apply restores the editor beside the document list and below the menu');
   const annotated=doc().querySelector('img[data-sin-annotation]');check(annotated,'Annotation apply retains layer metadata');
   const state=JSON.parse(annotated.dataset.sinAnnotation);check(state.objects[0].imageClip.x===20&&state.objects[0].cropCornerRadii.topLeft===16,'Numeric crop and per-corner radius retained non-destructively');
   state.objects.push({id:id(),type:'arrow',x1:60,y1:160,x2:410,y2:80,stroke:'#d53139',strokeWidth:5,arrowSize:22,opacity:1,visible:true});
@@ -130,6 +162,14 @@ export async function run(){
   check(document.querySelectorAll('[data-layer]').length===2,'Reopening annotation restores every image layer');
   click('[data-action=apply]');await reopen;
   check(doc().querySelectorAll('img[data-sin-annotation]')[1].style.width===originalWidth,'Annotation apply preserves document display width like PMT');
+  const beforeCancel=window.editor.html();
+  for(const cancel of ['button','escape']){
+    const canceled=window.editor.openAnnotation(doc().querySelector('img'));await waitFor('dialog.annotation');
+    if(cancel==='button')click('[data-action=cancel]');else await request('test-key',{parameters:{type:'keyDown',key:'Escape',code:'Escape',windowsVirtualKeyCode:27}});
+    await canceled;
+    const layout=await request('test-annotation-layout');
+    check(!layout.expanded&&layout.backgroundEnabled&&window.editor.html()===beforeCancel,'Annotation '+cancel+' restores the shell without changing the document');
+  }
   const savedHtml=window.editor.html();
   await window.editor.load('<p id="typing">Typing:</p>');
   const largeImage=doc().createElement('img');largeImage.src=png;

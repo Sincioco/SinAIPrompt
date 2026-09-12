@@ -24,9 +24,19 @@ internal static class UiSelfTest
             first.Text = "<!doctype html><html><head><title>Test prompt</title></head><body><h1>Sin - AI Prompt</h1><p>Write, format, and illustrate your ideas.</p></body></html>";
             TextFiles.Save(first, first.Path!);
             first.Path = null; first.AutoSave = false;
-            window = new MainWindow(new WindowSession { Documents = [first], Width = 1280, Height = 840 });
+            second.Text = "<p>Recovered unsaved second tab</p>"; second.AutoSave = false;
+            string restoredHtml = "<p>Inactive recovery text</p><!--" + new string('A', 100_000) + "-->";
+            var inactive = Enumerable.Range(3, 98).Select(n => new Document { UntitledNumber = n, Text = restoredHtml, SavedText = restoredHtml }).ToArray();
+            TextFiles.Save(inactive[0], Path.Combine(documents, "Inactive.html"));
+            File.WriteAllText(inactive[0].Path!, "<p>Updated on disk before launch</p>");
+            var restoreClock = System.Diagnostics.Stopwatch.StartNew();
+            window = new MainWindow(new WindowSession { Documents = [second, .. inactive, first], ActiveIndex = 99, Width = 1280, Height = 840, DocumentList = true });
+            results.Add($"100-document window construction: {restoreClock.ElapsedMilliseconds} ms");
             app.MainWindow = window; window.Show();
+            Check(window.ActiveDocument == first && window.Documents.Contains(second) && second.Dirty, "Startup selects the saved active tab and preserves inactive unsaved documents");
+            Check(window.Documents.Count == 100 && window.CreatedEditorCount == 1 && inactive[0].Text == restoredHtml, "100-document startup creates only the last active editor and defers inactive file reads");
             var view = window.CurrentView!;
+            Check(view.Editor.Text.Length == 0 && first.Text.Contains("Sin - AI Prompt"), "Startup keeps restored HTML in the document without filling the hidden source editor");
             bool loaded = false;
             for (int i = 0; i < 200; i++)
             {
@@ -121,7 +131,19 @@ internal static class UiSelfTest
             Check(app.Store.Read<List<JsonElement>>("templates.json").Count > 0, "Object templates persist as JSON outside HTML documents");
             Check(app.SaveState(), "Session recovery written as JSON");
             var recovered = app.Store.Read<Session>("session.json");
-            Check(recovered.Windows[0].Documents[0].Text.Contains("data-sin-annotation"), "Session recovery includes image layers and code blocks");
+            Check(recovered.Windows[0].Documents.Single(d => d.Id == first.Id).Text.Contains("data-sin-annotation"), "Session recovery includes image layers and code blocks");
+            Check(recovered.Windows[0].Documents.Single(d => d.Id == second.Id).Text == second.Text && recovered.Windows[0].Documents.Single(d => d.Id == second.Id).Dirty, "Streaming session reads preserve inactive unsaved text");
+            Check(await window.SaveDocument(second) && window.CreatedEditorCount == 1 && File.ReadAllText(second.Path!).Contains("Recovered unsaved second tab"), "Saving an unvisited tab preserves edits without creating its editor");
+            TextFiles.Save(inactive[1], Path.Combine(documents, "Unvisited.html"));
+            string unvisitedFolder = Path.Combine(documents, "Unvisited"); Directory.CreateDirectory(unvisitedFolder);
+            File.Copy(Directory.GetFiles(Path.Combine(movedFolder, "renamed # prompt"), "*.png")[0], Path.Combine(unvisitedFolder, "image.png"));
+            inactive[1].Text = "<p><img src=\"Unvisited/image.png\"></p>"; TextFiles.Save(inactive[1], inactive[1].Path!);
+            await window.RenameDocumentFile(inactive[1], "Unvisited renamed.html");
+            Check(window.CreatedEditorCount == 1 && inactive[1].Text.Contains("Unvisited%20renamed/image.png") && File.Exists(Path.Combine(documents, "Unvisited renamed", "image.png")), "Renaming an unvisited tab updates its image folder and references without loading its editor");
+            window.ActiveDocument = inactive[0];
+            Check(window.CreatedEditorCount == 2 && inactive[0].Text.Contains("Updated on disk before launch"), "Selecting an inactive tab creates its editor and reads its latest saved file");
+            window.ActiveDocument = first;
+            Check(await window.CloseDocument(inactive[^1]) && window.CreatedEditorCount == 2, "Closing an unvisited tab does not initialize its editor");
             StorageLocation.TestPointerPath = Path.Combine(folder, "test-data-location.json");
             string persistent = Path.Combine(folder, "persistent-profile");
             app.UseStorageFolder(persistent);

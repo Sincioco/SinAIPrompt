@@ -10,7 +10,7 @@ public partial class MainWindow
     async Task<bool> FlushDocument(Document doc)
     {
         fileOperationDepth++;
-        try { await editors[doc.Id].FlushAsync(); return true; }
+        try { if (editors.TryGetValue(doc.Id, out var view)) await view.FlushAsync(); return true; }
         catch (Exception ex) { MessageBox.Show(this, "Could not synchronize the editor. The document remains open.\n\n" + ex.Message); return false; }
         finally { fileOperationDepth--; }
     }

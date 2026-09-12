@@ -181,7 +181,7 @@ public sealed class Store(string directory)
     public T Read<T>(string name) where T : new()
     {
         foreach (string suffix in new[] { "", ".bak" })
-        { try { if (File.Exists(System.IO.Path.Combine(DirectoryPath, name + suffix))) return JsonSerializer.Deserialize<T>(File.ReadAllText(System.IO.Path.Combine(DirectoryPath, name + suffix))) ?? new T(); } catch (Exception e) when (e is IOException or JsonException or UnauthorizedAccessException) { } }
+        { try { using var input = File.OpenRead(System.IO.Path.Combine(DirectoryPath, name + suffix)); return JsonSerializer.Deserialize<T>(input) ?? new T(); } catch (Exception e) when (e is IOException or JsonException or UnauthorizedAccessException) { } }
         return new T();
     }
     public void Write<T>(string name, T value) { Directory.CreateDirectory(DirectoryPath); TextFiles.AtomicWrite(System.IO.Path.Combine(DirectoryPath, name), JsonSerializer.SerializeToUtf8Bytes(value), true); }

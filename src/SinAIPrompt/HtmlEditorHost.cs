@@ -30,6 +30,7 @@ public sealed partial class EditorView
         sourceBack = new Button { Content = "← Visual editor    ·    HTML source", HorizontalAlignment = HorizontalAlignment.Left, Margin = new Thickness(8), Visibility = Visibility.Collapsed };
         sourceBack.Click += (_, _) => ToggleSource(); SetColumnSpan(sourceBack, 2); Children.Add(sourceBack);
         Browser = new WebView2(); SetColumnSpan(Browser, 2); SetRowSpan(Browser, 2); Children.Add(Browser);
+        UpdateMode();
         Editor.TextChanged += (_, _) => { if (!receiving && ready && IsVisual) LoadHtml(); };
         Loaded += OnHtmlLoaded;
     }
@@ -44,6 +45,8 @@ public sealed partial class EditorView
             var environment = await CoreWebView2Environment.CreateAsync(null, cache, new CoreWebView2EnvironmentOptions("--disable-background-networking --disable-component-update --disable-sync --no-first-run"));
             if (disposed) return;
             await Browser.EnsureCoreWebView2Async(environment);
+            // Bundled CSS/modules must reflect the installed build on every launch.
+            await Browser.CoreWebView2.CallDevToolsProtocolMethodAsync("Network.setCacheDisabled", "{\"cacheDisabled\":true}");
             Browser.CoreWebView2.SetVirtualHostNameToFolderMapping("sin-editor.local", Path.Combine(AppContext.BaseDirectory, "Web"), CoreWebView2HostResourceAccessKind.DenyCors);
             await RefreshBase();
             Browser.CoreWebView2.Settings.AreDefaultContextMenusEnabled = true;
@@ -57,7 +60,7 @@ public sealed partial class EditorView
         }
         catch (Exception ex)
         {
-            initialized.TrySetException(ex); IsVisual = false; UpdateMode();
+            initialized.TrySetException(ex); await SetSourceAsync(true);
             MessageBox.Show("The visual editor could not start. HTML source remains available. Install Microsoft Edge WebView2 Runtime and restart.\n\n" + ex.Message, "Sin - AI Prompt");
         }
     }
@@ -101,6 +104,10 @@ public sealed partial class EditorView
                 case "ready": ready = true; LoadHtml(); ApplyHtmlPreferences(); initialized.TrySetResult(); break;
                 case "change": AcceptHtml(message.GetProperty("html").GetString()!); break;
                 case "source": await SetSourceAsync(true); break;
+                case "annotation-mode": Owner.SetAnnotationMode(this, message.GetProperty("open").GetBoolean()); break;
+                case "annotation-copy": AnnotationClipboard.Copy(message.GetProperty("format").GetString()!, message.GetProperty("content").GetString()!, message.GetProperty("objects").GetString()!); break;
+                case "annotation-paste": result = AnnotationClipboard.Read(); break;
+                case "test-clipboard-formats" when App.Current.TestMode: result = AnnotationClipboard.TestData?.GetFormats(false); break;
                 case "command":
                     if (message.TryGetProperty("html", out var html)) AcceptHtml(html.GetString()!);
                     await Owner.HandleHtmlCommand(message.GetProperty("command").GetString()!); break;
@@ -114,6 +121,12 @@ public sealed partial class EditorView
                 case "templates-save": App.Current.Store.Write("templates.json", message.GetProperty("templates")); break;
                 case "test-mouse" when App.Current.TestMode:
                     await Browser.CoreWebView2.CallDevToolsProtocolMethodAsync("Input.dispatchMouseEvent", message.GetProperty("parameters").GetRawText()); break;
+                case "test-key" when App.Current.TestMode:
+                    await Browser.CoreWebView2.CallDevToolsProtocolMethodAsync("Input.dispatchKeyEvent", message.GetProperty("parameters").GetRawText()); break;
+                case "test-annotation-layout" when App.Current.TestMode:
+                    var origin = Browser.TranslatePoint(new Point(), Owner.ClientArea);
+                    result = new { expanded = Owner.IsAnnotating, backgroundEnabled = Owner.Shell.IsEnabled, x = origin.X, y = origin.Y, width = Browser.ActualWidth, height = Browser.ActualHeight, clientWidth = Owner.ClientArea.ActualWidth, clientHeight = Owner.ClientArea.ActualHeight };
+                    break;
                 case "test-capture" when App.Current.TestMode:
                     using (var capture = File.Create(Path.Combine(App.Current.Store.DirectoryPath, "annotation.png")))
                         await Browser.CoreWebView2.CapturePreviewAsync(CoreWebView2CapturePreviewImageFormat.Png, capture);

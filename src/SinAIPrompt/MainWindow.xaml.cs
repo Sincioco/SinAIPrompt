@@ -18,6 +18,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 {
     public ObservableCollection<Document> Documents { get; } = [];
     readonly Dictionary<Guid, EditorView> editors = [];
+    readonly HashSet<Guid> restoredDocuments = [];
     readonly Dictionary<Guid, string?> noticedVersions = [];
     readonly Dictionary<Guid, DateTime> pendingAutoSaves = [];
     readonly Dictionary<Guid, string> autoSaveErrors = [];
@@ -28,11 +29,11 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         get => activeDocument;
         set
         {
-            if (value == null || value == activeDocument || !Documents.Contains(value)) return;
+            if (value == null || value == activeDocument || IsAnnotating || !Documents.Contains(value)) return;
             activeDocument = value;
             if (EditorHost != null)
             {
-                EditorHost.Content = editors[value.Id];
+                EditorHost.Content = GetEditor(value);
                 ExternalNotice.Visibility = Visibility.Collapsed;
                 UpdateStatus(); UpdateSearchStatus();
                 Title = "Sin - AI Prompt - " + value.Name;
@@ -43,6 +44,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         }
     }
     public EditorView? CurrentView => ActiveDocument == null ? null : editors.GetValueOrDefault(ActiveDocument.Id);
+    internal int CreatedEditorCount => editors.Count;
     public TextBox? Editor => CurrentView?.Editor;
     public bool IsDocumentList { get; private set; }
     double savedListWidth = 250;
@@ -69,11 +71,8 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                 if (Documents.Any(d => d.Id == doc.Id)) doc.Id = Guid.NewGuid();
                 doc.Zoom = Math.Clamp(doc.Zoom, 10, 500);
                 Preferences.NextDocumentNumber = Math.Max(Preferences.NextDocumentNumber, doc.UntitledNumber + 1);
-                if (!doc.Dirty && doc.Path != null && File.Exists(doc.Path))
-                {
-                    try { var disk = TextFiles.Open(doc.Path); doc.Text = disk.Text; doc.SavedText = disk.SavedText; doc.Fingerprint = disk.Fingerprint; doc.EncodingName = disk.EncodingName; doc.SavedEncoding = disk.EncodingName; doc.NewLine = disk.NewLine; doc.SavedNewLine = disk.NewLine; } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { }
-                }
-                AddDocument(doc);
+                restoredDocuments.Add(doc.Id);
+                AddDocument(doc, activate: false);
             }
             if (Documents.Count > 0) ActiveDocument = Documents[Math.Clamp(session.ActiveIndex, 0, Documents.Count - 1)];
             if (session.Maximized) WindowState = WindowState.Maximized;
@@ -101,19 +100,31 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         }
         AddDocument(doc); FocusEditor(); return doc;
     }
-    void AddDocument(Document doc)
+    void AddDocument(Document doc, bool activate = true)
     {
-        var view = new EditorView(doc) { HostWindow = this };
-        editors[doc.Id] = view;
         Documents.Add(doc);
         doc.PropertyChanged += (_, _) => { if (doc == ActiveDocument) { Title = "Sin - AI Prompt - " + doc.Name; UpdateStatus(); } };
+        if (activate) { ActiveDocument = doc; UpdateTabWidths(); }
+        App.Current.MarkChanged();
+        if (doc.AutoSave && doc.Dirty) pendingAutoSaves[doc.Id] = DateTime.UtcNow;
+    }
+    EditorView GetEditor(Document doc)
+    {
+        if (editors.TryGetValue(doc.Id, out var existing)) return existing;
+        // Inactive restored documents keep their recovery text until first selected.
+        if (restoredDocuments.Remove(doc.Id) && !doc.Dirty && doc.Path != null)
+        {
+            try { var disk = TextFiles.Open(doc.Path); doc.Text = disk.Text; doc.SavedText = disk.SavedText; doc.Fingerprint = disk.Fingerprint; doc.EncodingName = disk.EncodingName; doc.SavedEncoding = disk.EncodingName; doc.NewLine = disk.NewLine; doc.SavedNewLine = disk.NewLine; } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { }
+        }
+        var view = new EditorView(doc) { HostWindow = this };
+        editors[doc.Id] = view;
         view.Editor.SelectionChanged += (_, _) => { if (doc == ActiveDocument) UpdateStatus(); };
         void ContentChanged(object? sender, EventArgs args) { if (doc.AutoSave) { pendingAutoSaves[doc.Id] = DateTime.UtcNow; autoSaveErrors.Remove(doc.Id); } if (doc == ActiveDocument) { UpdateStatus(); UpdateSearchStatus(); } }
         view.Editor.TextChanged += ContentChanged;
         view.HtmlChanged += ContentChanged;
         view.Editor.PreviewMouseWheel += (_, e) => { if (Keyboard.Modifiers.HasFlag(ModifierKeys.Control)) { ChangeZoom(e.Delta > 0 ? 10 : -10); e.Handled = true; } };
-        ActiveDocument = doc; UpdateTabWidths(); App.Current.MarkChanged();
-        if (doc.AutoSave && doc.Dirty) pendingAutoSaves[doc.Id] = DateTime.UtcNow;
+        view.ApplyPreferences();
+        return view;
     }
     public bool FlushAutoSaves(bool force)
     {
@@ -144,7 +155,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                 var doc = TextFiles.Open(path);
                 var empty = Documents.Count == 1 && Documents[0].Path == null && !Documents[0].Dirty && Documents[0].Text.Length == 0 ? Documents[0] : null;
                 AddDocument(doc);
-                if (empty != null) { Documents.Remove(empty); editors[empty.Id].Dispose(); editors.Remove(empty.Id); }
+                if (empty != null) { Documents.Remove(empty); editors.GetValueOrDefault(empty.Id)?.Dispose(); editors.Remove(empty.Id); restoredDocuments.Remove(empty.Id); }
                 AddRecent(path);
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
@@ -177,13 +188,16 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         {
             bool conflict = string.Equals(path, doc.Path, StringComparison.OrdinalIgnoreCase) && TextFiles.ChangedOnDisk(doc);
             if (conflict && MessageBox.Show(this, "This file changed outside Sin - AI Prompt or was moved. Replace it with the text in this tab?", "File changed", MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes) return false;
+            var view = editors.GetValueOrDefault(doc.Id);
+            if (view == null && doc.Path != null && !string.Equals(path, doc.Path, StringComparison.OrdinalIgnoreCase))
+            { ActiveDocument = doc; view = CurrentView; }
             string original = doc.Text;
-            string? relocated = await editors[doc.Id].PrepareSaveAsAsync(path!);
+            string? relocated = view == null ? null : await view.PrepareSaveAsAsync(path!);
             if (relocated != null) doc.Text = relocated;
             try { TextFiles.Save(doc, path!, conflict); }
             catch { doc.Text = original; throw; }
-            await editors[doc.Id].RefreshBase(reloadDocument: relocated == null);
-            if (relocated != null) { editors[doc.Id].AcceptHtml(doc.Text); editors[doc.Id].ReloadSavedHtml(); }
+            if (view != null) await view.RefreshBase(reloadDocument: relocated == null);
+            if (relocated != null) { view!.AcceptHtml(doc.Text); view.ReloadSavedHtml(); }
             AddRecent(path!); noticedVersions.Remove(doc.Id); autoSaveErrors.Remove(doc.Id); pendingAutoSaves.Remove(doc.Id); ExternalNotice.Visibility = Visibility.Collapsed; UpdateStatus(); App.Current.MarkChanged(); return true;
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Text.EncoderFallbackException)
@@ -206,7 +220,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     internal void RemoveDocument(Document doc, bool fileDeleted = false)
     {
         int index = Documents.IndexOf(doc); bool active = doc == ActiveDocument;
-        Documents.Remove(doc); editors[doc.Id].Dispose(); editors.Remove(doc.Id); noticedVersions.Remove(doc.Id); pendingAutoSaves.Remove(doc.Id); autoSaveErrors.Remove(doc.Id);
+        Documents.Remove(doc); editors.GetValueOrDefault(doc.Id)?.Dispose(); editors.Remove(doc.Id); restoredDocuments.Remove(doc.Id); noticedVersions.Remove(doc.Id); pendingAutoSaves.Remove(doc.Id); autoSaveErrors.Remove(doc.Id);
         if (Documents.Count == 0) NewDocument(fileDeleted ? doc.Path : null); else if (active) ActiveDocument = Documents[Math.Min(index, Documents.Count - 1)];
         UpdateTabWidths(); FocusEditor(); App.Current.MarkChanged();
     }
@@ -316,8 +330,8 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         e.Handled = true;
     }
     void NavigationKeyDown(object sender, KeyEventArgs e) { if (e.Key == Key.Enter) { FocusEditor(); e.Handled = true; } }
-    void WindowDragOver(object sender, DragEventArgs e) { if (e.Data.GetDataPresent(DataFormats.FileDrop)) { e.Effects = DragDropEffects.Copy; e.Handled = true; } }
-    void WindowDrop(object sender, DragEventArgs e) { if (e.Data.GetData(DataFormats.FileDrop) is string[] paths) { OpenPaths(paths); e.Handled = true; } }
+    void WindowDragOver(object sender, DragEventArgs e) { if (IsAnnotating) return; if (e.Data.GetDataPresent(DataFormats.FileDrop)) { e.Effects = DragDropEffects.Copy; e.Handled = true; } }
+    void WindowDrop(object sender, DragEventArgs e) { if (IsAnnotating) return; if (e.Data.GetData(DataFormats.FileDrop) is string[] paths) { OpenPaths(paths); e.Handled = true; } }
     void FocusEditor() { if (IsLoaded) Dispatcher.BeginInvoke(() => CurrentView?.FocusEditing(), DispatcherPriority.Input); }
     public void ChangeZoom(int delta, bool absolute = false)
     {
@@ -452,6 +466,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     }
     async void WindowKeyDown(object sender, KeyEventArgs e)
     {
+        if (IsAnnotating) return;
         ModifierKeys modifiers = Keyboard.Modifiers;
         if (CurrentView?.IsVisual == false && TryInsertShortcut(e.Key, modifiers)) { e.Handled = true; return; }
         bool ctrl = modifiers.HasFlag(ModifierKeys.Control), shift = modifiers.HasFlag(ModifierKeys.Shift), alt = modifiers.HasFlag(ModifierKeys.Alt);

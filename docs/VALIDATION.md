@@ -2,6 +2,16 @@
 
 Validated on September 12, 2026 using the local Windows / Visual Studio 2026 installation.
 
+## Full-area annotation, clipboard, and startup
+
+- Release build and `Build.ps1 -Package` completed with zero warnings/errors. The packaged native/browser suite passed 125 checks in `work/smoke-11c8686fbcf143e29f1690ad83d611ad`; all nine JavaScript modules passed syntax checks and `git diff --check` passed.
+- Annotation covers the entire client area over the native menu, document list, and status bar. Native bounds and browser bounds were checked; Apply, Cancel, and Escape restore the shell. The packaged screenshot was inspected. Middle-button behavior remains unchanged.
+- Native mouse/keyboard checks cover marquee intersection, reverse direction, Shift-add selection, SVG and PNG format choices, editable paste with fresh object IDs, one-step paste undo, and cancellation preserving clipboard contents. The tests use native `DataObject` payloads in an isolated clipboard, leaving the user's Windows clipboard untouched. SVG is supplied as `image/svg+xml` and text; PNG is supplied as PNG bytes and a Windows bitmap.
+- A restored 100-document window creates exactly one editor for its saved active document. Tests verify that other saved files are read only when selected, unsaved recovery text survives, and unvisited documents can be saved, renamed with their image folders, or closed without initializing their editors.
+- Packaged process launch with 100 documents and approximately 19 MB of recovery JSON took 557, 462, and 471 ms to obtain the first native window, titled for document 100. This measures first-window creation, not full HTML rendering, and is not a cold-machine guarantee. Very large recovery files and active images can still increase startup time.
+- Earlier diagnostic runs with a 48 MB recovery file measured about 130 ms to read it as text versus about 80 ms streamed. Windows file-association registration now runs in the background; hidden source editors are populated on demand. Temporary timing instrumentation was removed.
+- WebView cache is disabled for the editor so packaged CSS and modules are refreshed on launch. Rebuild/package and relaunch were performed; the user does not need to compile or press Ctrl+F5.
+
 ## Rename, resize, and wheel zoom
 
 - Release build and `Build.ps1 -Package` completed with zero warnings/errors; `Test.ps1 -Packaged`, syntax checks for all eight JavaScript modules, and `git diff --check` passed. Inspected the packaged annotation screenshot and resulting renamed files under the isolated test profile.

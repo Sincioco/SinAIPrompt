@@ -29,20 +29,22 @@ public partial class MainWindow
         foreach (var window in windows) window.fileOperationDepth++;
         try
         {
-            foreach (var (window, open) in references) await window.editors[open.Id].FlushAsync();
+            foreach (var (window, open) in references) if (window.editors.TryGetValue(open.Id, out var loaded)) await loaded.FlushAsync();
             var disk = await Task.Run(() => TextFiles.Open(oldPath));
             if (references.Any(r => r.Doc.Fingerprint != null && r.Doc.Fingerprint != disk.Fingerprint))
                 throw new IOException("The file changed outside Sin - AI Prompt. Reload it before renaming.");
-            if (moveFolder) disk.Text = await editors[doc.Id].RenameImageFolderAsync(disk.Text, oldName, newName);
+            var converter = CurrentView!;
+            if (moveFolder) disk.Text = await converter.RenameImageFolderAsync(disk.Text, oldName, newName);
             await Task.Run(() => RenameFiles(disk, destination, moveFolder ? oldFolder : null, newFolder));
             foreach (var (window, open) in references)
             {
-                var view = window.editors[open.Id];
+                var view = window.editors.GetValueOrDefault(open.Id);
                 open.Path = destination; open.Fingerprint = disk.Fingerprint;
                 if (moveFolder)
                 {
-                    open.SavedText = await view.RenameImageFolderAsync(open.SavedText, oldName, newName);
-                    await view.RenameOpenImageFolderAsync(oldName, newName);
+                    open.SavedText = await (view ?? converter).RenameImageFolderAsync(open.SavedText, oldName, newName);
+                    if (view != null) await view.RenameOpenImageFolderAsync(oldName, newName);
+                    else open.Text = await converter.RenameImageFolderAsync(open.Text, oldName, newName);
                 }
                 open.Notify(); window.noticedVersions.Remove(open.Id);
                 if (open == window.ActiveDocument) window.ExternalNotice.Visibility = Visibility.Collapsed;
