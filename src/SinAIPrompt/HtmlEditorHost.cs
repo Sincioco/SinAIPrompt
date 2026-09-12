@@ -185,6 +185,27 @@ public sealed partial class EditorView
         finally { saveAsPath = null; }
     }
     public void ReloadSavedHtml() { if (ready) LoadHtml(); }
+    internal async Task<string> RenameImageFolderAsync(string html, string oldName, string newName)
+    {
+        await initialized.Task;
+        return JsonSerializer.Deserialize<string>(await Browser.ExecuteScriptAsync($"window.editor.renameImageFolder({Json(html)},{Json(oldName)},{Json(newName)})"))
+            ?? throw new IOException("Could not update the image references.");
+    }
+    internal async Task RenameOpenImageFolderAsync(string oldName, string newName)
+    {
+        if (IsVisual)
+        {
+            string result = await Browser.ExecuteScriptAsync($"window.editor.renameOpenImageFolder({Json(oldName)},{Json(newName)})");
+            AcceptHtml(JsonSerializer.Deserialize<string>(result) ?? throw new IOException("Could not refresh the renamed image references."));
+        }
+        else
+        {
+            // Keep source edits made while the disk operation ran.
+            string original, updated;
+            do { original = Editor.Text; updated = await RenameImageFolderAsync(original, oldName, newName); } while (Editor.Text != original);
+            AcceptHtml(updated);
+        }
+    }
     public async Task<string> ExportAsync()
     {
         await initialized.Task;

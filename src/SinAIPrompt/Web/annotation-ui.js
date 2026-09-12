@@ -14,7 +14,7 @@ export async function annotate(initial) {
   <div id="imageCrop" hidden><hr><h3>Reversible crop (px)</h3><button data-action="crop" class="wide">Drag crop handles</button><div class="pair">${['top','right','bottom','left'].map(k=>`<label>${k[0].toUpperCase()+k.slice(1)}<input data-crop-value="${k}" type="number" min="0" value="0"></label>`).join('')}</div><h3 style="margin-top:15px">Corner radius (px)</h3><div class="pair">${[['topLeft','Top left'],['topRight','Top right'],['bottomLeft','Bottom left'],['bottomRight','Bottom right']].map(([k,label])=>`<label>${label}<input data-radius="${k}" type="number" min="0" value="0"></label>`).join('')}</div><button data-action="resetCrop" class="wide">Reset crop &amp; corners</button><p class="hint">Crop values use the image’s canvas pixels. The original image stays available.</p></div>
   <div id="textFields" hidden><hr><h3>Text</h3><textarea id="shapeText" rows="4" style="width:100%"></textarea><label class="field">Font size <input id="shapeFontSize" type="number" min="6" max="200" value="20"></label><label class="field">Text color <input id="textColor" type="color" value="#20252c"></label></div>
   <hr><h3>Canvas</h3><label class="field">Background <input id="canvasColor" type="color" value="#ffffff"></label><label class="field"><span>Transparent</span><input id="canvasTransparent" type="checkbox" checked></label><p id="dimensions" class="hint"></p></aside></div>
-  <footer><span class="annotation-error" role="alert"></span><span class="hint">Drag to draw · Drag handles to resize · Del removes · Esc cancels</span><div class="actions"><button data-action="cancel">Cancel</button><button data-action="apply" class="primary">Apply to document</button></div></footer></div>`;
+  <footer><span class="annotation-error" role="alert"></span><span class="hint">Corners keep proportions · Sides stretch · Wheel zooms · Del removes · Esc cancels</span><div class="actions"><button data-action="cancel">Cancel</button><button data-action="apply" class="primary">Apply to document</button></div></footer></div>`;
   document.body.append(dialog);dialog.showModal();
   const $=s=>dialog.querySelector(s),$$=s=>[...dialog.querySelectorAll(s)];
   const svg=$('#canvas'),viewport=$('.canvas-viewport');
@@ -68,6 +68,15 @@ export async function annotate(initial) {
     $('[data-action=crop]').classList.toggle('active',cropMode);
   }
   function point(event){const p=new DOMPoint(event.clientX,event.clientY).matrixTransform(svg.getScreenCTM().inverse());return {x:p.x,y:p.y};}
+  viewport.addEventListener('wheel',event=>{
+    event.preventDefault();if(gesture||!event.deltaY)return;
+    const anchor=point(event),percent=clamp(Math.round(zoom*100*(event.deltaY<0?1.1:1/1.1)),5,400),select=$('#canvasZoom');
+    let option=$('#wheelZoom');if(!option){option=new Option();option.id='wheelZoom';select.append(option);}
+    option.value=String(percent);option.textContent=percent+'%';select.value=option.value;
+    render(true,true);
+    const position=new DOMPoint(anchor.x,anchor.y).matrixTransform(svg.getScreenCTM());
+    viewport.scrollLeft+=position.x-event.clientX;viewport.scrollTop+=position.y-event.clientY;
+  },{passive:false});
   svg.addEventListener('pointerdown',event=>{
     if(event.button!==0)return;event.preventDefault();error('');const p=point(event),target=event.target,objectId=target.closest('[data-object]')?.dataset.object;
     const handle=target.dataset.handle,crop=target.dataset.crop,end=target.dataset.end;
@@ -91,7 +100,15 @@ export async function annotate(initial) {
       else {const b=gesture.kind==='crop'?imageClip(original):bounds(original,false);let left=b.x,top=b.y,right=b.x+b.width,bottom=b.y+b.height;const key=gesture.handle;
         if(key.includes('w'))left=Math.min(right-1,b.x+dx);if(key.includes('e'))right=Math.max(left+1,b.x+b.width+dx);if(key.includes('n'))top=Math.min(bottom-1,b.y+dy);if(key.includes('s'))bottom=Math.max(top+1,b.y+b.height+dy);
         if(gesture.kind==='crop'){left=clamp(left,o.x,o.x+o.width-1);top=clamp(top,o.y,o.y+o.height-1);right=clamp(right,left+1,o.x+o.width);bottom=clamp(bottom,top+1,o.y+o.height);o.imageClip={x:left,y:top,width:right-left,height:bottom-top};o.cropVisible=true;}
-        else {if(event.shiftKey && key.length===2)bottom=top+(right-left)*original.height/original.width;resize(o,{x:left,y:top,width:right-left,height:bottom-top});}
+        else {
+          if(key.length===2){
+            const sx=(right-left)/b.width,sy=(bottom-top)/b.height;
+            const scale=Math.max(1/b.width,1/b.height,Math.abs(sx-1)>=Math.abs(sy-1)?sx:sy);
+            if(key.includes('w'))left=right-b.width*scale;else right=left+b.width*scale;
+            if(key.includes('n'))top=bottom-b.height*scale;else bottom=top+b.height*scale;
+          }
+          resize(o,{x:left,y:top,width:right-left,height:bottom-top});
+        }
       }
     }render(true);
   });

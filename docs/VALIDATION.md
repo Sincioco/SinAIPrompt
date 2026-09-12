@@ -2,6 +2,14 @@
 
 Validated on September 12, 2026 using the local Windows / Visual Studio 2026 installation.
 
+## Rename, resize, and wheel zoom
+
+- Release build and `Build.ps1 -Package` completed with zero warnings/errors; `Test.ps1 -Packaged`, syntax checks for all eight JavaScript modules, and `git diff --check` passed. Inspected the packaged annotation screenshot and resulting renamed files under the isolated test profile.
+- Native rename checks cover moving the matching PNG folder, updating encoded image references in saved and open HTML, preserving unsaved edits, immediate image visibility, occupied-folder rejection, rollback after a read-only HTML rewrite failure, and case-only rename while editing source.
+- Browser mouse checks cover all four proportional corner handles with the opposite corner anchored, all four independent side handles, and wheel zoom in/out without changing object dimensions. Existing crop, line endpoints, undo/redo, drag-size, and typing responsiveness checks remain in the smoke suite.
+- Rename performs disk work off the UI thread and shows an indeterminate progress bar in its dialog. Only image URLs pointing into the matching local folder are rewritten; inline images, external URLs, other folders, and displayed text remain unchanged.
+- Renaming an image folder reloads the open visual document to discard undo entries containing obsolete URLs; unsaved text is preserved. Wheel zoom keeps its pointer anchor within the available scroll range.
+
 ## Image and typing fixes
 
 Validated September 12, 2026 with PowerShell 7 and the installed Visual Studio 2026 components.

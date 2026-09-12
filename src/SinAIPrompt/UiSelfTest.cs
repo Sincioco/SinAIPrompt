@@ -93,6 +93,31 @@ internal static class UiSelfTest
             for (int i = 0; i < 100 && savedImagesReady == "null"; i++) { await Task.Delay(20); savedImagesReady = await view.Browser.ExecuteScriptAsync("window.savedImagesReady"); }
             Check(savedImagesReady == "true", "Images remain visible after Save As changes the asset folder");
             Check(Directory.GetFiles(Path.Combine(movedFolder, "Saved prompt"), "*.png").Length > 0 && File.Exists(Path.Combine(documents, "Prompt 1.html")), "Save As retains separate PNG storage and preserves the original file");
+            var imageNames = Directory.GetFiles(Path.Combine(movedFolder, "Saved prompt"), "*.png").Select(Path.GetFileName).Order().ToArray();
+            await view.Browser.ExecuteScriptAsync("window.editor.command('insertText','Keep this unsaved rename edit')");
+            await window.RenameDocumentFile(first, "Renamed # prompt.html");
+            string renamedFolder = Path.Combine(movedFolder, "Renamed # prompt");
+            Check(File.Exists(first.Path!) && !File.Exists(copied) && !Directory.Exists(Path.Combine(movedFolder, "Saved prompt")) && Directory.GetFiles(renamedFolder, "*.png").Select(Path.GetFileName).Order().SequenceEqual(imageNames), "Rename moves the HTML file and its matching image folder without copying images");
+            Check(File.ReadAllText(first.Path!).Contains("Renamed%20%23%20prompt/image-") && first.Text.Contains("Renamed%20%23%20prompt/image-"), "Rename updates saved and open image references with URL-encoded folder names");
+            Check(first.Dirty && first.Text.Contains("Keep this unsaved rename edit") && !File.ReadAllText(first.Path!).Contains("Keep this unsaved rename edit"), "Rename preserves unsaved edits without writing them into the saved HTML");
+            await view.Browser.ExecuteScriptAsync("window.savedImagesReady=null;window.editor.ready().then(()=>Promise.all([...document.querySelector('#document').contentDocument.images].map(image=>image.decode()))).then(()=>window.savedImagesReady=true).catch(()=>window.savedImagesReady=false)");
+            savedImagesReady = "null";
+            for (int i = 0; i < 100 && savedImagesReady == "null"; i++) { await Task.Delay(20); savedImagesReady = await view.Browser.ExecuteScriptAsync("window.savedImagesReady"); }
+            Check(savedImagesReady == "true", "Images remain visible immediately after renaming");
+            string occupiedImages = Path.Combine(movedFolder, "Occupied");Directory.CreateDirectory(occupiedImages);File.WriteAllText(Path.Combine(occupiedImages, "keep.txt"), "Keep");
+            bool renameBlocked = false;try { await window.RenameDocumentFile(first, "Occupied.html"); } catch (IOException) { renameBlocked = true; }
+            Check(renameBlocked && File.Exists(first.Path!) && Directory.Exists(renamedFolder) && !File.Exists(Path.Combine(movedFolder, "Occupied.html")) && File.ReadAllText(Path.Combine(occupiedImages, "keep.txt")) == "Keep", "Rename rejects an occupied image folder before moving any files");
+            string beforeFailedRename = first.Path!;
+            File.SetAttributes(beforeFailedRename, File.GetAttributes(beforeFailedRename) | FileAttributes.ReadOnly);
+            bool renameRolledBack = false;
+            try { await window.RenameDocumentFile(first, "Cannot write.html"); }
+            catch (UnauthorizedAccessException) { renameRolledBack = true; }
+            finally { File.SetAttributes(beforeFailedRename, FileAttributes.Normal); }
+            Check(renameRolledBack && File.Exists(beforeFailedRename) && Directory.Exists(renamedFolder) && !File.Exists(Path.Combine(movedFolder, "Cannot write.html")) && !Directory.Exists(Path.Combine(movedFolder, "Cannot write")), "Failed HTML rewrite rolls back both the file and image folder rename");
+            await view.SetSourceAsync(true);
+            await window.RenameDocumentFile(first, "renamed # prompt.html");
+            Check(Directory.GetDirectories(movedFolder).Any(path => Path.GetFileName(path) == "renamed # prompt") && view.Editor.Text.Contains("renamed%20%23%20prompt/image-") && first.Dirty, "Case-only rename updates the folder and source editor while preserving unsaved edits");
+            await view.SetSourceAsync(false);
             Check(app.Store.Read<List<JsonElement>>("templates.json").Count > 0, "Object templates persist as JSON outside HTML documents");
             Check(app.SaveState(), "Session recovery written as JSON");
             var recovered = app.Store.Read<Session>("session.json");

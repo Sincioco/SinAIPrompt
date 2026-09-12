@@ -25,13 +25,13 @@ Select an image for width/height controls and optional aspect-ratio locking. Dou
 The annotation window provides:
 
 - Arrows, lines, rectangles, ellipses/circles, and text objects.
-- Dragging to draw, move, resize, or adjust either endpoint of a line or arrow. Hold Shift while drawing a rectangle or ellipse for equal dimensions, or while resizing for the original aspect ratio.
+- Dragging to draw, move, resize, or adjust either endpoint of a line or arrow. Corner resize handles preserve the object's proportions by default; side handles change width or height freely. Hold Shift while drawing a rectangle or ellipse for equal dimensions.
 - Outline/fill colors, transparent outline/fill, thickness, arrow-head size, and opacity.
 - A layer list with multi-selection using Shift-click, visibility, duplication, deletion, and front/back ordering.
 - Reversible image cropping with draggable handles and numeric top/right/bottom/left insets. Each corner has its own radius control.
 - Multiple images on an expanding canvas, with undo and redo. Apply retains the image's document width, matching PMT, while fitting expanded artwork into it.
 
-Dragging keeps the current canvas scale while the scrollable workspace expands. Choose a zoom percentage or Fit to change the scale; resizing the annotation window recalculates Fit.
+Dragging keeps the current canvas scale while the scrollable workspace expands. Roll the mouse wheel over the canvas to zoom in or out (5–400%), or choose a zoom percentage or Fit. Resizing the annotation window recalculates Fit. The side panels keep their normal scrolling behavior.
 
 The displayed image is a lossless PNG. Editable original image sources and objects are retained in the HTML image's `data-sin-annotation` metadata, so copying the HTML also preserves its editing state. Cropping does not discard original pixels. Large annotated files can contain both source images and the rendered PNG.
 
@@ -45,7 +45,7 @@ PMT's version 1 template format is supported for images, arrows, lines, rectangl
 
 Choose **File → Export as Standalone HTML**. The export embeds document images and CSS background images as PNG Base64 data and includes the code-block styling. Missing or unreadable image assets cause an explicit export error. The open document and its normal save path remain unchanged.
 
-Save As copies separate image assets into a folder matching the new HTML filename and preserves inline images. The original HTML and image files remain intact. Rename keeps existing relative references valid in the same parent folder; later new images use the renamed document's asset folder.
+Save As copies separate image assets into a folder matching the new HTML filename and preserves inline images. The original HTML and image files remain intact. Rename moves the HTML file and its matching image folder together, then updates image references in the saved file and open editors. Unsaved edits remain unsaved. An occupied destination folder is rejected, and a failed HTML rewrite rolls back the file and folder moves.
 
 ## Settings that survive a C: reformat
 

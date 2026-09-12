@@ -23,6 +23,17 @@ export function serialize(doc) {
   clone.querySelector('body').removeAttribute('spellcheck');
   return '<!DOCTYPE html>\n' + clone.outerHTML;
 }
+export function renameImageFolder(html,oldName,newName) {
+  const input=parseHtml(html),root='https://sin-document.local/';let changed=false;
+  const base=new URL(input.querySelector('base[href]')?.getAttribute('href')||root,root);
+  for(const image of input.querySelectorAll('img[src]')){
+    const url=new URL(image.getAttribute('src'),base),parts=url.pathname.split('/');
+    if(url.origin!==new URL(root).origin||decodeURIComponent(parts[1]||'').toLowerCase()!==oldName.toLowerCase()||parts.length<3)continue;
+    const parents='../'.repeat(base.pathname.split('/').length-2);
+    image.setAttribute('src',parents+encodeURIComponent(newName)+'/'+parts.slice(2).join('/')+url.search+url.hash);changed=true;
+  }
+  return changed?serialize(input):html;
+}
 export async function loadImage(source) {
   const image = new Image();
   image.src = source;

@@ -1,4 +1,4 @@
-import {normalizeIndent,parseHtml,portableHtml} from './document.js';
+import {normalizeIndent,parseHtml,portableHtml,renameImageFolder} from './document.js';
 import {prepareRichSourceHighlight} from './source-highlighting.js';
 import {captureTemplate,parseTemplate,templateJson} from './templates.js';
 import {renderPng,outputBounds,move,id} from './annotation-model.js';
@@ -13,6 +13,8 @@ export async function run(){
   const waitFor=async selector=>{for(let i=0;i<100;i++){const el=document.querySelector(selector);if(el)return el;await delay(50);}throw Error('Timed out: '+selector);};
   await window.editor.ready();
   check(doc().body.isContentEditable,'Visual HTML is editable');
+  const renamed=parseHtml(renameImageFolder('<p>Old folder/photo.png</p><img src="./Old%20folder/photo.png?size=1#preview"><img src="https://example.invalid/Old%20folder/photo.png"><img src="Other/photo.png">','Old folder','New # folder'));
+  check(renamed.images[0].getAttribute('src')==='New%20%23%20folder/photo.png?size=1#preview'&&renamed.images[1].getAttribute('src').startsWith('https://example.invalid/')&&renamed.images[2].getAttribute('src')==='Other/photo.png'&&renamed.querySelector('p').textContent==='Old folder/photo.png','Folder rename updates encoded local image references without replacing other text or URLs');
   const savedCaret=doc().createRange();savedCaret.setStart(doc().querySelector('p').firstChild,7);savedCaret.collapse(true);
   doc().getSelection().removeAllRanges();doc().getSelection().addRange(savedCaret);doc().dispatchEvent(new Event('selectionchange'));
   await window.editor.setBase(doc().baseURI);
@@ -53,6 +55,26 @@ export async function run(){
     check(Number(document.querySelector('[data-geometry=width]').value)===360&&Number(document.querySelector('[data-geometry=height]').value)===200,'Moving image preserves its pixel dimensions');
     click('[data-action=undo]');
   }
+  const geometry=()=>{const image=document.querySelector('#canvas image');return Object.fromEntries(['x','y','width','height'].map(key=>[key,Number(image.getAttribute(key))]));};
+  async function dragHandle(key,dx,dy){const r=document.querySelector('[data-handle='+key+']').getBoundingClientRect();const start={x:r.x+r.width/2,y:r.y+r.height/2};await drag(start,{x:start.x+dx,y:start.y+dy});}
+  for(const key of ['nw','ne','se','sw']){
+    const before=geometry();await dragHandle(key,key.includes('w')?-40:40,key.includes('n')?-10:10);const after=geometry();
+    const oppositeX=key.includes('w')?'right':'left',oppositeY=key.includes('n')?'bottom':'top';
+    check(Math.abs(after.width/after.height-before.width/before.height)<.001&&Math.abs((after.x+(oppositeX==='right'?after.width:0))-(before.x+(oppositeX==='right'?before.width:0)))<.01&&Math.abs((after.y+(oppositeY==='bottom'?after.height:0))-(before.y+(oppositeY==='bottom'?before.height:0)))<.01,'Corner '+key+' keeps proportions and anchors the opposite corner without Shift');
+    click('[data-action=undo]');
+  }
+  for(const key of ['n','e','s','w']){
+    const before=geometry();await dragHandle(key,key==='w'?-40:key==='e'?40:0,key==='n'?-20:key==='s'?20:0);const after=geometry();
+    check(key==='n'||key==='s'?after.width===before.width&&after.height>before.height:after.height===before.height&&after.width>before.width,'Side '+key+' resizes freely without changing the other dimension');
+    click('[data-action=undo]');
+  }
+  const wheelPoint=canvasPoint(180,100),zoomBefore=document.querySelector('#canvas').getScreenCTM().a;
+  await request('test-mouse',{parameters:{type:'mouseWheel',x:wheelPoint.x,y:wheelPoint.y,deltaX:0,deltaY:-120}});await delay(50);
+  const zoomIn=document.querySelector('#canvas').getScreenCTM().a;
+  check(zoomIn>zoomBefore&&geometry().width===360,'Mouse wheel zooms in without resizing objects: '+zoomBefore+' to '+zoomIn);
+  await request('test-mouse',{parameters:{type:'mouseWheel',x:wheelPoint.x,y:wheelPoint.y,deltaX:0,deltaY:120}});await delay(50);
+  check(document.querySelector('#canvas').getScreenCTM().a<zoomIn,'Mouse wheel zooms out');
+  document.querySelector('#canvasZoom').value='fit';document.querySelector('#canvasZoom').dispatchEvent(new Event('change',{bubbles:true}));
   click('[data-tool=arrow]');await drag(canvasPoint(50,150),canvasPoint(430,75));
   check(document.querySelectorAll('[data-layer]').length===2,'Dragging draws an arrow on a separate layer');
   const endpoint=document.querySelector('[data-end="2"]');const endRect=endpoint.getBoundingClientRect();

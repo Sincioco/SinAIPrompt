@@ -1,5 +1,5 @@
 import {send,request,native,blobData,escapeHtml,ask,report} from './bridge.js';
-import {parseHtml,ensureStyle,editingStyles,serialize,normalizeIndent,codeHtml,toPng,portableHtml,pasteSafeHtml} from './document.js';
+import {parseHtml,ensureStyle,editingStyles,serialize,normalizeIndent,codeHtml,toPng,portableHtml,pasteSafeHtml,renameImageFolder} from './document.js';
 import {prepareRichSourceHighlight,RICH_SOURCE_TEXT_TYPES} from './source-highlighting.js';
 import {annotate} from './annotation-ui.js';
 import {id,outputBounds} from './annotation-model.js';
@@ -141,7 +141,8 @@ for(const dimension of ['Width','Height'])$('#image'+dimension).onchange=()=>{
 $('#source').onclick=async()=>{if(native){send('source');return;}const answer=await ask('HTML source',`<textarea name="source" aria-label="HTML source" spellcheck="false">${escapeHtml(html())}</textarea>`);if(answer.choice==='ok'){await load(answer.values.source);changed();}};
 $('#link').onclick=async()=>{saveSelection();const answer=await ask('Insert link','<label>Address <input name="url" type="url" required placeholder="https://…"></label>');if(answer.choice==='ok')command('createLink',answer.values.url);};
 $('#notice').onclick=()=>$('#notice').hidden=true;
-window.editor={load,html,setBase,command,insertImage,openAnnotation,pasteCode,ready:()=>loading,
+window.editor={load,html,setBase,command,insertImage,openAnnotation,pasteCode,renameImageFolder,ready:()=>loading,
+  renameOpenImageFolder(oldName,newName){const updated=renameImageFolder(html(true),oldName,newName);load(updated);return updated;},
   beginPortable(){const key=id();(async()=>{await loading;return await portableHtml(html(),base);})().then(html=>exports.set(key,{html})).catch(error=>exports.set(key,{error:error.message}));return key;},
   beginRelocate(){
     const key=id();

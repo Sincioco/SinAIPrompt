@@ -42,7 +42,7 @@ public static class Dialogs
         buttons.Children.Add(Button("Cancel", () => w.Close(), cancel: true)); panel.Children.Add(buttons);
         w.Content = panel; w.Loaded += (_, _) => { input.Focus(); input.SelectAll(); }; w.ShowDialog(); return result;
     }
-    public static void RenameFile(Window owner, string currentName, Action<string> rename)
+    public static void RenameFile(Window owner, string currentName, Func<string, Task> rename)
     {
         var w = Create(owner, "Rename file - Sin - AI Prompt", 500);
         var panel = new StackPanel { Margin = new Thickness(24) };
@@ -51,14 +51,19 @@ public static class Dialogs
         System.Windows.Automation.AutomationProperties.SetName(input, "File name"); panel.Children.Add(input);
         var error = new TextBlock { Foreground = Brushes.IndianRed, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 8, 0, 16) }; panel.Children.Add(error);
         var buttons = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right };
-        buttons.Children.Add(Button("Rename", () =>
+        bool renaming = false;
+        var progress = new ProgressBar { IsIndeterminate = true, Height = 4, Visibility = Visibility.Collapsed, Margin = new Thickness(0, 0, 0, 12) }; panel.Children.Add(progress);
+        buttons.Children.Add(Button("Rename", async () =>
         {
-            try { rename(input.Text); w.Close(); }
+            renaming = true; buttons.IsEnabled = false; input.IsEnabled = false; progress.Visibility = Visibility.Visible; error.Text = "";
+            try { await rename(input.Text); renaming = false; w.Close(); }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
-            { error.Text = ex.Message; input.Focus(); }
+            { error.Text = ex.Message; }
+            finally { renaming = false; buttons.IsEnabled = true; input.IsEnabled = true; progress.Visibility = Visibility.Collapsed; if (error.Text.Length > 0) input.Focus(); }
         }, true));
         buttons.Children.Add(Button("Cancel", () => w.Close(), cancel: true)); panel.Children.Add(buttons);
         w.Content = panel;
+        w.Closing += (_, e) => e.Cancel = renaming;
         w.Loaded += (_, _) => { input.Focus(); int dot = currentName.LastIndexOf('.'); input.Select(0, dot > 0 ? dot : currentName.Length); };
         w.ShowDialog();
     }

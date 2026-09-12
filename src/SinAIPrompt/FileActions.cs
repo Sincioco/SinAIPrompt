@@ -71,26 +71,6 @@ public partial class MainWindow
         Application.Current.Windows.OfType<MainWindow>()
             .SelectMany(w => w.Documents.Where(d => string.Equals(d.Path, path, StringComparison.OrdinalIgnoreCase)).Select(d => (w, d))).ToList();
 
-    internal void RenameDocumentFile(Document doc, string name)
-    {
-        if (!Documents.Contains(doc) || doc.Path == null) throw new IOException("The document is no longer open as a saved file.");
-        string oldPath = doc.Path;
-        string destination = TextFiles.RenamePath(oldPath, name);
-        // Include missing-but-open destinations: they may hold unsaved work that would otherwise collide.
-        if (!string.Equals(oldPath, destination, StringComparison.OrdinalIgnoreCase) && OpenReferences(destination).Count > 0)
-            throw new IOException("The new name is already open in another tab or window. Choose a different name.");
-        var references = OpenReferences(oldPath);
-        TextFiles.Rename(oldPath, destination);
-        foreach (var (window, open) in references)
-        {
-            open.Path = destination; open.Notify(); _ = window.editors[open.Id].RefreshBase();
-            window.noticedVersions.Remove(open.Id);
-            if (open == window.ActiveDocument) window.ExternalNotice.Visibility = Visibility.Collapsed;
-        }
-        Preferences.Recent.RemoveAll(p => string.Equals(p, oldPath, StringComparison.OrdinalIgnoreCase));
-        AddRecent(destination); App.Current.MarkChanged();
-    }
-
     internal bool DeleteDocumentFile(Document doc, Func<string, bool, bool> confirm, Action<string>? recycle = null)
     {
         if (!Documents.Contains(doc) || doc.Path == null) return false;
