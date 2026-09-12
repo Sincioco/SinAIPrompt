@@ -98,12 +98,12 @@ async function pasteCode(existing=null){
   }
   if(highlight.error)report(highlight.error);
 }
-async function openAnnotation(image=null){
+async function openAnnotation(image=null,capturedSource=null){
   saveSelection();let mode=image?.dataset.sinStorage||(image?(/^data:/.test(image.getAttribute('src'))?'inline':'separate'):null);
   let state;
   const displayWidth=image?.getBoundingClientRect().width||800;
   if(image?.dataset.sinAnnotation){state=JSON.parse(image.dataset.sinAnnotation);}
-  else if(image){const png=await toPng(image.src);state={version:1,width:png.width,height:png.height,background:'none',objects:[{id:id(),type:'embedded-image',name:'Original Image',source:png.data,x:0,y:0,width:png.width,height:png.height,isOriginalImage:true,visible:true}]};}
+  else if(image||capturedSource){const png=await toPng(capturedSource||image.src);state={version:1,width:png.width,height:png.height,background:'none',objects:[{id:id(),type:'embedded-image',name:capturedSource?'Screen Capture':'Original Image',source:png.data,x:0,y:0,width:png.width,height:png.height,isOriginalImage:true,visible:true}]};}
   else {state={version:1,width:800,height:500,blankCanvas:true,background:'none',objects:[]};}
   const result=await annotate(state);if(!result)return;
   if(!mode)mode=await storageChoice();if(!mode)return;
@@ -124,6 +124,12 @@ function shortcuts(event){
 }
 $('#pasteCode').onclick=()=>pasteCode().catch(report);
 $('#insertImage').onclick=()=>openAnnotation(selectedImage?.isConnected?selectedImage:null).catch(report);
+$('#screenCapture').onclick=async()=>{
+  saveSelection();$('#screenCapture').disabled=true;
+  try{const source=await request('screen-capture');if(source)await openAnnotation(null,source);}
+  catch(error){report(error);}
+  finally{$('#screenCapture').disabled=false;}
+};
 $('#toolbar').addEventListener('click',event=>{
   const action=event.target.closest('[data-native-command]')?.dataset.nativeCommand;
   if(action)send('command',{command:action,html:html(true)});

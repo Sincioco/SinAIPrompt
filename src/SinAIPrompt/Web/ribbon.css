@@ -48,6 +48,10 @@
 #toolbar #insertImage svg{color:#185abd;width:27px;height:27px;stroke-width:1.7}
 #toolbar[data-style-mode=modern] .style-tile span{font-family:"Segoe UI",Arial,sans-serif;color:#1f2328}
 #toolbar[data-style-mode=modern] :is(.style-heading,.style-heading2,.style-title) span{font-weight:600}
+#toolbar[data-style-mode=modern] .style-heading span{font-size:22px}
+#toolbar[data-style-mode=modern] .style-heading2 span{font-size:28px}
+#toolbar[data-style-mode=modern] .style-title span{font-size:34px}
+#toolbar .highlight-color svg{width:20px;height:20px}
 @media(max-width:800px){.ribbon-groups{grid-template-columns:152px 278px minmax(140px,1fr)}.styles-group{grid-column:1/-1;border-top:1px solid var(--line);padding-top:5px}.style-gallery{height:55px}.group-caption{padding-top:2px}.ribbon-group.paragraph-group{border-right:0}.ribbon-hint{display:none}}
 @media(max-width:580px){.ribbon-groups{grid-template-columns:140px minmax(270px,1fr)}.paragraph-group{grid-column:1/-1;flex-direction:row;align-items:center;gap:10px;border-top:1px solid var(--line)}.paragraph-row{gap:6px}.paragraph-group .group-caption{margin:0 0 0 auto}.ribbon-actions{flex-wrap:wrap}}
 :root[data-theme=dark] .style-tile{background:#fff!important;color:#000!important}

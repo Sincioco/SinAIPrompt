@@ -17,6 +17,7 @@ Paths below are relative to `src/`; unqualified native filenames are under
 | Visual/source editing adapter | `EditorView.cs` + `HtmlEditorHost.cs`: one document's WPF source view, WebView lifecycle, synchronization, mapping, native messages | Calls the window and platform adapters. Existing reverse coupling must not spread. Source/visual, immediate save, image, typing tests. |
 | Document data and persistence | `SinAIPrompt.Core/Documents.cs`: `Document`, settings/session records, `TextFiles`, `Store`, numbering, search | Core uses .NET APIs; no dependency on the WPF app or WebView. Save/conflict, recovery, numbering checks. |
 | Platform services | `HtmlAssets.cs`, `AnnotationClipboard.cs`, `FileAssociations.cs`, `StorageLocation.cs`; `Dialogs.cs` builds native dialogs | Narrow Windows/file operations. Clipboard, PNG, storage and native dialog tests. |
+| Screen capture | `ScreenCapture.cs` owns Win32 monitor/window enumeration and physical-pixel capture; each `ScreenCaptureDialog` owns its picker, cancellable countdown and window restoration; `CaptureRegionWindow` owns selection over one frozen bitmap | The host passes only its owner window and receives an in-memory PNG. Capture/encoding run on workers; the browser reuses annotation and image storage. `ScreenCaptureSelfTest` covers actual window pixels, picker initialization, cursor option, delay, cancellation, scaling and negative coordinates. |
 | Browser editor | `SinAIPrompt/Web/editor.js`: live document, caret/selection, pending synchronization and exports | Uses `document.js`, annotation UI, highlighting, and bridge. Browser integration suite. |
 | Document styling and formatting | `Web/document-styles.js` owns Office/Modern presets and CSS; the HTML root owns its persisted style mode. `ribbon.js` owns gallery/painter UI state; `word-styles.js` owns paragraph operations; `text-formatting.js` owns a document's pending insertion font | Editor supplies document/selection/change callbacks. `ribbon-self-test.js` covers paragraph scope, spacing, fonts, undo, Enter, mode persistence, painter and clipboard. No imports back into the editor. |
 | Color palettes | `Web/color-picker.js` owns each temporary popup; callers own color values. `annotation-colors.js` adapts existing inspector values/events | Annotation retains scene/history ownership. Native color inputs replaced without moving annotation state. Browser palette/transparency checks. |
@@ -132,6 +133,24 @@ The Insert Link regression is fixed in the shared form dialog: Cancel bypasses
 constraint validation, while Apply still validates the address. Its browser
 check covers both empty and invalid addresses, cancellation without a content
 change, and successful insertion at the saved selection.
+
+The 12:02 enhancements revise Modern Title/Heading/Heading2 to 34/22/28 points,
+matching the numeric toolbar's units. Existing saved formatting is preserved
+until the user reapplies a preset or switches document mode. Ribbon controls and
+the Document List header remain in their existing UI owners.
+
+Screen capture uses Windows GDI and DWM APIs, with no downloaded components or
+new dependency. Window capture brings the chosen window forward and captures
+its visible desktop pixels; it does not reconstruct obscured/off-screen content
+or bypass protected surfaces. Region selection overlays a frozen capture, so
+its controls and selection cursor cannot appear in the PNG. Include Cursor is
+off by default and composites the current Windows pointer, with its hotspot,
+before region selection. Capture and insertion do not write to the clipboard.
+Browser integration checks cover captured-image cancellation and applying at
+the saved caret through the normal storage choice. Live mixed-DPI/multi-monitor,
+HDR and protected-window behavior remain hardware/manual validation areas;
+scaled/negative-coordinate geometry is covered automatically. MainWindow's
+616-line baseline, dependency directions and guardrail limits are unchanged.
 
 ## Template adoption
 

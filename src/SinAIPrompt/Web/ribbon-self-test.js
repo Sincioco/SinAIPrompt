@@ -42,9 +42,15 @@ export async function runRibbonTests(check) {
     select('p',2);style('heading');
     const heading=doc().querySelector('p'),content=doc().body.textContent;
     css=doc().defaultView.getComputedStyle(heading);
-    check(css.fontSize==='32px'&&css.fontWeight==='600'&&css.color==='rgb(31, 35, 40)'&&css.borderBottomWidth==='1px','Modern Heading uses the reference size, color, weight and divider');
+    check(Math.abs(parseFloat(css.fontSize)-22*4/3)<.05&&css.fontWeight==='600'&&css.color==='rgb(31, 35, 40)'&&css.borderBottomWidth==='1px','Modern Heading uses 22 points with the reference color, weight and divider');
+    for(const [id,points] of [['title',34],['heading2',28],['heading',22]]){
+      style(id);await delay();
+      check(Math.abs(parseFloat(doc().defaultView.getComputedStyle(doc().querySelector('p')).fontSize)-points*4/3)<.05&&Number(document.querySelector('#fontSize').value)===points,'Modern '+id+' applies the requested point size and displays it in the font box');
+    }
+    check(document.querySelector('#fontSize').type==='number'&&!document.querySelector('#fontSize').hasAttribute('list'),'Font size retains numeric spin controls without the extra datalist arrow');
+    check(document.querySelector('#backColor svg path')&&!document.querySelector('#backColor').textContent.includes('▰'),'Highlight uses a recognizable marker icon instead of the block glyph');
     document.querySelector('#documentStyle').value='office';document.querySelector('#documentStyle').dispatchEvent(new Event('change'));
-    css=doc().defaultView.getComputedStyle(heading);
+    css=doc().defaultView.getComputedStyle(doc().querySelector('p'));
     check(css.fontFamily.includes('Aptos Display')&&css.color==='rgb(15, 71, 97)'&&css.borderBottomStyle==='none'&&doc().body.textContent===content,'MS Office Style updates styled paragraphs without losing content');
     document.querySelector('#documentStyle').value='modern';document.querySelector('#documentStyle').dispatchEvent(new Event('change'));
     const modern=window.editor.html();await window.editor.load(modern);

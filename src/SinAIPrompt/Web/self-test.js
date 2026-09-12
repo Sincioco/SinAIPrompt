@@ -179,6 +179,20 @@ export async function run(){
     const layout=await request('test-annotation-layout');
     check(!layout.expanded&&layout.backgroundEnabled&&window.editor.html()===beforeCancel,'Annotation '+cancel+' restores the shell without changing the document');
   }
+  const beforeCapture=window.editor.html();
+  const canceledCapture=window.editor.openAnnotation(null,png);await waitFor('dialog.annotation');
+  check(document.querySelectorAll('[data-layer]').length===1&&document.querySelector('#canvas image').getAttribute('width')==='360','Screen capture opens as one image layer at its original resolution');
+  click('[data-action=cancel]');await canceledCapture;
+  check(window.editor.html()===beforeCapture,'Canceling a captured image leaves document content unchanged');
+  selectText('p');doc().getSelection().collapseToStart();doc().dispatchEvent(new Event('selectionchange'));
+  const preceding=doc().createRange();preceding.selectNodeContents(doc().body);preceding.setEnd(doc().getSelection().anchorNode,doc().getSelection().anchorOffset);
+  const textBeforeCapture=preceding.toString();
+  const captured=window.editor.openAnnotation(null,png);await waitFor('dialog.annotation');click('[data-action=apply]');
+  await waitFor('dialog button[value=inline]');click('dialog button[value=inline]');await captured;
+  const capturedImage=[...doc().images].find(image=>image.dataset.sinAnnotation&&JSON.parse(image.dataset.sinAnnotation).objects[0].name==='Screen Capture');
+  if(capturedImage)preceding.setEndBefore(capturedImage);
+  check(capturedImage?.dataset.sinStorage==='inline'&&preceding.toString()===textBeforeCapture,'Applying a screen capture inserts at the saved caret with the chosen storage and editable layer');
+  await window.editor.load(beforeCapture);
   const savedHtml=window.editor.html();
   await runRibbonTests(check);
   await window.editor.load('<p id="typing">Typing:</p>');
