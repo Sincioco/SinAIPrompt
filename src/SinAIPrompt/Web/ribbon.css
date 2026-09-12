@@ -1,9 +1,9 @@
 #toolbar{flex:none;background:var(--surface);border-bottom:1px solid var(--line);padding:6px 8px 0;user-select:none}
 .ribbon-groups{display:flex;flex-wrap:wrap;gap:0;align-items:stretch}
-.file-group{width:128px}.clipboard-group{width:152px}.font-group{width:278px}.paragraph-group{width:166px}.styles-group{flex:0 1 auto;max-width:570px;min-width:150px}.tools-group{width:128px}
+.file-group{width:128px}.clipboard-group{width:152px}.font-group{width:278px}.paragraph-group{width:166px}.styles-group{flex:0 1 auto;max-width:570px;min-width:150px}.tools-group{width:225px}
 .tools-controls{display:flex;align-items:stretch;min-height:66px;gap:3px}
 #toolbar .tools-controls button,#toolbar #screenCapture{display:flex;flex-direction:column;justify-content:center;align-items:center;gap:4px;font-size:11px;flex:1}
-#toolbar .save-large svg,#toolbar #screenCapture svg{width:27px;height:29px}
+#toolbar .save-large svg,#toolbar .tools-controls svg{width:27px;height:29px}
 .ribbon-group{min-width:0;padding:3px 8px 0;border-right:1px solid var(--line);display:flex;flex-direction:column}
 .ribbon-group:last-child{border-right:0;padding-right:0}
 .group-caption{text-align:center;font-size:11px;color:var(--text);padding:5px 0 3px;margin-top:auto}

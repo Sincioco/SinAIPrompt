@@ -32,6 +32,13 @@ public sealed partial class EditorView
         sourceBack = new Button { Content = "← Visual editor    ·    HTML source", HorizontalAlignment = HorizontalAlignment.Left, Margin = new Thickness(8), Visibility = Visibility.Collapsed };
         sourceBack.Click += (_, _) => ToggleSource(); SetColumnSpan(sourceBack, 2); Children.Add(sourceBack);
         Browser = new WebView2(); SetColumnSpan(Browser, 2); SetRowSpan(Browser, 2); Children.Add(Browser);
+        Browser.IsVisibleChanged += async (_, _) =>
+        {
+            // Fullscreen temporarily reparents the host. Check the settled layout
+            // before stopping media when switching documents or opening source.
+            await System.Windows.Threading.Dispatcher.Yield(System.Windows.Threading.DispatcherPriority.ContextIdle);
+            if (ready && !disposed && !Browser.IsVisible) await Browser.ExecuteScriptAsync("window.editor.stopMedia()");
+        };
         UpdateMode();
         Editor.TextChanged += (_, _) => { if (!receiving && ready && IsVisual) LoadHtml(); };
         Loaded += OnHtmlLoaded;
@@ -58,6 +65,7 @@ public sealed partial class EditorView
             Browser.CoreWebView2.NewWindowRequested += (_, args) => args.Handled = true;
             Browser.CoreWebView2.PermissionRequested += (_, args) => args.State = args.PermissionKind == CoreWebView2PermissionKind.ClipboardRead ? CoreWebView2PermissionState.Allow : CoreWebView2PermissionState.Deny;
             Browser.CoreWebView2.WebMessageReceived += ReceiveMessage;
+            _ = new EditorFullscreen(Browser.CoreWebView2, () => Owner, open => Owner.SetAnnotationMode(this, open));
             Browser.Source = new Uri("https://sin-editor.local/index.html?v=1.0.0");
         }
         catch (Exception ex)
@@ -123,7 +131,10 @@ public sealed partial class EditorView
                 case "editor-paste": result = await EditorClipboard.ReadAsync(Document.Id.ToString()); break;
                 case "editor-fonts": result = await EditorFonts.StyleSheetAsync(Browser.CoreWebView2); break;
                 case "link-preview": result = await LinkPreview.FetchAsync(message.GetProperty("url").GetString()!); break;
+                case "youtube-preview": result = await LinkPreview.FetchVideoAsync(message.GetProperty("url").GetString()!, message.GetProperty("saveThumbnail").GetBoolean()); break;
+                case "open-video": LinkPreview.OpenVideo(message.GetProperty("video").GetString()!); break;
                 case "screen-capture": result = await ScreenCaptureDialog.CaptureAsync(Owner); break;
+                case "region-capture": result = await ScreenCaptureDialog.CaptureRegionAsync(Owner); break;
                 case "test-clipboard-formats" when App.Current.TestMode: result = AnnotationClipboard.TestData?.GetFormats(false); break;
                 case "command":
                     if (message.TryGetProperty("html", out var html)) AcceptHtml(html.GetString()!);
@@ -134,6 +145,7 @@ public sealed partial class EditorView
                 case "save-image-as" when saveAsPath != null:
                     result = await HtmlAssets.SavePngAsync(saveAsPath, message.GetProperty("data").GetString()!); break;
                 case "read-image": result = await HtmlAssets.ReadImageAsync(Document.Path, message.GetProperty("source").GetString()!); break;
+                case "open-image": await ImageExternalViewer.OpenAsync(App.Current.Store.DirectoryPath, message.GetProperty("data").GetString()!); break;
                 case "reuse-image": result = await HtmlAssets.ReusePngAsync(Document.Path, message.GetProperty("data").GetString()!); break;
                 case "templates-load": result = App.Current.Store.Read<List<JsonElement>>("templates.json"); break;
                 case "templates-save": App.Current.Store.Write("templates.json", message.GetProperty("templates")); break;
@@ -210,7 +222,7 @@ public sealed partial class EditorView
     {
         if (Browser == null) return;
         UpdateMode(); Browser.ZoomFactor = Document.Zoom / 100.0;
-        if (ready) _ = Browser.ExecuteScriptAsync($"document.documentElement.dataset.theme={Json(App.Current.Preferences.Theme.ToLowerInvariant())};document.querySelector('#toolbar').hidden={Json(!App.Current.Preferences.ShowToolbar)}");
+        if (ready) _ = Browser.ExecuteScriptAsync($"document.documentElement.dataset.theme={Json(App.Current.Preferences.Theme.ToLowerInvariant())};document.querySelector('#toolbar').hidden={Json(!App.Current.Preferences.ShowToolbar)};window.editor.setImageStorage({Json(App.Current.Preferences.ImageStorage)})");
     }
     public async Task<string?> PrepareSaveAsAsync(string path)
     {

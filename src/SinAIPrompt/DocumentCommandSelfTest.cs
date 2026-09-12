@@ -45,10 +45,11 @@ internal static class DocumentCommandSelfTest
             "Rename is available for a new unsaved document");
         await view.Browser.ExecuteScriptAsync("window.editor.command('insertText','Draft rename keeps this text')");
         await view.FlushAsync();
+        check(window.Title.EndsWith(doc.Name + " *"), "Typing marks the current document title with an asterisk");
         string originalText = doc.Text;
         int editors = window.CreatedEditorCount;
         await window.RenameDocumentFile(doc, "My renamed draft");
-        check(doc.Name == "My renamed draft" && window.Title.EndsWith(doc.Name) && doc.Path == null &&
+        check(doc.Name == "My renamed draft" && window.Title.EndsWith(doc.Name + " *") && doc.Path == null &&
             doc.Text == originalText && doc.Dirty && window.CreatedEditorCount == editors,
             "Draft rename updates its title without saving, losing edits, or creating an editor");
         check(App.Current.SaveState(), "Renamed draft can be saved to session recovery");
@@ -87,6 +88,7 @@ internal static class DocumentCommandSelfTest
             saved = File.ReadAllText(doc.Path!).Contains("Shortcut save regression");
         }
         check(saved, "The consumed Ctrl+S still saves the pending visual edit");
+        check(window.Title.EndsWith(doc.Name) && !window.Title.EndsWith(" *"), "Saving removes the modified-document title asterisk");
         var bold = KeyPress(Key.B);
         window.RaiseEvent(bold);
         check(!bold.Handled, "Browser formatting shortcuts still pass through the native window");
@@ -126,6 +128,13 @@ internal static class DocumentCommandSelfTest
                         foreach (var descendant in Controls(child)) yield return descendant;
                 }
                 var controls = Controls(dialog).ToArray();
+                var inline = controls.OfType<CheckBox>().Single(b => b.Content.ToString()!.StartsWith("Always Embed Images"));
+                var separate = controls.OfType<CheckBox>().Single(b => b.Content.ToString()!.StartsWith("Always Store Images"));
+                check(inline.IsChecked == false && separate.IsChecked == false, "Both image storage defaults start turned off");
+                inline.IsChecked = true; separate.IsChecked = true;
+                check(inline.IsChecked == false && separate.IsChecked == true, "Separate image storage clears the embed preference");
+                inline.IsChecked = true;
+                check(separate.IsChecked == false, "Embedding image storage clears the separate-file preference");
                 var tabs = controls.OfType<TabControl>().Single();
                 check(tabs.Items.Count == 3 && dialog.ActualHeight <= 570, "Settings groups options in three compact tabs");
                 tabs.SelectedIndex = 1;
@@ -143,6 +152,8 @@ internal static class DocumentCommandSelfTest
         window.ApplyPreferences();
         check(preferences.ShowToolbar && App.Current.Store.Read<Settings>("settings.json").ShowToolbar &&
             await view.Browser.ExecuteScriptAsync("!document.querySelector('#toolbar').hidden") == "true", "Settings restores the toolbar and persists the same visibility preference");
+        check(preferences.ImageStorage == "inline" && App.Current.Store.Read<Settings>("settings.json").ImageStorage == "inline", "The selected image storage default persists in application settings");
+        preferences.ImageStorage = ""; window.ApplyPreferences();
     }
 
     public static async Task DuplicateAndRevert(MainWindow window, Action<bool, string> check)

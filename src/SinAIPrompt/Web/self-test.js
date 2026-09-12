@@ -7,6 +7,7 @@ import {runRibbonTests} from './ribbon-self-test.js';
 import {runDocumentToolsTests} from './document-tools-self-test.js';
 import {runNumberingTests} from './numbering-self-test.js';
 import {runCodeBlockTests} from './code-block-self-test.js';
+import {runMediaTests} from './media-self-test.js';
 
 export async function run(){
   const results=[];const check=(value,name)=>{if(!value)throw Error(name);results.push(name);};
@@ -21,6 +22,7 @@ export async function run(){
   await runDocumentToolsTests(check);
   await runNumberingTests(check);
   await runCodeBlockTests(check);
+  await runMediaTests(check);
   check(doc().body.isContentEditable,'Visual HTML is editable');
   const renamed=parseHtml(renameImageFolder('<p>Old folder/photo.png</p><img src="./Old%20folder/photo.png?size=1#preview"><img src="https://example.invalid/Old%20folder/photo.png"><img src="Other/photo.png">','Old folder','New # folder'));
   check(renamed.images[0].getAttribute('src')==='New%20%23%20folder/photo.png?size=1#preview'&&renamed.images[1].getAttribute('src').startsWith('https://example.invalid/')&&renamed.images[2].getAttribute('src')==='Other/photo.png'&&renamed.querySelector('p').textContent==='Old folder/photo.png','Folder rename updates encoded local image references without replacing other text or URLs');
@@ -66,6 +68,8 @@ export async function run(){
   check(!document.querySelector('#imagebar'),'Selecting an image no longer adds the blue image toolbar');
   for(const corner of ['nw','ne','se','sw']){
     const selected=doc().querySelector('img');selected.scrollIntoView({block:'center'});selected.click();await delay(30);
+    check(document.querySelector('.image-actions').matches(':popover-open')&&document.querySelector('[data-image-resize=nw]').getBoundingClientRect().width===0,'Image selection opens its dropdown before showing resize handles');
+    click('[data-image-action=resize]');
     const before=selected.getBoundingClientRect(),handle=document.querySelector(`[data-image-resize=${corner}]`).getBoundingClientRect();
     if(corner==='nw')await request('test-capture',{name:'inline-selection'});
     await drag({x:handle.x+5,y:handle.y+5},{x:handle.x+5+(corner.includes('w')?35:-35),y:handle.y+5+(corner.includes('n')?5:-5)});

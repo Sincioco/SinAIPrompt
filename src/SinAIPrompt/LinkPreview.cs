@@ -4,15 +4,19 @@ using System.Net.Http;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Text.Json.Serialization;
+using System.Text.Json;
+using System.Diagnostics;
 using System.Windows.Media.Imaging;
 
 namespace SinAIPrompt;
 
-// Fetch only when the user inserts a link. Returned PNGs are embedded in the
-// document, so reopening it never contacts the source site or loads its scripts.
+// Bounded, optional metadata reads at insertion. Static previews embed PNGs;
+// YouTube cards retain a remote thumbnail unless the user asks to save it locally.
 internal static class LinkPreview
 {
     internal sealed record Preview([property: JsonPropertyName("title")] string Title, [property: JsonPropertyName("image")] string Image);
+    internal sealed record Video([property: JsonPropertyName("id")] string Id, [property: JsonPropertyName("title")] string Title,
+        [property: JsonPropertyName("author")] string Author, [property: JsonPropertyName("image")] string Image);
     static readonly HttpClient http = new(new HttpClientHandler
     {
         AutomaticDecompression = DecompressionMethods.All,
@@ -50,6 +54,34 @@ internal static class LinkPreview
             // Missing/private/blocked metadata is ordinary: the link still works.
             return null;
         }
+    }
+
+    internal static async Task<Video?> FetchVideoAsync(string address, bool saveThumbnail, HttpClient? client = null)
+    {
+        if (!WebUri(address, out var url) || YouTubeId(url!) is not string id) return null;
+        client ??= http;
+        string title = "YouTube video", author = "", image = $"https://i.ytimg.com/vi/{id}/hqdefault.jpg";
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(8));
+        try
+        {
+            var metadata = await ReadAsync(client, new Uri("https://www.youtube.com/oembed?url=" + Uri.EscapeDataString("https://www.youtube.com/watch?v=" + id) + "&format=json"), 256_000, timeout.Token);
+            using var json = JsonDocument.Parse(metadata.Bytes);
+            if (json.RootElement.TryGetProperty("title", out var value)) title = value.GetString() ?? title;
+            if (json.RootElement.TryGetProperty("author_name", out value)) author = value.GetString() ?? "";
+        }
+        catch (Exception error) when (error is not OutOfMemoryException) { /* Playback can still work without metadata. */ }
+        if (saveThumbnail)
+        {
+            var thumbnail = await ReadAsync(client, new Uri(image), 8_000_000, timeout.Token);
+            image = await Task.Run(() => Thumbnail(thumbnail.Bytes), timeout.Token);
+        }
+        return new(id, title, author, image);
+    }
+
+    internal static void OpenVideo(string id)
+    {
+        if (!Regex.IsMatch(id, @"^[A-Za-z0-9_-]{11}$", RegexOptions.None, regexTimeout)) throw new ArgumentException("Invalid YouTube video.");
+        Process.Start(new ProcessStartInfo("https://www.youtube.com/watch?v=" + id) { UseShellExecute = true });
     }
 
     internal static Preview Metadata(string html, Uri page)

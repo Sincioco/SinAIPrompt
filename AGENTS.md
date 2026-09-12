@@ -28,6 +28,8 @@ dependencies, validation, and expected growth; keep the assessment proportional.
 
 ## Commits
 
+Commit and push completed, validated work at the end of each task.
+
 Every Codex-created commit subject starts exactly with `Sin and Codex: `.
 Nontrivial commits include a detailed body with Summary, Changes, Validation, and Known limitations.
 Describe actual behavior and only checks performed. Commit coherent validated work; never

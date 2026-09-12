@@ -13,7 +13,7 @@ export function createImageSelection(frame,changed,onSelection){
   }
   function select(next){
     image?.removeAttribute('data-sin-selected');observer?.disconnect();observer=null;
-    image=next;overlay.hidden=!image;onSelection(image);
+    image=next;overlay.hidden=!image;overlay.dataset.resizing='false';onSelection(image);
     if(image){
       image.dataset.sinSelected='1';observer=new ResizeObserver(position);observer.observe(image);position();
       const doc=image.ownerDocument,range=doc.createRange();range.selectNode(image);
@@ -32,7 +32,7 @@ export function createImageSelection(frame,changed,onSelection){
     doc.addEventListener('dragend',()=>{if(draggedImage){draggedImage=null;select(null);changed();}});
   }
   overlay.addEventListener('pointerdown',event=>{
-    if(event.button!==0||!image)return;
+    if(event.button!==0||!image||!event.target.dataset.imageResize)return;
     event.preventDefault();event.stopPropagation();
     gesture={x:event.clientX,y:event.clientY,rect:image.getBoundingClientRect(),style:image.getAttribute('style'),corner:event.target.dataset.imageResize};
     // Keep a drag in the parent document when the pointer crosses the iframe.
@@ -51,9 +51,10 @@ export function createImageSelection(frame,changed,onSelection){
     const doc=image.ownerDocument,index=[...doc.images].indexOf(image),replacement=image.cloneNode(true);
     replacement.removeAttribute('data-sin-selected');restore();gesture=null;
     doc.body.focus();const range=doc.createRange();range.selectNode(image);doc.getSelection().removeAllRanges();doc.getSelection().addRange(range);
-    doc.execCommand('insertHTML',false,replacement.outerHTML);select(doc.images[index]);changed();
+    doc.execCommand('insertHTML',false,replacement.outerHTML);select(doc.images[index]);resize();changed();
     shield?.remove();shield=null;
   });
   document.addEventListener('pointercancel',()=>{if(gesture&&image){restore();gesture=null;position();}shield?.remove();shield=null;});
-  return {select,attach,get selected(){return image;}};
+  function resize(){if(image){overlay.dataset.resizing='true';position();}}
+  return {select,attach,resize,get selected(){return image;}};
 }

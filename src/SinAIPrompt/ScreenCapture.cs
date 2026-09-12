@@ -12,6 +12,7 @@ namespace SinAIPrompt;
 // coordinates. Capture UI and its lifetime belong to ScreenCaptureDialog.
 internal static class ScreenCapture
 {
+    internal static Int32Rect DesktopBounds => new(GetSystemMetrics(76), GetSystemMetrics(77), GetSystemMetrics(78), GetSystemMetrics(79));
     internal sealed record Target(string Name, nint Window, Int32Rect Bounds)
     {
         public override string ToString() => Name;
@@ -70,8 +71,7 @@ internal static class ScreenCapture
             !GetWindowRect(target.Window, out rect)) throw new Win32Exception();
         // A desktop capture contains the visible portion when a window extends
         // beyond the virtual desktop; it never invents off-screen pixels.
-        var desktop = new Int32Rect(GetSystemMetrics(76), GetSystemMetrics(77), GetSystemMetrics(78), GetSystemMetrics(79));
-        return Intersect(rect.Pixels, desktop);
+        return Intersect(rect.Pixels, DesktopBounds);
     }
 
     internal static Int32Rect Intersect(Int32Rect a, Int32Rect b)

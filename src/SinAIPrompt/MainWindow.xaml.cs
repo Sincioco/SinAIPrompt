@@ -38,7 +38,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                 EditorHost.Content = GetEditor(value);
                 ExternalNotice.Visibility = Visibility.Collapsed;
                 UpdateStatus(); UpdateSearchStatus();
-                Title = "Sin - AI Prompt - " + value.Name;
+                Title = "Sin - AI Prompt - " + value.Name + (value.Dirty ? " *" : "");
                 Dispatcher.BeginInvoke(() => { if (!IsLoaded) return; Tabs.ScrollIntoView(value); DocumentList.ScrollIntoView(value); }, DispatcherPriority.Loaded);
             }
             PropertyChanged?.Invoke(this, new(nameof(ActiveDocument)));
@@ -109,7 +109,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     void AddDocument(Document doc, bool activate = true)
     {
         Documents.Add(doc);
-        doc.PropertyChanged += (_, _) => { if (doc == ActiveDocument) { Title = "Sin - AI Prompt - " + doc.Name; UpdateStatus(); } };
+        doc.PropertyChanged += (_, _) => { if (doc == ActiveDocument) { Title = "Sin - AI Prompt - " + doc.Name + (doc.Dirty ? " *" : ""); UpdateStatus(); } };
         if (activate) { ActiveDocument = doc; UpdateTabWidths(); }
         App.Current.MarkChanged();
         if (doc.AutoSave && doc.Dirty) pendingAutoSaves[doc.Id] = DateTime.UtcNow;

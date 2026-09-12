@@ -98,6 +98,29 @@ internal sealed class ScreenCaptureDialog : Window
         finally { Owner.WindowState = originalState; }
     }
 
+    internal static async Task<string?> CaptureRegionAsync(Window owner)
+    {
+        var originalState = owner.WindowState;
+        bool wasEnabled = owner.IsEnabled;
+        try
+        {
+            // Keep the countdown nonmodal so the user can arrange any window,
+            // including this editor, before freezing the desktop.
+            await CountdownAsync(3, CancellationToken.None);
+            owner.IsEnabled = false;
+            var bounds = ScreenCapture.DesktopBounds;
+            var image = await Task.Run(() => ScreenCapture.Capture(bounds, includeCursor: false));
+            image = CaptureRegionWindow.Select(image, bounds, magnify: true);
+            return image == null ? null : await Task.Run(() => ScreenCapture.Png(image));
+        }
+        catch (OperationCanceledException) { return null; }
+        finally
+        {
+            owner.WindowState = originalState;
+            owner.IsEnabled = wasEnabled; owner.Activate();
+        }
+    }
+
     static async Task CountdownAsync(int seconds, CancellationToken cancellation)
     {
         if (seconds == 0) { await Task.Delay(200, cancellation); return; }

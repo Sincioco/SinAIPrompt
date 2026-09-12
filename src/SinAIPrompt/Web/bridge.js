@@ -9,9 +9,10 @@ if (native) window.chrome.webview.addEventListener('message', ({data}) => {
 export function send(type, data = {}) { window.chrome?.webview?.postMessage({type, ...data}); }
 export function request(type, data = {}) {
   if (!native) {
-    if (type === 'screen-capture') return Promise.reject(new Error('Screen Capture is available in the desktop application.'));
+    if (['screen-capture','region-capture','open-image','open-video'].includes(type)) return Promise.reject(new Error('This action is available in the desktop application.'));
     if (type === 'annotation-mode') return Promise.resolve();
     if (type === 'link-preview') return Promise.resolve(null);
+    if (type === 'youtube-preview') return Promise.resolve(null);
     if (type === 'annotation-copy' || type === 'annotation-paste') return Promise.reject(new Error('Object clipboard is available in the desktop application.'));
     if (type === 'templates-load') return Promise.resolve(JSON.parse(localStorage.getItem('sin.templates') || '[]'));
     if (type === 'templates-save') { localStorage.setItem('sin.templates', JSON.stringify(data.templates)); return Promise.resolve(); }

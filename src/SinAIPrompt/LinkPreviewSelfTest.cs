@@ -24,6 +24,14 @@ internal static class LinkPreviewSelfTest
             check(preview?.Image.StartsWith("data:image/png;base64,") == true && handler.Addresses.Last() == "https://i.ytimg.com/vi/AbcD_123-xy/hqdefault.jpg", "YouTube thumbnail supports " + new Uri(url).Host + new Uri(url).AbsolutePath);
         }
         check(LinkPreview.YouTubeId(new Uri("https://youtube.com.evil.invalid/watch?v=AbcD_123-xy")) == null, "Only exact YouTube hosts receive YouTube thumbnail handling");
+        handler.Addresses.Clear();
+        var video = await LinkPreview.FetchVideoAsync("https://youtu.be/AbcD_123-xy", false, client);
+        check(video?.Title == "Video & title" && video.Author == "Example channel" && video.Image.StartsWith("https://i.ytimg.com/") && handler.Addresses.Count == 1,
+            "YouTube cards read title and author without downloading thumbnail bytes by default");
+        video = await LinkPreview.FetchVideoAsync("https://youtu.be/AbcD_123-xy", true, client);
+        check(video?.Image.StartsWith("data:image/png;base64,") == true, "YouTube local-thumbnail option saves a decoded PNG inside the document");
+        check(await LinkPreview.FetchVideoAsync("https://youtube.com.evil.invalid/watch?v=AbcD_123-xy", false, client) == null,
+            "Video metadata handling rejects lookalike YouTube domains");
         check(await LinkPreview.FetchAsync("file:///private.png", client) == null && await LinkPreview.FetchAsync("https://preview.invalid/large", client) == null,
             "Thumbnail retrieval rejects non-web addresses and oversized responses");
         check(await LinkPreview.FetchAsync("https://preview.invalid/missing", client) == null, "Missing link thumbnails fall back without failing link insertion");
@@ -39,6 +47,7 @@ internal static class LinkPreviewSelfTest
             string url = request.RequestUri!.AbsoluteUri; Addresses.Add(url);
             var response = new HttpResponseMessage(HttpStatusCode.OK) { RequestMessage = request };
             if (url.EndsWith("/page")) response.Content = new StringContent("<meta content='Example &amp; title' property='og:title'><meta content='photo.png' property='og:image'>", System.Text.Encoding.UTF8, "text/html");
+            else if (request.RequestUri.AbsolutePath == "/oembed") response.Content = new StringContent("{\"title\":\"Video & title\",\"author_name\":\"Example channel\"}", System.Text.Encoding.UTF8, "application/json");
             else if (url.EndsWith("/large")) { response.Content = new ByteArrayContent([]); response.Content.Headers.ContentLength = 3_000_000; }
             else if (url.EndsWith(".png") || url.EndsWith(".jpg")) { response.Content = new ByteArrayContent(png); response.Content.Headers.ContentType = new("image/png"); }
             else response.StatusCode = HttpStatusCode.NotFound;

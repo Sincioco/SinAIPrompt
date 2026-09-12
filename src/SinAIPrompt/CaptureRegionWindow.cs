@@ -18,7 +18,7 @@ internal sealed class CaptureRegionWindow : Window
     Point? start;
     BitmapSource? result;
 
-    CaptureRegionWindow(BitmapSource image, Int32Rect bounds)
+    CaptureRegionWindow(BitmapSource image, Int32Rect bounds, bool magnify)
     {
         this.image = image;
         Title = "Select Capture Region";
@@ -29,6 +29,8 @@ internal sealed class CaptureRegionWindow : Window
         var root = new Grid();
         root.Children.Add(new Image { Source = image, Stretch = Stretch.Fill });
         surface.Children.Add(shade); surface.Children.Add(outline); root.Children.Add(surface);
+        CaptureMagnifier? magnifier = magnify ? new(surface, image, bounds) : null;
+        if (magnify) { shade.Visibility = Visibility.Collapsed; outline.Stroke = Brushes.DeepSkyBlue; }
         var cancel = new Button { Content = "Cancel", Padding = new Thickness(12, 4, 12, 4), Margin = new Thickness(14, 0, 0, 0) };
         cancel.Click += (_, _) => Close();
         var instruction = new StackPanel { Orientation = Orientation.Horizontal };
@@ -38,22 +40,31 @@ internal sealed class CaptureRegionWindow : Window
             Padding = new Thickness(16, 10, 16, 10), Margin = new Thickness(12), CornerRadius = new CornerRadius(5),
             HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Top });
         Content = root;
-        Loaded += (_, _) => { ScreenCapture.Place(this, bounds); Opacity = 1; Activate(); };
+        Loaded += (_, _) => { ScreenCapture.Place(this, bounds); Opacity = 1; Activate(); magnifier?.Update(Mouse.GetPosition(surface)); };
         surface.SizeChanged += (_, _) => Draw(Rect.Empty);
         surface.MouseLeftButtonDown += (_, e) => { start = e.GetPosition(surface); surface.CaptureMouse(); e.Handled = true; };
-        surface.MouseMove += (_, e) => { if (start is Point first) Draw(new Rect(first, Clamp(e.GetPosition(surface)))); };
+        surface.MouseMove += (_, e) =>
+        {
+            var point = Clamp(e.GetPosition(surface));
+            magnifier?.Update(point);
+            if (start is Point first) Draw(new Rect(first, point));
+        };
         surface.MouseLeftButtonUp += (_, e) =>
         {
             if (start is not Point first) return;
             surface.ReleaseMouseCapture(); start = null;
-            var pixels = PixelBounds(first, Clamp(e.GetPosition(surface)), surface.RenderSize, image.PixelWidth, image.PixelHeight);
-            if (pixels.Width < 2 || pixels.Height < 2) { Draw(Rect.Empty); return; }
-            result = new CroppedBitmap(image, pixels); result.Freeze(); Close();
+            CompleteSelection(first, Clamp(e.GetPosition(surface)));
         };
         KeyDown += (_, e) => { if (e.Key == Key.Escape) { e.Handled = true; Close(); } };
     }
 
     Point Clamp(Point point) => new(Math.Clamp(point.X, 0, surface.ActualWidth), Math.Clamp(point.Y, 0, surface.ActualHeight));
+    internal void CompleteSelection(Point first, Point last)
+    {
+        var pixels = PixelBounds(first, last, surface.RenderSize, image.PixelWidth, image.PixelHeight);
+        if (pixels.Width < 2 || pixels.Height < 2) { Draw(Rect.Empty); return; }
+        result = new CroppedBitmap(image, pixels); result.Freeze(); Close();
+    }
     void Draw(Rect selection)
     {
         var geometry = new GeometryGroup { FillRule = FillRule.EvenOdd };
@@ -76,9 +87,9 @@ internal sealed class CaptureRegionWindow : Window
         return new(x, y, right - x, bottom - y);
     }
 
-    internal static BitmapSource? Select(BitmapSource image, Int32Rect bounds)
+    internal static BitmapSource? Select(BitmapSource image, Int32Rect bounds, bool magnify = false)
     {
-        var window = new CaptureRegionWindow(image, bounds);
+        var window = new CaptureRegionWindow(image, bounds, magnify);
         window.ShowDialog();
         return window.result;
     }

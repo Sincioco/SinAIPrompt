@@ -147,6 +147,7 @@ public sealed class Settings
     public bool WordWrap { get; set; } = true;
     public bool StatusBar { get; set; } = true;
     public bool ShowToolbar { get; set; } = true;
+    public string ImageStorage { get; set; } = "";
     public bool LineNumbers { get; set; } = true;
     public bool RestoreSession { get; set; } = true;
     public bool AutoSaveAllOnClose { get; set; } = true;

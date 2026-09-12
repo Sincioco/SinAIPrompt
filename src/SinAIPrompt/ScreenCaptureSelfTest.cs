@@ -18,6 +18,9 @@ internal static class ScreenCaptureSelfTest
             "Region selection handles reverse drags and scaled display coordinates");
         check(ScreenCapture.Intersect(new(-1500, 20, 200, 100), new(-1920, 0, 3840, 1080)) == new Int32Rect(-1500, 20, 200, 100),
             "Capture geometry preserves negative monitor coordinates");
+        check(CaptureMagnifier.OppositeCorner(new(20, 30), new(0, 0, 1000, 800), new(156, 156)) == new Point(828, 628) &&
+            CaptureMagnifier.OppositeCorner(new(950, 750), new(0, 0, 1000, 800), new(156, 156)) == new Point(16, 16),
+            "The capture magnifier moves to the opposite horizontal and vertical corner");
         var fixture = new Window { Title = "Screen Capture Test", Width = 320, Height = 220, Topmost = true,
             WindowStartupLocation = WindowStartupLocation.CenterScreen, Content = new Border { Background = Brushes.CornflowerBlue } };
         fixture.Show();
@@ -139,6 +142,52 @@ internal static class ScreenCaptureSelfTest
             }
         }
         finally { fixture.Close(); }
+    }
+
+    internal static async Task RegionShortcut(MainWindow owner, Action<bool, string> check)
+    {
+        var view = owner.CurrentView!;
+        string original = owner.ActiveDocument!.Text;
+        bool inspected = false; Exception? failure = null;
+        var select = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromMilliseconds(50) };
+        select.Tick += (_, _) =>
+        {
+            var overlay = Application.Current.Windows.OfType<CaptureRegionWindow>().SingleOrDefault();
+            if (overlay?.IsLoaded != true || overlay.Opacity != 1) return;
+            select.Stop();
+            try
+            {
+                var canvas = ((Grid)overlay.Content).Children.OfType<Canvas>().Single();
+                check(canvas.Children.OfType<System.Windows.Shapes.Path>().Single().Visibility == Visibility.Collapsed &&
+                    canvas.Children.OfType<Border>().Single().Name == "CaptureMagnifier", "Region shortcut shows its magnifier without darkening the frozen screen");
+                var image = ((Grid)overlay.Content).Children.OfType<Image>().Single();
+                check(((BitmapSource)image.Source).PixelWidth == ScreenCapture.DesktopBounds.Width, "Region shortcut covers the entire virtual desktop");
+                inspected = true; overlay.CompleteSelection(new(25, 25), new(125, 85));
+            }
+            catch (Exception ex) { failure = ex; overlay.Close(); }
+        };
+        try
+        {
+            await view.Browser.ExecuteScriptAsync("window.editor.setImageStorage('inline');window.regionShortcut=document.querySelector('#regionCapture').onclick().then(()=>true)");
+            for (int i = 0; i < 100 && !Application.Current.Windows.Cast<Window>().Any(w => w.Title == "Capture Countdown"); i++) await Task.Delay(20);
+            check(Application.Current.Windows.Cast<Window>().Any(w => w.Title == "Capture Countdown"), "Region toolbar button starts the countdown directly");
+            select.Start();
+            for (int i = 0; i < 500; i++)
+            {
+                if (await view.Browser.ExecuteScriptAsync("!document.querySelector('#regionCapture').disabled") == "true") break;
+                await Task.Delay(20);
+            }
+            if (failure != null) throw failure;
+            check(inspected && owner.IsEnabled && owner.WindowState != WindowState.Minimized && await view.Browser.ExecuteScriptAsync(
+                "!document.querySelector('dialog[open]') && document.querySelector('#document').contentDocument.images[0]?.dataset.sinStorage==='separate' && document.querySelector('#document').contentDocument.images[0]?.naturalWidth>0") == "true",
+                "Region capture inserts a visible separate PNG directly, overriding embed preference without annotation or storage prompts");
+        }
+        finally
+        {
+            select.Stop();
+            await view.Browser.ExecuteScriptAsync("window.editor.setImageStorage('');window.editor.load(" + System.Text.Json.JsonSerializer.Serialize(original) + ")");
+            view.AcceptHtml(original);
+        }
     }
 
     static async Task<ScreenCaptureDialog> Picker(Task<string?> pending)

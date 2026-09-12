@@ -13,8 +13,9 @@ Keep the entire `app` folder together. Its .NET runtime is included; it uses the
 - Use the toolbar to choose fonts, pixel sizes, foreground and selection background colors, bold, italic, underline, and strikethrough. Headings, lists, alignment, and links are included.
 - **View Source** opens the native HTML source editor. Return using **Visual editor**, or **View → Visual editor / View source**. `Ctrl+Shift+U` switches views.
 - **Paste Code** supports C#, HTML, JavaScript, CSS, SQL/T-SQL, TypeScript, JSON, and Java. Choose full code (default), a first-lines preview, or a collapsed block with a required caption. Click a disclosure to expand it; double-click to edit. Colors follow Visual Studio 2026 Light, with IntelliJ Default for Java. Coloring is lexical, without project/compiler symbol resolution.
-- The ribbon uses Modern paragraph styles, a large Save button with New / Save As / Close, and a Tools group for Editor / Capture. The text marker starts yellow and remembers the chosen color; highlighting stays visible while the text remains selected.
-- **Link** provides a full-width address, optional name and **URL only, no thumbnail**. Available YouTube/page thumbnails are fetched when inserting, then embedded. Missing thumbnails fall back to a text link.
+- The ribbon uses Modern paragraph styles, a large Save button with New / Save As / Close, and a Tools group for Editor / Capture / Region Capture. The text marker starts yellow and remembers the chosen color; highlighting stays visible while the text remains selected.
+- **Link** provides a full-width address, optional name and **URL only, no thumbnail**. YouTube links default to a card with thumbnail, title/channel, inline playback, fullscreen and **Open In Browser**. **Save the YouTube thumbnail locally** optionally embeds a PNG; otherwise the thumbnail loads from YouTube. Other available page thumbnails are embedded, with text-link fallback when unavailable.
+- Modified documents show ` *` after their name in the title bar; saving clears it.
 - Find and replace (`Ctrl+F` / `Ctrl+H`) open the source view, where you can search the complete HTML.
 - HTML head content and script source are retained. Document scripts and inline event handlers do not run inside the editor.
 
@@ -22,13 +23,26 @@ Keep the entire `app` folder together. Its .NET runtime is included; it uses the
 
 Pasting an image asks whether to embed a Base64 PNG or store a separate PNG. For `D:\Prompts\Example.html`, separate images go in `D:\Prompts\Example\` and use relative references. An unsaved document must be saved before creating a separate image.
 
+**Settings → Documents → Pasted Images** offers mutually exclusive defaults to always
+embed images or always store them in the document folder. Both start off; leave both
+off to keep the per-paste choice. Existing same-document clipboard images retain their storage.
+
+**Region Capture** starts a three-second countdown while you arrange your windows,
+then lets you drag across any part of the desktop. The screen stays undimmed and a
+magnifier moves to the opposite corner of the pointer's monitor. The cursor is never
+captured. The result inserts directly as a separate PNG, overriding the paste default,
+without an annotation or storage dialog. Esc cancels region selection.
+
 Separate PNGs use a SHA-256 content hash. Repeated pastes reuse the matching file,
 including a file you renamed. Cut/copy and paste within the same document preserve
 its image references and storage choices. Applying a permanent crop hashes the new
 rendered PNG; earlier image files remain available. A transparent blank annotation
 canvas exports its artwork's bounds. To trim an older saved canvas, edit and Apply it.
 
-Select an image for width/height controls and optional aspect-ratio locking. Double-click it, or choose **Annotate / Crop**, to edit its layers. **Insert an Image** opens a blank drawing canvas; paste or add images there.
+Select an image to open its dropdown: **Edit Image**, **Resize Image**, **View Full Screen**,
+or **View Externally** in your default image viewer. Resize shows four proportional
+corner handles; selection uses a border without blue image shading. Double-click
+also edits its layers. The toolbar **Editor** opens the selected image or a blank canvas.
 
 The annotation window fills the application's client area, covering its menu, document list, and status bar until you Apply, Cancel, or press Escape. It provides:
 
@@ -117,7 +131,7 @@ From Windows PowerShell in the project folder:
 
 The offline packager copies the .NET / Windows Desktop runtimes installed by Visual Studio into `app` and merges their local dependency manifests. It does not download NuGet runtime packs. No Visual Studio installation is needed to run the resulting app folder; Windows WebView2 must already be present.
 
-The editor uses two WebView2 virtual host names mapped to local folders. These are local resource mappings, not websites or network services. User-authored HTML may refer to external resources, but the application itself has no remote UI assets or services.
+The editor uses two WebView2 virtual host names mapped to local folders. These are local resource mappings, not websites or network services. Application UI assets are bundled locally. User-authored external assets, link previews and YouTube playback require network access. YouTube may restrict particular videos; **Open In Browser** remains available. Saved video cards remain ordinary thumbnail/text links outside this application, with no document scripts added.
 
 `Test.ps1` uses the real WPF app and Windows WebView2, including native browser input for drag checks. There is no Playwright, Selenium, npm, or test-library dependency. Tests use isolated profiles under ignored `work` and avoid normal settings and documents. See [validation](docs/VALIDATION.md).
 

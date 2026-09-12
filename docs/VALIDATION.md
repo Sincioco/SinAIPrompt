@@ -135,3 +135,68 @@ Physical changed-file sizes (new owners have a zero baseline):
 | `src/SinAIPrompt/Web/ribbon.js` | 142 | 139 | -3 |
 | `src/SinAIPrompt/Web/self-test.js` | 262 | 277 | 15 |
 | `src/SinAIPrompt/Web/source-highlighting.js` | 210 | 125 | -85 |
+
+## Prompt 34: media, capture, image defaults and title state (September 12)
+
+- Source integration passed: `work/prompt34-tests-3.log`, profile `work/smoke-96443f98d07f4d35a86c644bcbd68283`.
+- Offline package built with zero compiler warnings/errors: `work/prompt34-package.log`.
+- Packaged integration passed **462 native/browser checks**, plus all **16 architecture-checker fixtures**: `work/prompt34-packaged-tests.log`, profile `work/smoke-06ab772477eb4ae2ad688dac1be5fe16`.
+- All **33 JavaScript modules** passed `node --check`; `git diff --check` passed. Architecture checks cover **100 handwritten files**, with the existing 564-line MainWindow review warning and no exceptions or changed limits.
+- Native/browser checks cover the three-second direct region shortcut, undimmed frozen desktop, opposite-corner magnifier geometry, separate-PNG insertion overriding embed defaults, settings mutual exclusion/persistence, dirty-title updates, image dropdown, four proportional resize handles/Undo, image and video fullscreen hosting/restoration, reusable external-view PNGs, YouTube metadata and optional local thumbnails, inert document scripts, saved-card round trips, and absence of runtime player markup from saved HTML.
+- Live UI validation used the official YouTube player sample (`M7lc1UVf-VE`) in an isolated profile under `work/prompt34-live`: fetched title/channel/thumbnail, played inline, played fullscreen, returned with Esc, and opened the same video in the default Chrome browser. The temporary browser tab was closed and the fixture saved before closing the test app. Playback is an actual live check, not merely iframe creation.
+
+Ownership review: insertion storage policy moved from the editor coordinator into
+`image-insertion.js`; existing image reuse/save paths and regression checks remain.
+The image action menu and transient fullscreen view are in `image-actions.js`, with
+resize state retained by `image-selection.js`. `youtube.js` owns one player per
+editor, and `EditorFullscreen.cs` owns/restores window presentation through a small
+existing-host callback. `CaptureMagnifier.cs` owns only its frozen preview geometry.
+The native bridge delegates platform work; MainWindow gained no lines or feature
+state. No new dependencies, architecture exceptions, or startup scans were added.
+The established native partial-class coupling and browser/native bridge remain debt.
+
+Limits: YouTube playback and remote thumbnails require a network connection and
+remain subject to YouTube's video restrictions. Local thumbnails are stored as PNG
+data inside the HTML. Saved cards act as normal thumbnail/text links outside the
+app; scripts are never added to user documents. Capture uses visible desktop pixels,
+including protected/off-screen limitations of the existing Windows capture primitive.
+Magnifier geometry covers multiple-monitor/negative-coordinate cases in checks;
+physical dragging across every possible mixed-DPI monitor arrangement is manual
+acceptance. The external image action's PNG preparation is validated without changing
+the user's default viewer. No clean-machine VM was used.
+
+The .NET package was rebuilt; restart loads bundled CSS/modules with WebView caching
+disabled. No manual compilation or Ctrl+F5 is needed for the relaunched package.
+
+Changed source-file physical growth (new modules start at zero):
+
+| File | Before | After | Delta |
+| --- | ---: | ---: | ---: |
+| src/SinAIPrompt.Core/Documents.cs | 213 | 214 | 1 |
+| src/SinAIPrompt/CaptureMagnifier.cs | 0 | 49 | 49 |
+| src/SinAIPrompt/CaptureRegionWindow.cs | 85 | 96 | 11 |
+| src/SinAIPrompt/DocumentCommandSelfTest.cs | 198 | 209 | 11 |
+| src/SinAIPrompt/EditorFullscreen.cs | 0 | 44 | 44 |
+| src/SinAIPrompt/HtmlAssetsSelfTest.cs | 38 | 41 | 3 |
+| src/SinAIPrompt/HtmlEditorHost.cs | 283 | 295 | 12 |
+| src/SinAIPrompt/ImageExternalViewer.cs | 0 | 23 | 23 |
+| src/SinAIPrompt/LinkPreview.cs | 122 | 154 | 32 |
+| src/SinAIPrompt/LinkPreviewSelfTest.cs | 48 | 57 | 9 |
+| src/SinAIPrompt/MainWindow.xaml.cs | 564 | 564 | 0 |
+| src/SinAIPrompt/ScreenCapture.cs | 201 | 201 | 0 |
+| src/SinAIPrompt/ScreenCaptureDialog.cs | 142 | 165 | 23 |
+| src/SinAIPrompt/ScreenCaptureSelfTest.cs | 162 | 211 | 49 |
+| src/SinAIPrompt/SettingsDialog.cs | 111 | 118 | 7 |
+| src/SinAIPrompt/UiSelfTest.cs | 184 | 185 | 1 |
+| src/SinAIPrompt/Web/bridge.js | 37 | 38 | 1 |
+| src/SinAIPrompt/Web/editor.css | 87 | 97 | 10 |
+| src/SinAIPrompt/Web/editor.js | 168 | 176 | 8 |
+| src/SinAIPrompt/Web/image-actions.js | 0 | 37 | 37 |
+| src/SinAIPrompt/Web/image-insertion.js | 0 | 25 | 25 |
+| src/SinAIPrompt/Web/image-selection.js | 59 | 60 | 1 |
+| src/SinAIPrompt/Web/link-insertion.js | 39 | 53 | 14 |
+| src/SinAIPrompt/Web/media-self-test.js | 0 | 53 | 53 |
+| src/SinAIPrompt/Web/ribbon.css | 62 | 62 | 0 |
+| src/SinAIPrompt/Web/ribbon.js | 139 | 139 | 0 |
+| src/SinAIPrompt/Web/self-test.js | 277 | 281 | 4 |
+| src/SinAIPrompt/Web/youtube.js | 0 | 67 | 67 |

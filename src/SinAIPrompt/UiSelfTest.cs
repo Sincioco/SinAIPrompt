@@ -52,6 +52,7 @@ internal static class UiSelfTest
             Check(await window.SaveDocument(first, destinationPath: Path.Combine(documents, "Prompt 1.html")), "First save changes the unsaved prompt's asset folder");
             await DocumentCommandSelfTest.SaveShortcut(window, Check);
             await DocumentCommandSelfTest.Appearance(window, Check);
+            await ScreenCaptureSelfTest.RegionShortcut(window, Check);
             await SearchSelfTest.Source(window, Check);
             var exceptionEvent = view.Browser.CoreWebView2!.GetDevToolsProtocolEventReceiver("Runtime.exceptionThrown");
             var browserErrors = new List<string>();

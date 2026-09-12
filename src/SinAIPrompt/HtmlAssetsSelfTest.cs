@@ -18,6 +18,9 @@ internal static class HtmlAssetsSelfTest
         }
         string image = Png(255), first = await HtmlAssets.SavePngAsync(document, image);
         string repeated = await HtmlAssets.SavePngAsync(document, image);
+        string external = await Task.Run(() => ImageExternalViewer.Prepare(folder, image));
+        check(external.EndsWith(".png") && File.Exists(external) && Path.GetDirectoryName(external) == Path.Combine(folder, "Image previews") &&
+            ImageExternalViewer.Prepare(folder, image) == external, "External image viewing prepares a reusable decoded PNG in application storage");
         check(first == repeated && Directory.GetFiles(assets).Length == 1, "Repeated PNG saves reuse the same SHA-256 image file");
         check(await HtmlAssets.ReusePngAsync(document, image) == first, "Repeated paste finds its existing file before asking for image storage");
         string renamed = Path.Combine(assets, "Custom # name.png"); File.Move(Path.Combine(folder, Uri.UnescapeDataString(first)), renamed);
