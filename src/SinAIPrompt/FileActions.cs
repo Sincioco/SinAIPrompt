@@ -48,15 +48,60 @@ public partial class MainWindow
             menu.Items.Add(item);
         }
         Add("_Rename…", () => RenameDocument(doc), true, needsPath: doc.Path != null);
+        Add("D_uplicate", () => _ = RunDocumentAction("Duplicating Document…", async () => await DuplicateDocument(doc)), false, needsPath: false);
         Add("_Delete…", () => DeleteDocumentFile(doc, (path, dirty) => Dialogs.DeleteFile(this, path, dirty)), true);
         menu.Items.Add(new Separator());
         Add("Copy Full _Path", () => Clipboard.SetText(FullPathText(doc.Path!)), false);
         Add("Copy For _AI Use", () => Clipboard.SetText(AiInstructionText(doc.Path!)), false);
         Add("Open Containing _Folder", () => OpenContainingFolder(doc.Path!), false);
         menu.Items.Add(new Separator());
+        Add("_Revert To Last Saved…", () => _ = RunDocumentAction("Reverting Document…", async () => await RevertDocument(doc)), true);
         Add("_Close", async () => await CloseDocument(doc), false, needsPath: false);
         ((MenuItem)menu.Items[^1]).InputGestureText = "Ctrl+W";
         return menu;
+    }
+
+    async Task RunDocumentAction(string title, Func<Task> action)
+    {
+        try { await Dialogs.WithProgress(this, title, action); }
+        catch (Exception ex) { MessageBox.Show(this, ex.Message, title, MessageBoxButton.OK, MessageBoxImage.Error); }
+    }
+
+    internal async Task<Document> DuplicateDocument(Document doc)
+    {
+        fileOperationDepth++;
+        try
+        {
+            ActiveDocument = doc;
+            var copy = await DocumentCopies.CreateAsync(doc, GetEditor(doc),
+                Application.Current.Windows.OfType<MainWindow>().SelectMany(w => w.Documents.Select(d => d.Name)));
+            AddDocument(copy);
+            if (copy.Path != null) AddRecent(copy.Path);
+            return copy;
+        }
+        finally { fileOperationDepth--; }
+    }
+
+    internal async Task<bool> RevertDocument(Document doc, Func<bool>? confirm = null)
+    {
+        if (doc.Path == null) return false;
+        fileOperationDepth++;
+        try
+        {
+            ActiveDocument = doc;
+            var view = GetEditor(doc);
+            await view.FlushAsync();
+            if (!(confirm?.Invoke() ?? MessageBox.Show(this, "Revert this document to its last saved state? Unsaved changes will be discarded.",
+                "Revert Document", MessageBoxButton.YesNo, MessageBoxImage.Question, MessageBoxResult.No) == MessageBoxResult.Yes)) return false;
+            var disk = await Task.Run(() => TextFiles.Open(doc.Path));
+            doc.SavedText = disk.Text; doc.EncodingName = doc.SavedEncoding = disk.EncodingName;
+            doc.NewLine = doc.SavedNewLine = disk.NewLine; doc.Fingerprint = disk.Fingerprint;
+            view.AcceptHtml(disk.Text); view.Editor.ClearUndo(); view.ReloadSavedHtml(); doc.Notify();
+            pendingAutoSaves.Remove(doc.Id); autoSaveErrors.Remove(doc.Id); noticedVersions.Remove(doc.Id);
+            ExternalNotice.Visibility = Visibility.Collapsed; App.Current.MarkChanged();
+            return true;
+        }
+        finally { fileOperationDepth--; }
     }
 
     internal static ProcessStartInfo ContainingFolderCommand(string path)

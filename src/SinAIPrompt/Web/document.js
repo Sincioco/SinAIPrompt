@@ -51,13 +51,14 @@ export async function toPng(source) {
   if (data === 'data:,') throw Error('The image is too large to render.');
   return {data, width:canvas.width, height:canvas.height};
 }
-export async function portableHtml(html, base) {
+export async function portableHtml(html, base, duplicate=false) {
   const doc = parseHtml(html); ensureStyle(doc);
   const actualBase = doc.querySelector('base[href]') ? new URL(doc.querySelector('base').getAttribute('href'), base).href : base;
   const resolve = source => new URL(source, actualBase).href;
   for (const img of doc.querySelectorAll('img')) {
     const source = img.getAttribute('src');
     if (source) img.setAttribute('src', (await toPng(resolve(source))).data);
+    if(duplicate)img.dataset.sinStorage='inline';
     img.removeAttribute('srcset');
   }
   // Prefer the now-embedded fallback image in picture elements.

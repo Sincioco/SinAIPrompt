@@ -549,7 +549,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             DateTimeMenu.Items.Add(item);
         }
     }
-    void MenuPreviewMouseDown(object sender, MouseButtonEventArgs e) { /* Editing actions explicitly target the current editor, preserving its selection. */ }
+    void MenuPreviewMouseDown(object sender, MouseButtonEventArgs e) => ToolbarVisibility.Toggle(e, Preferences, ApplyPreferences);
     void NewTabClick(object sender, RoutedEventArgs e) => NewDocument();
     void NewWindowClick(object sender, RoutedEventArgs e) { new MainWindow().Show(); }
     void OpenClick(object sender, RoutedEventArgs e)
@@ -588,7 +588,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     void LineNumbersClick(object sender, RoutedEventArgs e) => SetLineNumbers(!Preferences.LineNumbers);
     void WordWrapClick(object sender, RoutedEventArgs e) { Preferences.WordWrap = !Preferences.WordWrap; ApplyPreferences(); }
     void DocumentListClick(object sender, RoutedEventArgs e) => SetDocumentList(!IsDocumentList);
-    void SettingsClick(object sender, RoutedEventArgs e) { Dialogs.Settings(this); foreach (var w in Application.Current.Windows.OfType<MainWindow>()) w.ApplyPreferences(); }
+    void SettingsClick(object sender, RoutedEventArgs e) { SettingsDialog.Show(this); foreach (var w in Application.Current.Windows.OfType<MainWindow>()) w.ApplyPreferences(); }
     void EditOpened(object sender, RoutedEventArgs e) { UndoMenu.IsEnabled = CurrentView?.IsVisual == true || Editor?.CanUndo == true; RedoMenu.IsEnabled = CurrentView?.IsVisual == true || Editor?.CanRedo == true; CutMenu.IsEnabled = CopyMenu.IsEnabled = DeleteMenu.IsEnabled = CurrentView?.IsVisual == true || Editor?.SelectionLength > 0; }
     void ViewOpened(object sender, RoutedEventArgs e) { StatusBarMenu.IsChecked = Preferences.StatusBar; WordWrapMenu.IsChecked = Preferences.WordWrap; DocumentListMenu.IsChecked = IsDocumentList; LineNumbersMenu.IsChecked = Preferences.LineNumbers; }
     void RecentOpened(object sender, RoutedEventArgs e)

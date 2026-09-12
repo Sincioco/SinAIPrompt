@@ -21,6 +21,9 @@ Paths below are relative to `src/`; unqualified native filenames are under
 | Browser editor | `SinAIPrompt/Web/editor.js`: live document, caret/selection, pending synchronization and exports | Uses `document.js`, annotation UI, highlighting, and bridge. Browser integration suite. |
 | Document styling and formatting | `Web/document-styles.js` owns Office/Modern presets and CSS; the HTML root owns its persisted style mode. `ribbon.js` owns gallery/painter UI state; `word-styles.js` owns paragraph operations; `text-formatting.js` owns a document's pending insertion font | Editor supplies document/selection/change callbacks. `ribbon-self-test.js` covers paragraph scope, spacing, fonts, undo, Enter, mode persistence, painter and clipboard. No imports back into the editor. |
 | Color palettes | `Web/color-picker.js` owns each temporary popup; callers own color values. `annotation-colors.js` adapts existing inspector values/events | Annotation retains scene/history ownership. Native color inputs replaced without moving annotation state. Browser palette/transparency checks. |
+| Annotation crops | `Web/annotation-crop.js` owns crop controls, inset/radius calculations and baking one image layer; `annotation-ui.js` retains scene, selection and undo history | Explicit object arguments; no import back into the UI or editor. Existing crop behavior passed before extraction; browser checks cover synchronized/independent radii, reset, baked pixels, positioning and undo. |
+| Settings and editor chrome | `SettingsDialog.cs` owns tabbed settings controls; `Settings.ShowToolbar` persists visibility. `ToolbarVisibility` filters blank-menu double clicks with an explicit settings object and apply callback. `EditorPathStatus` owns one editor's hovered/selected image source and displayed path | The native host binds the status text and receives image-status messages. Browser/native checks cover settings save, toolbar visibility, local image paths and document fallback. No new state in MainWindow. |
+| Document copies and revert | `DocumentCopies.cs` owns duplicate naming and copy creation, using the existing browser export/asset relocation path. `FileActions.cs` coordinates selected document, paused autosaves, progress and revert confirmation | Saved copies own their own image folders; drafts embed image copies. Native checks cover current unsaved text, names, collisions, separate/inline images, original-file preservation, cancel and confirmed revert. |
 | Text clipboard and Office fonts | `EditorClipboard.cs` owns Windows HTML/text exchange and isolated test clipboard; `EditorFonts.cs` owns an immutable cached catalog of existing local Aptos faces | `Web/editor-clipboard.js` operates on an explicit document selection. Font catalog reads run off the UI thread; a local WebView mapping serves existing Office fonts without copying, downloading or exporting them. Actual local-font loads and Unicode clipboard round trips tested. |
 | Annotation interaction | `Web/annotation-ui.js`: one dialog's scene, selection, gesture, zoom, history, inspector | Uses model, templates, clipboard, and bridge. Mouse/keyboard, crop, copy/paste, modal tests. |
 | Annotation representation | `Web/annotation-model.js`: geometry, movement, SVG/PNG rendering; no persistent scene ownership | Explicit scene/object arguments; image/escaping utilities. Geometry and render behavior covered through browser tests. |
@@ -151,6 +154,34 @@ the saved caret through the normal storage choice. Live mixed-DPI/multi-monitor,
 HDR and protected-window behavior remain hardware/manual validation areas;
 scaled/negative-coordinate geometry is covered automatically. MainWindow's
 616-line baseline, dependency directions and guardrail limits are unchanged.
+
+The 12:14 iteration changes Modern Heading2 to 18 points (Title remains 34 and
+Heading 22). The Styles grid caps at its intrinsic five-tile width, with Editor
+immediately to its right. Settings UI moved out of the shared dialog utility
+into its own owner; the window entry/coordination file remains at 616 lines.
+Formatting report preferences are recorded permanently in `AGENTS.md`.
+
+`CaptureGallery` owns visual choices grouped by monitor. Monitor previews are
+snapshots taken before the picker appears and retained for that invocation;
+refresh updates the window list without capturing the picker inside itself.
+`WindowThumbnail` owns each Windows DWM thumbnail relationship, clips it to the
+scroll viewport, and unregisters it when unloaded/disposed. Live previews do not
+activate source windows or send blocking capture messages to other apps. The
+picker covers the owner's content area. Native tests inspect real thumbnail
+pixels, monitor cards, selected capture, cancellation and restoration. Some
+windows can provide unavailable/blank previews through DWM; actual capture still
+uses the previously documented visible-desktop behavior.
+
+Crop baking replaces a layer's source PNG and removes its reversible crop data;
+it preserves canvas placement and opacity. Reset All Crops removes only current
+reversible masks/radii. Undo retains pre-bake pixels for the current annotation
+session; Apply To Document persists the new layer source. This does not overwrite
+an independently imported image file on disk. The white workspace is a visual
+surface; output transparency and chosen canvas colors retain their meaning.
+Draft duplicates embed their copied assets instead of creating a new unsaved
+asset-folder convention. Saved duplicates use the existing separate-image flow.
+Existing browser/native adapter coupling and settings/storage integration debt
+remain; no guardrail limits or exclusions were changed.
 
 ## Template adoption
 

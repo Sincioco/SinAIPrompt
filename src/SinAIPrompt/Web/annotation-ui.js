@@ -4,16 +4,17 @@ import {clone,id,isLine,clamp,bounds,union,outputBounds,imageClip,move,resize,ob
 import {captureTemplate,parseTemplate,templateJson,instantiate} from './templates.js';
 import {copyObjects} from './annotation-clipboard.js';
 import {connectAnnotationColors} from './annotation-colors.js';
+import {cropControls,resetCrop,setCropInsets,setCornerRadii,applyCrop} from './annotation-crop.js';
 
 export async function annotate(initial) {
   const dialog=document.createElement('dialog'); dialog.className='annotation'; dialog.setAttribute('aria-label','Image Annotation');
-  dialog.innerHTML=`<div class="annotation-layout"><header><div><h2>Image Annotation <small>Shapes, images &amp; reusable objects</small></h2></div><div><button data-action="undo" title="Undo (Ctrl+Z)">↶ Undo</button> <button data-action="redo" title="Redo (Ctrl+Y)">↷ Redo</button> <select id="canvasZoom" aria-label="Canvas Zoom"><option value="fit">Fit</option>${[25,50,75,100,150,200].map(n=>`<option value="${n}">${n}%</option>`).join('')}</select></div></header>
+  dialog.innerHTML=`<div class="annotation-layout"><header><div><h2>Image Annotation <small>Shapes, images &amp; reusable objects</small></h2></div><div><button data-action="undo" title="Undo (Ctrl+Z)">↶ Undo</button> <button data-action="redo" title="Redo (Ctrl+Y)">↷ Redo</button> <button data-action="resetAllCrops">Reset All Crops</button> <select id="canvasZoom" aria-label="Canvas Zoom"><option value="fit">Fit</option>${[25,50,75,100,150,200].map(n=>`<option value="${n}">${n}%</option>`).join('')}</select></div></header>
   <div class="annotation-body"><aside class="left"><h3>Draw</h3><div class="tools">${[['select','↖ Select'],['arrow','↗ Arrow'],['line','╱ Line'],['rectangle','▭ Rectangle'],['circle','◯ Circle'],['text','T Text']].map(([tool,label])=>`<button data-tool="${tool}">${label}</button>`).join('')}</div><button data-action="addImage" class="wide">＋ Add Image…</button><p class="hint">Paste images with Ctrl+V.<br>Drag empty canvas to select touching objects.<br>Shift adds to the selection.</p><hr><h3>Layers</h3><div id="layers"></div><div class="small-actions"><button data-action="front">To Front</button><button data-action="back">To Back</button><button data-action="copy" title="Copy Selected Objects (Ctrl+C)">Copy…</button><button data-action="paste" title="Paste Objects Or An Image (Ctrl+V)">Paste</button><button data-action="duplicate">Duplicate</button><button data-action="delete">Delete</button></div><hr><h3>Object Templates</h3><button data-action="saveTemplate" class="wide">Save Selected As Template</button><button data-action="importTemplate" class="wide">Import PMT Template…</button><div id="templates"></div></aside>
   <main class="canvas-viewport"><div class="canvas-stage"><svg id="canvas" tabindex="0" xmlns="http://www.w3.org/2000/svg" aria-label="Annotation Canvas"></svg></div></main>
   <aside class="right"><h3>Appearance</h3><label class="field">Outline <button id="stroke" type="button" aria-label="Outline Color" value="#dc3939"></button></label><label class="field"><span>Transparent Outline</span><input id="noStroke" type="checkbox"></label><label class="field">Fill <button id="fill" type="button" aria-label="Fill Color" value="#fff2a6"></button></label><label class="field"><span>Transparent Fill</span><input id="noFill" type="checkbox" checked></label><label class="field">Thickness <input id="strokeWidth" type="number" min="1" max="80" value="4"></label><label class="field">Arrow Head <input id="arrowSize" type="number" min="4" max="160" value="20"></label><label class="field">Opacity % <input id="opacity" type="number" min="0" max="100" value="100"></label>
   <div id="geometry"><hr><h3>Position &amp; Size (px)</h3><div class="pair">${['x','y','width','height'].map(k=>`<label>${k[0].toUpperCase()+k.slice(1)}<input data-geometry="${k}" type="number" step="1"></label>`).join('')}</div></div>
   <div id="endpoints" hidden><hr><h3>Endpoints (px)</h3><div class="pair">${['x1','y1','x2','y2'].map(k=>`<label>${k}<input data-endpoint="${k}" type="number"></label>`).join('')}</div></div>
-  <div id="imageCrop" hidden><hr><h3>Reversible Crop (px)</h3><button data-action="crop" class="wide">Drag Crop Handles</button><div class="pair">${['top','right','bottom','left'].map(k=>`<label>${k[0].toUpperCase()+k.slice(1)}<input data-crop-value="${k}" type="number" min="0" value="0"></label>`).join('')}</div><h3 style="margin-top:15px">Corner Radius (px)</h3><div class="pair">${[['topLeft','Top Left'],['topRight','Top Right'],['bottomLeft','Bottom Left'],['bottomRight','Bottom Right']].map(([k,label])=>`<label>${label}<input data-radius="${k}" type="number" min="0" value="0"></label>`).join('')}</div><button data-action="resetCrop" class="wide">Reset Crop &amp; Corners</button><p class="hint">Crop values use the image’s canvas pixels. The original image stays available.</p></div>
+  ${cropControls}
   <div id="textFields" hidden><hr><h3>Text</h3><textarea id="shapeText" rows="4" style="width:100%"></textarea><label class="field">Font Size <input id="shapeFontSize" type="number" min="6" max="200" value="20"></label><label class="field">Text Color <button id="textColor" type="button" aria-label="Text Color" value="#20252c"></button></label></div>
   <hr><h3>Canvas</h3><label class="field">Background <button id="canvasColor" type="button" aria-label="Canvas Background" value="#ffffff"></button></label><label class="field"><span>Transparent</span><input id="canvasTransparent" type="checkbox" checked></label><p id="dimensions" class="hint"></p></aside></div>
   <footer><span class="annotation-error" role="alert"></span><span class="hint">Corners keep proportions · Sides stretch · Wheel zooms · Del removes · Esc cancels</span><div class="actions"><button data-action="cancel">Cancel</button><button data-action="apply" class="primary">Apply To Document</button></div></footer></div>`;
@@ -173,7 +174,15 @@ export async function annotate(initial) {
         case 'front':change(()=>{state.objects=[...state.objects.filter(o=>!selected.includes(o.id)),...selectedObjects()];});break;
         case 'back':change(()=>{state.objects=[...selectedObjects(),...state.objects.filter(o=>!selected.includes(o.id))];});break;
         case 'crop':cropMode=!cropMode;tool='select';render();break;
-        case 'resetCrop':change(()=>{const o=one();if(o){delete o.imageClip;delete o.cropCornerRadii;o.cropCornerRadius=0;o.cropVisible=true;}});break;
+        case 'resetCrop':change(()=>{if(one())resetCrop(one());});break;
+        case 'resetAllCrops':change(()=>state.objects.filter(o=>o.type==='embedded-image').forEach(resetCrop));break;
+        case 'applyCrop':{
+          const object=one();if(!object)break;
+          target.disabled=true;error('Applying image crop…');
+          try{const cropped=await applyCrop(object);change(()=>Object.assign(object,cropped));cropMode=false;render();error('');}
+          finally{target.disabled=false;}
+          break;
+        }
         case 'addImage':chooseFile('image/*',addImage);break;
         case 'saveTemplate':if(!selected.length){error('Select one or more objects first.');break;}{const answer=await ask('Save Object Template','<label>Name <input name="name" value="My Object" required maxlength="120"></label>');if(answer.choice==='ok'){templates.push(captureTemplate(selectedObjects(),answer.values.name));await persistTemplates();}}break;
         case 'importTemplate':chooseFile('.json',async file=>{templates.push(await parseTemplate(await file.text()));await persistTemplates();});break;
@@ -192,8 +201,8 @@ export async function annotate(initial) {
     change(()=>{
       if(el.dataset.geometry){const b={x:o.x,y:o.y,width:o.width,height:o.height};b[el.dataset.geometry]=Number(el.value)||0;b.width=Math.max(1,b.width);b.height=Math.max(1,b.height);resize(o,b);}
       if(el.dataset.endpoint)o[el.dataset.endpoint]=Number(el.value)||0;
-      if(el.dataset.cropValue){let values=Object.fromEntries($$('[data-crop-value]').map(el=>[el.dataset.cropValue,Math.max(0,Number(el.value)||0)]));values.left=Math.min(o.width-1,values.left);values.right=Math.min(o.width-values.left-1,values.right);values.top=Math.min(o.height-1,values.top);values.bottom=Math.min(o.height-values.top-1,values.bottom);o.imageClip={x:o.x+values.left,y:o.y+values.top,width:o.width-values.left-values.right,height:o.height-values.top-values.bottom};o.cropVisible=true;}
-      if(el.dataset.radius){o.cropCornerRadii=Object.fromEntries($$('[data-radius]').map(el=>[el.dataset.radius,clamp(el.value,0,Math.min(imageClip(o).width,imageClip(o).height)/2)]));}
+      if(el.dataset.cropValue)setCropInsets(o,Object.fromEntries($$('[data-crop-value]').map(el=>[el.dataset.cropValue,Number(el.value)||0])));
+      if(el.dataset.radius)setCornerRadii(o,el.dataset.radius,el.value,$('#syncCorners').checked);
       if(el.id==='shapeText')o.text=el.value;if(el.id==='shapeFontSize')o.fontSize=clamp(el.value,6,200);if(el.id==='textColor')o.textColor=el.value;
     });
   });

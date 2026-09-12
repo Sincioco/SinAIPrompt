@@ -10,65 +10,68 @@ namespace SinAIPrompt;
 // It returns a PNG in memory; the editor owns insertion and image storage choices.
 internal sealed class ScreenCaptureDialog : Window
 {
-    readonly ComboBox kind = new() { ItemsSource = new[] { "Desktop Monitor", "Application Window" }, SelectedIndex = 0 };
-    readonly ComboBox target = new();
-    readonly ComboBox delay = new() { ItemsSource = new[] { 0, 3, 5, 10 }, SelectedItem = 3 };
-    readonly CheckBox region = new() { Content = "Select A Region", Margin = new Thickness(0, 14, 0, 0) };
-    readonly CheckBox cursor = new() { Content = "Include Cursor", Margin = new Thickness(0, 10, 0, 0) };
-    readonly Button capture = new() { Content = "Capture", IsDefault = true, MinWidth = 95, Padding = new Thickness(14, 6, 14, 6) };
-    readonly TextBlock error = new() { Foreground = Brushes.IndianRed, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 12, 0, 12) };
+    readonly CaptureGallery gallery = new();
+    readonly ComboBox delay = new() { ItemsSource = new[] { 0, 3, 5, 10 }, SelectedItem = 3, Width = 85 };
+    readonly CheckBox region = new() { Content = "Select A Region", Margin = new Thickness(22, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center };
+    readonly CheckBox cursor = new() { Content = "Include Cursor", Margin = new Thickness(22, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center };
+    readonly Button capture = new() { Content = "Capture", IsDefault = true, MinWidth = 100, Padding = new Thickness(18, 8, 18, 8) };
+    readonly TextBlock error = new() { Foreground = Brushes.IndianRed, TextWrapping = TextWrapping.Wrap };
+    readonly TextBlock selectedName = new() { FontSize = 13, TextTrimming = TextTrimming.CharacterEllipsis, Margin = new Thickness(0, 0, 16, 0), VerticalAlignment = VerticalAlignment.Center };
     readonly TaskCompletionSource<string?> completion = new(TaskCreationOptions.RunContinuationsAsynchronously);
     readonly CancellationTokenSource cancellation = new();
     bool capturing;
 
     ScreenCaptureDialog(Window owner)
     {
-        Owner = owner; Title = "Screen Capture"; Width = 580;
+        Owner = owner; Title = "Screen Capture"; Width = owner.ActualWidth; Height = owner.ActualHeight;
         NameScope.SetNameScope(this, new NameScope());
-        SizeToContent = SizeToContent.Height; ResizeMode = ResizeMode.NoResize;
-        WindowStartupLocation = WindowStartupLocation.CenterOwner; ShowInTaskbar = false;
+        WindowStyle = WindowStyle.None; ResizeMode = ResizeMode.NoResize; ShowInTaskbar = false; Opacity = 0;
         FontFamily = new FontFamily("Segoe UI"); FontSize = 14; ThemeMode = owner.ThemeMode;
         SetResourceReference(BackgroundProperty, "ShellBrush"); SetResourceReference(ForegroundProperty, "TextBrush");
-        var panel = new StackPanel { Margin = new Thickness(24) };
-        void Field(string name, string caption, FrameworkElement input)
+        var root = new DockPanel { Margin = new Thickness(20) };
+        var header = new DockPanel { Margin = new Thickness(8, 0, 8, 16) };
+        var cancel = new Button { Content = "Close", IsCancel = true, Padding = new Thickness(14, 6, 14, 6) };
+        cancel.Click += (_, _) => Close(); DockPanel.SetDock(cancel, Dock.Right); header.Children.Add(cancel);
+        var title = new StackPanel();
+        title.Children.Add(new TextBlock { Text = "Screen Capture", FontSize = 26, FontWeight = FontWeights.SemiBold });
+        title.Children.Add(new TextBlock { Text = "Choose a monitor or an application below. Captures open in the image editor.", Margin = new Thickness(0, 5, 0, 0) });
+        header.Children.Add(title); DockPanel.SetDock(header, Dock.Top); root.Children.Add(header);
+        var options = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(8, 0, 8, 12) };
+        options.Children.Add(new TextBlock { Text = "Delay (seconds)", VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 8, 0) });
+        options.Children.Add(delay); options.Children.Add(region); options.Children.Add(cursor);
+        var refresh = new Button { Content = "Refresh Window List", Margin = new Thickness(22, 0, 0, 0) };
+        refresh.Click += async (_, _) =>
         {
-            panel.Children.Add(new TextBlock { Text = caption, Margin = new Thickness(0, 10, 0, 5) });
-            RegisterName(name, input); System.Windows.Automation.AutomationProperties.SetName(input, caption);
-            panel.Children.Add(input);
-        }
-        Field("CaptureKind", "Capture", kind); Field("CaptureTarget", "Choose A Monitor Or Window", target);
-        Field("CaptureDelay", "Delay (Seconds)", delay);
-        RegisterName("CaptureRegion", region); panel.Children.Add(region);
-        RegisterName("CaptureCursor", cursor); panel.Children.Add(cursor);
-        panel.Children.Add(new TextBlock { Text = "The editor moves out of the way during capture. Window capture brings the selected window forward; keep it visible until capture finishes. Captures open in the image editor before insertion.",
-            TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 14, 0, 0), FontSize = 12 });
-        panel.Children.Add(error);
-        var buttons = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right };
-        var refresh = new Button { Content = "Refresh List", Margin = new Thickness(0, 0, 12, 0) };
-        var cancel = new Button { Content = "Cancel", IsCancel = true, Margin = new Thickness(0, 0, 8, 0) };
-        refresh.Click += (_, _) => RefreshTargets(); cancel.Click += (_, _) => Close();
+            refresh.IsEnabled = capture.IsEnabled = false;
+            try { await gallery.RefreshAsync(new WindowInteropHelper(this).Handle); }
+            catch (Exception ex) { error.Text = ex.Message; }
+            finally { refresh.IsEnabled = true; capture.IsEnabled = gallery.Selected != null; }
+        };
+        options.Children.Add(refresh); DockPanel.SetDock(options, Dock.Top); root.Children.Add(options);
+        var footer = new StackPanel { Margin = new Thickness(8, 12, 8, 0) };
+        footer.Children.Add(error);
+        var controls = new DockPanel(); DockPanel.SetDock(capture, Dock.Right); controls.Children.Add(capture); controls.Children.Add(selectedName);
+        footer.Children.Add(controls);
+        footer.Children.Add(new TextBlock { Text = "Window capture brings the chosen window forward. Keep it visible until capture finishes.", FontSize = 12, Margin = new Thickness(0, 10, 0, 0) });
+        DockPanel.SetDock(footer, Dock.Bottom); root.Children.Add(footer); root.Children.Add(gallery); Content = root;
+        RegisterName("CaptureGallery", gallery); RegisterName("CaptureDelay", delay); RegisterName("CaptureRegion", region);
+        RegisterName("CaptureCursor", cursor); RegisterName("CaptureNow", capture);
+        System.Windows.Automation.AutomationProperties.SetName(delay, "Capture Delay In Seconds");
+        gallery.SelectionChanged += target => { selectedName.Text = "Selected: " + target.Name; capture.IsEnabled = true; };
         capture.Click += async (_, _) => await CaptureAsync();
-        RegisterName("CaptureNow", capture);
-        buttons.Children.Add(refresh); buttons.Children.Add(cancel); buttons.Children.Add(capture); panel.Children.Add(buttons);
-        Content = panel;
-        kind.SelectionChanged += (_, _) => RefreshTargets();
-        Loaded += (_, _) => RefreshTargets();
-        Closed += (_, _) => { cancellation.Cancel(); if (!capturing) completion.TrySetResult(null); };
-    }
-
-    void RefreshTargets()
-    {
-        var previous = target.SelectedItem as ScreenCapture.Target;
-        var targets = kind.SelectedIndex == 0 ? ScreenCapture.Monitors() : ScreenCapture.Windows(new WindowInteropHelper(this).Handle);
-        target.ItemsSource = targets;
-        target.SelectedItem = targets.FirstOrDefault(item => item.Name == previous?.Name) ?? targets.FirstOrDefault();
-        capture.IsEnabled = targets.Count > 0;
-        error.Text = targets.Count == 0 ? "No capture targets are available. Refresh the list to try again." : "";
+        Loaded += (_, _) =>
+        {
+            var surface = (FrameworkElement)owner.Content;
+            var origin = surface.PointToScreen(new Point()); var dpi = VisualTreeHelper.GetDpi(surface);
+            ScreenCapture.Place(this, new Int32Rect((int)origin.X, (int)origin.Y, (int)Math.Round(surface.ActualWidth * dpi.DpiScaleX), (int)Math.Round(surface.ActualHeight * dpi.DpiScaleY)));
+            Opacity = 1;
+        };
+        Closed += (_, _) => { gallery.Dispose(); cancellation.Cancel(); if (!capturing) completion.TrySetResult(null); };
     }
 
     async Task CaptureAsync()
     {
-        if (capturing || target.SelectedItem is not ScreenCapture.Target selected) return;
+        if (capturing || gallery.Selected is not ScreenCapture.Target selected) return;
         capturing = true;
         var originalState = Owner.WindowState;
         try
@@ -129,7 +132,7 @@ internal sealed class ScreenCaptureDialog : Window
         var dialog = new ScreenCaptureDialog(owner);
         bool wasEnabled = owner.IsEnabled;
         owner.IsEnabled = false;
-        try { dialog.Show(); return await dialog.completion.Task; }
+        try { await dialog.gallery.RefreshAsync(0); dialog.Show(); return await dialog.completion.Task; }
         finally
         {
             dialog.Close(); dialog.cancellation.Dispose();

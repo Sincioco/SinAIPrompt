@@ -14,6 +14,14 @@ export async function runRibbonTests(check) {
   async function load(html='<p id="sample">Style reference sample</p><p id="after">Other paragraph</p>'){await window.editor.load(html);select('#sample',2);}
   function style(id){click('.style-strip [data-style="'+id+'"]');}
   try {
+    check(document.querySelector('#growFont svg')&&document.querySelector('#shrinkFont svg')&&document.querySelector('#fontColor svg'),'Font size and font color controls use drawn Office-style icons');
+    const editorButton=document.querySelector('#insertImage'),styles=document.querySelector('.styles-group');
+    check(editorButton.closest('.editor-group')?.previousElementSibling===styles,'Image Editor is grouped immediately to the right of Styles');
+    const toolbar=document.querySelector('#toolbar'),originalWidth=toolbar.style.width;
+    toolbar.style.width='1800px';await delay();const styleWidth=styles.getBoundingClientRect().width;
+    toolbar.style.width='2200px';await delay();
+    check(Math.abs(styles.getBoundingClientRect().width-styleWidth)<1&&styleWidth<650,'Styles stops growing after the five named presets');
+    toolbar.style.width=originalWidth;
     await load();
     const beforeLink=window.editor.html();
     for(const address of ['', 'invalid address']){
@@ -43,7 +51,7 @@ export async function runRibbonTests(check) {
     const heading=doc().querySelector('p'),content=doc().body.textContent;
     css=doc().defaultView.getComputedStyle(heading);
     check(Math.abs(parseFloat(css.fontSize)-22*4/3)<.05&&css.fontWeight==='600'&&css.color==='rgb(31, 35, 40)'&&css.borderBottomWidth==='1px','Modern Heading uses 22 points with the reference color, weight and divider');
-    for(const [id,points] of [['title',34],['heading2',28],['heading',22]]){
+    for(const [id,points] of [['title',34],['heading2',18],['heading',22]]){
       style(id);await delay();
       check(Math.abs(parseFloat(doc().defaultView.getComputedStyle(doc().querySelector('p')).fontSize)-points*4/3)<.05&&Number(document.querySelector('#fontSize').value)===points,'Modern '+id+' applies the requested point size and displays it in the font box');
     }

@@ -18,7 +18,7 @@ export const modernStyles = [
   {id:'normal',name:'Normal',tag:'p',next:'normal',css:modernCommon},
   {id:'no-spacing',name:'No Spacing',tag:'p',next:'no-spacing',css:{...modernCommon,lineHeight:'1',marginBottom:'0'}},
   {id:'heading',name:'Heading',tag:'h1',next:'normal',css:{...modernHeading,fontSize:'22pt',marginTop:'1.75em'}},
-  {id:'heading2',name:'Heading2',tag:'h2',next:'normal',css:{...modernHeading,fontSize:'28pt',marginTop:'1.7em'}},
+  {id:'heading2',name:'Heading2',tag:'h2',next:'normal',css:{...modernHeading,fontSize:'18pt',marginTop:'1.7em'}},
   {id:'title',name:'Title',tag:'p',next:'normal',css:{...modernHeading,fontSize:'34pt',marginTop:'0'}}
 ];
 export const documentStyleMode=doc=>doc?.documentElement.dataset.sinStyleMode==='modern'?'modern':'office';

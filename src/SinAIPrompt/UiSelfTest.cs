@@ -49,6 +49,7 @@ internal static class UiSelfTest
             await DocumentCommandSelfTest.RenameDraft(window, Check);
             Check(await window.SaveDocument(first, destinationPath: Path.Combine(documents, "Prompt 1.html")), "First save changes the unsaved prompt's asset folder");
             await DocumentCommandSelfTest.SaveShortcut(window, Check);
+            await DocumentCommandSelfTest.Appearance(window, Check);
             var exceptionEvent = view.Browser.CoreWebView2!.GetDevToolsProtocolEventReceiver("Runtime.exceptionThrown");
             var browserErrors = new List<string>();
             exceptionEvent.DevToolsProtocolEventReceived += (_, e) => browserErrors.Add(e.ParameterObjectAsJson);
@@ -91,6 +92,7 @@ internal static class UiSelfTest
             window.SetDocumentList(true);Check(window.IsDocumentList, "Cloned Document List navigation works");
             window.SetDocumentList(false);
             Check(await window.SaveDocument(first), "Save after source edits succeeds");
+            await DocumentCommandSelfTest.DuplicateAndRevert(window, Check);
             string saved = File.ReadAllText(first.Path!); File.AppendAllText(first.Path!, "<!-- external -->");
             bool conflict = false;try { TextFiles.Save(first, first.Path!); } catch (IOException) { conflict = true; }
             Check(conflict, "External file conflict prevents silent overwrite");

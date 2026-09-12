@@ -39,6 +39,11 @@ export async function run(){
   const insertion=window.editor.insertImage(png);await waitFor('dialog button[value=separate]');click('dialog button[value=separate]');await insertion;
   const image=doc().querySelector('img');check(image&&image.getAttribute('src').includes('/image-'),'Image storage dialog creates separate PNG reference');
   await image.decode();check(image.naturalWidth===360,'Separate PNG is visible immediately after saving the prompt');
+  image.dispatchEvent(new PointerEvent('pointerover',{bubbles:true}));
+  const imagePath=await request('test-path-status');
+  check(imagePath.endsWith(decodeURIComponent(image.getAttribute('src')).replaceAll('/','\\')),'Hovering an image displays its decoded local file path in the status bar');
+  image.dispatchEvent(new PointerEvent('pointerout',{bubbles:true}));
+  check((await request('test-path-status')).endsWith('Prompt 1.html'),'Leaving an image restores the document path in the status bar');
   image.click();document.querySelector('#imageWidth').value='220';document.querySelector('#imageWidth').dispatchEvent(new Event('change'));
   check(doc().querySelector('img').style.width==='220px','Image width control resizes selected image');
   window.editor.command('undo');check(doc().querySelector('img').style.width!=='220px','Image resize is undoable');
@@ -133,7 +138,12 @@ export async function run(){
   check(JSON.stringify(await request('annotation-paste'))===JSON.stringify(copiedBeforeCancel),'Canceling the format choice preserves the clipboard');
   const original=[...document.querySelectorAll('[data-layer]')].find(el=>el.textContent.includes('Original Image'));original.click();
   const crop=document.querySelector('[data-crop-value=left]');crop.value='20';crop.dispatchEvent(new Event('change',{bubbles:true}));
+  check(document.querySelector('[data-crop-value=left]').value==='20','Setting a numeric left crop retains its value');
   const radius=document.querySelector('[data-radius=topLeft]');radius.value='16';radius.dispatchEvent(new Event('change',{bubbles:true}));
+  check(document.querySelector('#syncCorners').checked&&[...document.querySelectorAll('[data-radius]')].every(el=>el.value==='16'),'Corner radii sync all four corners by default');
+  document.querySelector('#syncCorners').checked=false;
+  const independent=document.querySelector('[data-radius=bottomRight]');independent.value='4';independent.dispatchEvent(new Event('change',{bubbles:true}));
+  check(document.querySelector('[data-radius=topLeft]').value==='16'&&independent.value==='4','Turning corner sync off allows independent radii');
   click('[data-action=crop]');const cropHandle=document.querySelector('[data-crop=e]'),cropRect=cropHandle.getBoundingClientRect();
   await drag({x:cropRect.x+cropRect.width/2,y:cropRect.y+cropRect.height/2},canvasPoint(340,100));
   check(Number(document.querySelector('[data-crop-value=right]').value)>=19,'Dragging crop handle changes the precise crop value');
@@ -180,6 +190,22 @@ export async function run(){
     check(!layout.expanded&&layout.backgroundEnabled&&window.editor.html()===beforeCancel,'Annotation '+cancel+' restores the shell without changing the document');
   }
   const beforeCapture=window.editor.html();
+  const cropSession=window.editor.openAnnotation(null,png);await waitFor('dialog.annotation');
+  click('[data-layer]');
+  const originalPixels=document.querySelector('#canvas image').getAttribute('href');
+  for(const [edge,value] of [['left',20],['top',30]]){const el=document.querySelector('[data-crop-value='+edge+']');el.value=value;el.dispatchEvent(new Event('change',{bubbles:true}));}
+  click('[data-action=applyCrop]');
+  for(let i=0;i<100&&document.querySelector('#canvas image').getAttribute('href')===originalPixels;i++)await delay(20);
+  const croppedLayer=document.querySelector('#canvas image'),bakedPixels=croppedLayer.getAttribute('href');
+  const bakedImage=new Image();bakedImage.src=bakedPixels;await bakedImage.decode();
+  check(bakedPixels!==originalPixels&&bakedImage.naturalWidth===340&&bakedImage.naturalHeight===170&&Number(croppedLayer.getAttribute('x'))===20,'Permanently Apply Crop replaces source pixels with the cropped image and preserves its canvas position');
+  const laterCrop=document.querySelector('[data-crop-value=left]');laterCrop.value='5';laterCrop.dispatchEvent(new Event('change',{bubbles:true}));
+  click('[data-action=resetAllCrops]');
+  check([...document.querySelectorAll('[data-crop-value],[data-radius]')].every(el=>Number(el.value)===0)&&document.querySelector('#canvas image').getAttribute('href')===bakedPixels,'Reset All Crops removes reversible changes while keeping permanently applied pixels');
+  click('[data-action=undo]');click('[data-action=undo]');click('[data-action=undo]');
+  check(document.querySelector('#canvas image').getAttribute('href')===originalPixels,'Permanently applied crop can still be undone before applying the annotation');
+  check(getComputedStyle(document.querySelector('.canvas-viewport')).backgroundColor==='rgb(255, 255, 255)'&&getComputedStyle(document.querySelector('#canvas')).backgroundImage==='none','Annotation workspace is white with no checkerboard');
+  click('[data-action=cancel]');await cropSession;
   const canceledCapture=window.editor.openAnnotation(null,png);await waitFor('dialog.annotation');
   check(document.querySelectorAll('[data-layer]').length===1&&document.querySelector('#canvas image').getAttribute('width')==='360','Screen capture opens as one image layer at its original resolution');
   click('[data-action=cancel]');await canceledCapture;

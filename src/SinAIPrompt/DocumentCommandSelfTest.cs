@@ -91,7 +91,8 @@ internal static class DocumentCommandSelfTest
         window.RaiseEvent(bold);
         check(!bold.Handled, "Browser formatting shortcuts still pass through the native window");
         var menu = window.CreateDocumentMenu(doc).Items.OfType<MenuItem>().ToArray();
-        check(menu[2].Header.ToString() == "Copy Full _Path" && menu[3].Header.ToString() == "Copy For _AI Use" && menu[3].IsEnabled,
+        int pathItem = Array.FindIndex(menu, item => item.Header.ToString() == "Copy Full _Path");
+        check(pathItem >= 0 && menu[pathItem + 1].Header.ToString() == "Copy For _AI Use" && menu[pathItem + 1].IsEnabled,
             "Copy For AI Use appears directly below Copy Full Path for a saved document");
         check(MainWindow.FullPathText(@"D:\My Prompts\Test.html") == "\"D:\\My Prompts\\Test.html\"" &&
             MainWindow.FullPathText(@"D:\Prompts\Test.html") == @"D:\Prompts\Test.html",
@@ -101,6 +102,93 @@ internal static class DocumentCommandSelfTest
         await window.CurrentView!.Browser.ExecuteScriptAsync("window.editor.command('insertText','Toolbar save regression'); document.querySelector('[data-native-command=save]').click()");
         for (int i = 0; i < 100 && !File.ReadAllText(doc.Path!).Contains("Toolbar save regression"); i++) await Task.Delay(20);
         check(File.ReadAllText(doc.Path!).Contains("Toolbar save regression"), "Toolbar Save includes an edit made immediately before the click");
+    }
+
+    public static async Task Appearance(MainWindow window, Action<bool, string> check)
+    {
+        var preferences = App.Current.Preferences;
+        var view = window.CurrentView!;
+        preferences.ShowToolbar = false; window.ApplyPreferences();
+        check(await view.Browser.ExecuteScriptAsync("document.querySelector('#toolbar').hidden") == "true", "Toolbar preference hides formatting without hiding the document");
+        Exception? failure = null;
+        var timer = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromMilliseconds(50) };
+        timer.Tick += (_, _) =>
+        {
+            var dialog = Application.Current.Windows.Cast<Window>().SingleOrDefault(w => w.Title == "Settings - Sin - AI Prompt");
+            if (dialog?.IsLoaded != true) return;
+            timer.Stop();
+            try
+            {
+                IEnumerable<DependencyObject> Controls(DependencyObject root)
+                {
+                    yield return root;
+                    foreach (var child in LogicalTreeHelper.GetChildren(root).OfType<DependencyObject>())
+                        foreach (var descendant in Controls(child)) yield return descendant;
+                }
+                var controls = Controls(dialog).ToArray();
+                var tabs = controls.OfType<TabControl>().Single();
+                check(tabs.Items.Count == 3 && dialog.ActualHeight <= 570, "Settings groups options in three compact tabs");
+                tabs.SelectedIndex = 1;
+                var toolbar = controls.OfType<CheckBox>().Single(b => b.Content.ToString() == "Show Formatting Toolbar");
+                check(toolbar.IsChecked == false, "Settings reflects the current toolbar visibility");
+                toolbar.IsChecked = true;
+                dialog.UpdateLayout();
+                controls.OfType<Button>().Single(b => b.Content.ToString() == "Save").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            }
+            catch (Exception ex) { failure = ex; dialog.Close(); }
+        };
+        try { timer.Start(); SettingsDialog.Show(window); }
+        finally { timer.Stop(); }
+        if (failure != null) throw failure;
+        window.ApplyPreferences();
+        check(preferences.ShowToolbar && App.Current.Store.Read<Settings>("settings.json").ShowToolbar &&
+            await view.Browser.ExecuteScriptAsync("!document.querySelector('#toolbar').hidden") == "true", "Settings restores the toolbar and persists the same visibility preference");
+    }
+
+    public static async Task DuplicateAndRevert(MainWindow window, Action<bool, string> check)
+    {
+        var source = window.ActiveDocument!; var view = window.CurrentView!;
+        string originalAssets = Path.Combine(Path.GetDirectoryName(source.Path!)!, Path.GetFileNameWithoutExtension(source.Path!));
+        string originalImage = Directory.GetFiles(originalAssets, "*.png")[0];
+        string separate = "<p><img src=\"" + Uri.EscapeDataString(Path.GetFileName(originalAssets)) + "/" + Path.GetFileName(originalImage) + "\" data-sin-storage=\"separate\"></p>";
+        await view.Browser.ExecuteScriptAsync("window.editor.command('insertHTML'," + JsonSerializer.Serialize(separate) + ")");
+        await window.SaveDocument(source);
+        string saved = File.ReadAllText(source.Path!);
+        await view.Browser.ExecuteScriptAsync("window.editor.command('insertText',' Unsaved duplicate snapshot')");
+        var copy = await window.DuplicateDocument(source);
+        var copyView = window.CurrentView!;
+        await copyView.FlushAsync();
+        check(copy.Id != source.Id && copy.Name == Path.GetFileNameWithoutExtension(source.Name) + " 2" + Path.GetExtension(source.Name) && copy.Text.Contains("Unsaved duplicate snapshot"),
+            "Duplicate keeps the name with a numbered suffix and includes the current unsaved edit");
+        check(File.ReadAllText(source.Path!) == saved && source.Dirty && !copy.Dirty,
+            "Duplicating a saved document writes the copy without saving or changing the original");
+        string assets = Path.Combine(Path.GetDirectoryName(copy.Path!)!, Path.GetFileNameWithoutExtension(copy.Path!));
+        check(Directory.Exists(assets) && Directory.GetFiles(assets, "*.png").Length > 0 && copy.Text.Contains(Uri.EscapeDataString(Path.GetFileNameWithoutExtension(copy.Path!)) + "/image-"),
+            "A saved duplicate owns a separate image folder and references its copied images");
+        window.ActiveDocument = source;
+        var another = await window.DuplicateDocument(source);
+        check(another.Name == Path.GetFileNameWithoutExtension(source.Name) + " 3" + Path.GetExtension(source.Name), "Duplicate numbering skips existing files and open document names");
+        window.RemoveDocument(another); window.RemoveDocument(copy); window.ActiveDocument = source;
+        await view.FlushAsync(); string changed = source.Text;
+        bool asked = false;
+        check(!await window.RevertDocument(source, () => { asked = true; return false; }) && asked && source.Text == changed,
+            "Revert asks for confirmation and cancellation preserves unsaved changes");
+        check(await window.RevertDocument(source, () => true), "Confirmed Revert loads the last saved document");
+        await view.FlushAsync();
+        check(!source.Dirty && !source.Text.Contains("Unsaved duplicate snapshot"), "Revert synchronizes the visual editor and clears the modified state");
+        var menu = window.CreateDocumentMenu(source).Items.OfType<MenuItem>().ToArray();
+        check(menu[^2].Header.ToString() == "_Revert To Last Saved…" && menu[^1].Header.ToString() == "_Close", "Revert appears directly above Close in the document/tab menu");
+
+        var draft = window.NewDocument(); var draftView = window.CurrentView!;
+        await draftView.FlushAsync();
+        string imagePath = Directory.GetFiles(assets, "*.png")[0];
+        string draftHtml = "<p>Draft with image</p><img src=\"" + new Uri(imagePath).AbsoluteUri + "\" data-sin-storage=\"separate\">";
+        draftView.AcceptHtml(draftHtml); draftView.ReloadSavedHtml();
+        var draftCopy = await window.DuplicateDocument(draft);
+        check(draftCopy.Path == null && draftCopy.Dirty && draftCopy.Text.Contains("data:image/png;base64,") && draftCopy.Text.Contains("data-sin-storage=\"inline\""),
+            "Duplicating an unsaved draft creates independent embedded image copies without a Save dialog");
+        check(!await window.RevertDocument(draftCopy, () => throw new Exception("Draft must not prompt")), "Unsaved drafts cannot revert to a nonexistent saved file");
+        window.RemoveDocument(draftCopy); window.RemoveDocument(draft); window.ActiveDocument = source;
     }
 
     sealed class ControlKeyboard() : KeyboardDevice(InputManager.Current)

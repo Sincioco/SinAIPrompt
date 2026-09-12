@@ -10,7 +10,8 @@ const fontCss=native?await request('editor-fonts'):'';
 if(fontCss){const style=document.createElement('style');style.textContent=fontCss;document.head.append(style);}
 const frame=document.querySelector('#document'),$=s=>document.querySelector(s);
 let doc=null,selection=null,selectedImage=null,currentRaw='',base='https://sin-document.local/',loading=Promise.resolve(),loadingNow=false;
-let changeTimer;
+let changeTimer,lastImageStatus="";
+function imageStatus(source=""){if(source!==lastImageStatus){lastImageStatus=source;send('image-status',{source});}}
 const exports=new Map();
 const ribbon=createRibbon($('#toolbar'),{getDocument:()=>doc,saveSelection,restoreSelection,command,changed});
 function saveSelection(){if(!doc)return;const s=doc.getSelection();if(s.rangeCount && doc.body.contains(s.anchorNode))selection=s.getRangeAt(0).cloneRange();}
@@ -31,7 +32,7 @@ function changed(){
 function html(flush=false){if(flush)clearTimeout(changeTimer);return loadingNow?currentRaw:doc?serialize(doc):currentRaw;}
 async function load(raw,newBase=base){
   clearTimeout(changeTimer);
-  currentRaw=raw||'';base=newBase;loadingNow=true;selection=null;selectedImage=null;$('#imagebar').hidden=true;
+  imageStatus();currentRaw=raw||'';base=newBase;loadingNow=true;selection=null;selectedImage=null;$('#imagebar').hidden=true;
   const input=parseHtml(raw);ensureStyle(input);
   const baseTag=input.createElement('base');baseTag.href=base;baseTag.dataset.sinRuntime='1';
   // An explicit document base wins. Otherwise resolve its relative assets against the HTML folder.
@@ -43,6 +44,8 @@ async function load(raw,newBase=base){
     doc.addEventListener('selectionchange',()=>{saveSelection();syncFormatting();});doc.addEventListener('input',changed);
     doc.addEventListener('click',event=>{if(event.target.closest('a'))event.preventDefault();selectImage(event.target.closest('img'));});
     doc.addEventListener('dblclick',event=>{const image=event.target.closest('img'),code=event.target.closest('pre[data-sin-code]');if(image){selectImage(image);openAnnotation(image).catch(report);}else if(code)pasteCode(code).catch(report);});
+    doc.addEventListener('pointerover',event=>imageStatus(event.target.closest('img')?.src||selectedImage?.src||''));
+    doc.addEventListener('pointerout',event=>{if(event.target.closest('img'))imageStatus(selectedImage?.src||'');});
     doc.addEventListener('keydown',shortcuts);doc.addEventListener('paste',paste);
     doc.addEventListener('dragover',event=>{if(event.dataTransfer.types.includes('Files'))event.preventDefault();});
     doc.addEventListener('drop',event=>{const files=[...event.dataTransfer.files].filter(f=>f.type.startsWith('image/'));if(files.length){event.preventDefault();(async()=>{for(const f of files)await insertImage(await blobData(f));})().catch(report);}});
@@ -68,7 +71,7 @@ function command(name,value=null){
   doc.execCommand(name,false,value);changed();syncFormatting();
 }
 function syncFormatting(){ribbon.sync();}
-function selectImage(image){doc?.querySelectorAll('[data-sin-selected]').forEach(el=>el.removeAttribute('data-sin-selected'));selectedImage=image;$('#imagebar').hidden=!image;if(image){image.dataset.sinSelected='1';$('#imageWidth').value=Math.round(image.getBoundingClientRect().width);$('#imageHeight').value=Math.round(image.getBoundingClientRect().height);}}
+function selectImage(image){imageStatus(image?.src||'');doc?.querySelectorAll('[data-sin-selected]').forEach(el=>el.removeAttribute('data-sin-selected'));selectedImage=image;$('#imagebar').hidden=!image;if(image){image.dataset.sinSelected='1';$('#imageWidth').value=Math.round(image.getBoundingClientRect().width);$('#imageHeight').value=Math.round(image.getBoundingClientRect().height);}}
 async function storageChoice(){const answer=await ask('Store Image','<p>Choose how this image is stored with your HTML Document.</p><p><b>Inline:</b> embed the lossless PNG in the HTML file.<br><b>Separate file:</b> store a PNG in a folder named after the HTML file.</p>',[{value:'inline',label:'Inline (Base64)'},{value:'separate',label:'Separate PNG File'}]);return ['inline','separate'].includes(answer.choice)?answer.choice:null;}
 async function storeImage(png,mode){const source=mode==='separate'?await request('save-image',{data:png}):png;await loading;return source;}
 async function insertImage(source){saveSelection();const mode=await storageChoice();if(!mode)return;const png=await toPng(source),src=await storeImage(png.data,mode);restoreSelection();command('insertHTML',`<img src="${escapeHtml(src)}" data-sin-storage="${mode}" style="width:${png.width}px;max-width:100%;height:auto" alt=""><p><br></p>`);}
@@ -150,7 +153,7 @@ $('#link').onclick=async()=>{saveSelection();const answer=await ask('Insert Link
 $('#notice').onclick=()=>$('#notice').hidden=true;
 window.editor={load,html,setBase,focus,command,insertImage,openAnnotation,pasteCode,renameImageFolder,ready:()=>loading,
   renameOpenImageFolder(oldName,newName){const updated=renameImageFolder(html(true),oldName,newName);load(updated);return updated;},
-  beginPortable(){const key=id();(async()=>{await loading;return await portableHtml(html(),base);})().then(html=>exports.set(key,{html})).catch(error=>exports.set(key,{error:error.message}));return key;},
+  beginPortable(duplicate=false){const key=id();(async()=>{await loading;return await portableHtml(html(),base,duplicate);})().then(html=>exports.set(key,{html})).catch(error=>exports.set(key,{error:error.message}));return key;},
   beginRelocate(){
     const key=id();
     (async()=>{

@@ -55,6 +55,12 @@ internal static class ScreenCapture
         SetForegroundWindow(target.Window);
     }
 
+    internal static Int32Rect MonitorBounds(Target target)
+    {
+        var info = new MonitorInfo { Size = Marshal.SizeOf<MonitorInfo>(), Device = "" };
+        return GetMonitorInfo(MonitorFromWindow(target.Window, 2), ref info) ? info.Monitor.Pixels : default;
+    }
+
     internal static Int32Rect Bounds(Target target)
     {
         if (target.Window == 0) return target.Bounds;
@@ -171,6 +177,7 @@ internal static class ScreenCapture
     [DllImport("user32.dll", CharSet = CharSet.Unicode)] static extern bool GetMonitorInfo(nint monitor, ref MonitorInfo info);
     [DllImport("user32.dll")] static extern bool EnumWindows(WindowCallback callback, nint data);
     [DllImport("user32.dll")] static extern bool IsWindowVisible(nint window);
+    [DllImport("user32.dll")] static extern nint MonitorFromWindow(nint window, uint flags);
     [DllImport("user32.dll")] static extern bool IsWindow(nint window);
     [DllImport("user32.dll")] static extern bool IsIconic(nint window);
     [DllImport("user32.dll")] static extern nint GetShellWindow();

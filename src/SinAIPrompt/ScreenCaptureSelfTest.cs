@@ -36,14 +36,26 @@ internal static class ScreenCaptureSelfTest
                 "Capture preserves physical resolution and can cross the worker/UI boundary");
 
             var pending = ScreenCaptureDialog.CaptureAsync(owner);
-            await owner.Dispatcher.InvokeAsync(() => { }, System.Windows.Threading.DispatcherPriority.ContextIdle);
-            if (pending.IsFaulted) await pending;
-            var picker = Application.Current.Windows.OfType<ScreenCaptureDialog>().Single();
-            check(!owner.IsEnabled && ((ComboBox)picker.FindName("CaptureTarget")).Items.Count == monitors.Count,
-                "Capture picker offers every monitor and protects the insertion document");
-            ((ComboBox)picker.FindName("CaptureKind")).SelectedIndex = 1;
-            var targets = (ComboBox)picker.FindName("CaptureTarget");
-            targets.SelectedItem = targets.Items.Cast<ScreenCapture.Target>().Single(t => t.Window == handle);
+            var picker = await Picker(pending);
+            check(!owner.IsEnabled && Controls(picker).OfType<Button>().Count(b => b.Tag is ScreenCapture.Target t && t.Window == 0) == monitors.Count,
+                "Capture gallery offers a preview card for every monitor and protects the insertion document");
+            var ownerSurface = (FrameworkElement)owner.Content;
+            check(Math.Abs(picker.ActualWidth - ownerSurface.ActualWidth) < 2 && Math.Abs(picker.ActualHeight - ownerSurface.ActualHeight) < 2,
+                "Capture picker fills the application content area above menus, documents and status");
+            await Task.Delay(150);
+            File.WriteAllBytes(System.IO.Path.Combine(App.Current.Store.DirectoryPath, "capture-monitors.png"),
+                Convert.FromBase64String(ScreenCapture.Png(ScreenCapture.Capture(ScreenCapture.Bounds(new("", new WindowInteropHelper(picker).Handle, default)))).Split(',')[1]));
+            var tile = TargetButton(picker, handle); tile.BringIntoView(); picker.UpdateLayout();
+            await Task.Delay(200);
+            var preview = Controls(tile).OfType<WindowThumbnail>().Single();
+            var center = preview.PointToScreen(new Point(preview.ActualWidth / 2, preview.ActualHeight / 2));
+            var thumbnailPixels = ScreenCapture.Capture(new Int32Rect((int)center.X, (int)center.Y, 1, 1));
+            thumbnailPixels.CopyPixels(pixel, 4, 0);
+            check(pixel[0] == 237 && pixel[1] == 149 && pixel[2] == 100,
+                "Application thumbnail shows the actual window contents without activating it");
+            File.WriteAllBytes(System.IO.Path.Combine(App.Current.Store.DirectoryPath, "capture-gallery.png"),
+                Convert.FromBase64String(ScreenCapture.Png(ScreenCapture.Capture(ScreenCapture.Bounds(new("", new WindowInteropHelper(picker).Handle, default)))).Split(',')[1]));
+            tile.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             var delays = (ComboBox)picker.FindName("CaptureDelay");
             var cursor = (CheckBox)picker.FindName("CaptureCursor");
             check(cursor.IsChecked != true, "Screen Capture excludes the pointer by default and offers Include Cursor");
@@ -59,14 +71,12 @@ internal static class ScreenCaptureSelfTest
                 "Capture workflow returns a PNG and restores the editor after hiding capture controls");
 
             pending = ScreenCaptureDialog.CaptureAsync(owner);
-            await owner.Dispatcher.InvokeAsync(() => { }, System.Windows.Threading.DispatcherPriority.ContextIdle);
-            picker = Application.Current.Windows.OfType<ScreenCaptureDialog>().Single();
+            picker = await Picker(pending);
             picker.Close();
             check(await pending == null && owner.IsEnabled, "Canceling the capture picker leaves the editor available");
 
             pending = ScreenCaptureDialog.CaptureAsync(owner);
-            await owner.Dispatcher.InvokeAsync(() => { }, System.Windows.Threading.DispatcherPriority.ContextIdle);
-            picker = Application.Current.Windows.OfType<ScreenCaptureDialog>().Single();
+            picker = await Picker(pending);
             ((Button)picker.FindName("CaptureNow")).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             var countdown = Application.Current.Windows.Cast<Window>().Single(w => w.Title == "Capture Countdown");
             ((StackPanel)countdown.Content).Children.OfType<Button>().Single().RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
@@ -74,11 +84,8 @@ internal static class ScreenCaptureSelfTest
                 "Canceling the asynchronous countdown restores the editor without capturing");
 
             pending = ScreenCaptureDialog.CaptureAsync(owner);
-            await owner.Dispatcher.InvokeAsync(() => { }, System.Windows.Threading.DispatcherPriority.ContextIdle);
-            picker = Application.Current.Windows.OfType<ScreenCaptureDialog>().Single();
-            ((ComboBox)picker.FindName("CaptureKind")).SelectedIndex = 1;
-            targets = (ComboBox)picker.FindName("CaptureTarget");
-            targets.SelectedItem = targets.Items.Cast<ScreenCapture.Target>().Single(t => t.Window == handle);
+            picker = await Picker(pending);
+            TargetButton(picker, handle).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             ((ComboBox)picker.FindName("CaptureDelay")).SelectedItem = 0;
             ((CheckBox)picker.FindName("CaptureRegion")).IsChecked = true;
             bool regionShown = false;
@@ -103,4 +110,23 @@ internal static class ScreenCaptureSelfTest
         }
         finally { fixture.Close(); }
     }
+
+    static async Task<ScreenCaptureDialog> Picker(Task<string?> pending)
+    {
+        for (int i = 0; i < 250; i++)
+        {
+            if (pending.IsFaulted) await pending;
+            var picker = Application.Current.Windows.OfType<ScreenCaptureDialog>().SingleOrDefault();
+            if (picker?.IsLoaded == true && picker.IsVisible && picker.Opacity == 1) return picker;
+            await Task.Delay(20);
+        }
+        throw new TimeoutException("Capture gallery did not open.");
+    }
+    internal static IEnumerable<DependencyObject> Controls(DependencyObject root)
+    {
+        yield return root;
+        foreach (var child in LogicalTreeHelper.GetChildren(root).OfType<DependencyObject>())
+            foreach (var descendant in Controls(child)) yield return descendant;
+    }
+    static Button TargetButton(Window picker, nint handle) => Controls(picker).OfType<Button>().Single(b => b.Tag is ScreenCapture.Target t && t.Window == handle);
 }

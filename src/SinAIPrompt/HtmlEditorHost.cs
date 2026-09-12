@@ -13,6 +13,7 @@ public sealed partial class EditorView
     public WebView2 Browser { get; private set; } = null!;
     public bool IsVisual { get; private set; } = true;
     public event EventHandler? HtmlChanged;
+    public EditorPathStatus PathStatus { get; private set; } = null!;
     bool ready, receiving, disposed;
     string? saveAsPath;
     string? mappedFolder;
@@ -24,6 +25,7 @@ public sealed partial class EditorView
 
     void InitializeHtmlEditor()
     {
+        PathStatus = new(Document, App.Current.Store.DirectoryPath);
         RowDefinitions.Add(new() { Height = GridLength.Auto });
         RowDefinitions.Add(new() { Height = new GridLength(1, GridUnitType.Star) });
         SetRow(Editor, 1); SetRow(Gutter, 1);
@@ -72,6 +74,7 @@ public sealed partial class EditorView
         if (string.Equals(folder, mappedFolder, StringComparison.OrdinalIgnoreCase)) return;
         Browser.CoreWebView2.SetVirtualHostNameToFolderMapping("sin-document.local", folder, CoreWebView2HostResourceAccessKind.Allow);
         mappedFolder = folder;
+        PathStatus.SetFolder(folder);
         // ExecuteScriptAsync returns before a JavaScript Promise settles. Wait for
         // the iframe reload so a command immediately after Save reaches the new DOM.
         if (ready && reloadDocument) await Browser.CoreWebView2.CallDevToolsProtocolMethodAsync("Runtime.evaluate",
@@ -104,6 +107,8 @@ public sealed partial class EditorView
             object? result = null;
             switch (type)
             {
+                case "image-status": PathStatus.SetImage(message.GetProperty("source").GetString() ?? ""); break;
+                case "test-path-status" when App.Current.TestMode: result = PathStatus.Text; break;
                 case "ready": ready = true; LoadHtml(); ApplyHtmlPreferences(); initialized.TrySetResult(); break;
                 case "change": AcceptHtml(message.GetProperty("html").GetString()!); break;
                 case "source": await SetSourceAsync(true); break;
@@ -174,6 +179,7 @@ public sealed partial class EditorView
     void UpdateMode()
     {
         Browser.Visibility = IsVisual ? Visibility.Visible : Visibility.Collapsed;
+        if (!IsVisual) PathStatus.SetImage("");
         sourceBack.Visibility = IsVisual ? Visibility.Collapsed : Visibility.Visible;
         Editor.Visibility = IsVisual ? Visibility.Collapsed : Visibility.Visible;
         Gutter.Visibility = !IsVisual && App.Current.Preferences.LineNumbers ? Visibility.Visible : Visibility.Collapsed;
@@ -197,7 +203,7 @@ public sealed partial class EditorView
     {
         if (Browser == null) return;
         UpdateMode(); Browser.ZoomFactor = Document.Zoom / 100.0;
-        if (ready) _ = Browser.ExecuteScriptAsync($"document.documentElement.dataset.theme={Json(App.Current.Preferences.Theme.ToLowerInvariant())}");
+        if (ready) _ = Browser.ExecuteScriptAsync($"document.documentElement.dataset.theme={Json(App.Current.Preferences.Theme.ToLowerInvariant())};document.querySelector('#toolbar').hidden={Json(!App.Current.Preferences.ShowToolbar)}");
     }
     public async Task<string?> PrepareSaveAsAsync(string path)
     {
@@ -234,11 +240,11 @@ public sealed partial class EditorView
             AcceptHtml(updated);
         }
     }
-    public async Task<string> ExportAsync()
+    public async Task<string> ExportAsync(bool duplicate = false)
     {
         await initialized.Task;
         if (!IsVisual) { LoadHtml(); await Browser.ExecuteScriptAsync("window.editor.whenLoaded=true"); }
-        string key = JsonSerializer.Deserialize<string>(await Browser.ExecuteScriptAsync("window.editor.beginPortable()"))!;
+        string key = JsonSerializer.Deserialize<string>(await Browser.ExecuteScriptAsync($"window.editor.beginPortable({Json(duplicate)})"))!;
         return await AwaitExportAsync(key);
     }
     async Task<string> AwaitExportAsync(string key)
