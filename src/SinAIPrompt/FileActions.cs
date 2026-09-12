@@ -47,11 +47,12 @@ public partial class MainWindow
             };
             menu.Items.Add(item);
         }
-        Add("_Rename…", () => Dialogs.RenameFile(this, doc.Name, name => RenameDocumentFile(doc, name)), true, needsPath: doc.Path != null);
+        Add("_Rename…", () => RenameDocument(doc), true, needsPath: doc.Path != null);
         Add("_Delete…", () => DeleteDocumentFile(doc, (path, dirty) => Dialogs.DeleteFile(this, path, dirty)), true);
         menu.Items.Add(new Separator());
-        Add("Copy full _path", () => Clipboard.SetText(doc.Path!), false);
-        Add("Open containing _folder", () => OpenContainingFolder(doc.Path!), false);
+        Add("Copy Full _Path", () => Clipboard.SetText(FullPathText(doc.Path!)), false);
+        Add("Copy For _AI Use", () => Clipboard.SetText(AiInstructionText(doc.Path!)), false);
+        Add("Open Containing _Folder", () => OpenContainingFolder(doc.Path!), false);
         menu.Items.Add(new Separator());
         Add("_Close", async () => await CloseDocument(doc), false, needsPath: false);
         ((MenuItem)menu.Items[^1]).InputGestureText = "Ctrl+W";
@@ -66,6 +67,8 @@ public partial class MainWindow
         { UseShellExecute = true, Arguments = File.Exists(path) ? $"/select,\"{path}\"" : $"\"{folder}\"" };
     }
     static void OpenContainingFolder(string path) => Process.Start(ContainingFolderCommand(path));
+    internal static string FullPathText(string path) => path.Contains(' ') ? $"\"{path}\"" : path;
+    internal static string AiInstructionText(string path) => $"Read and execute the instructions in the \"{path}\" file.";
 
     static List<(MainWindow Window, Document Doc)> OpenReferences(string path) =>
         Application.Current.Windows.OfType<MainWindow>()

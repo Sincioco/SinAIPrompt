@@ -57,7 +57,7 @@ public sealed partial class EditorView : Grid, IDisposable
         Editor.SetResourceReference(Control.ForegroundProperty, "TextBrush");
         Editor.SetResourceReference(TextBox.CaretBrushProperty, "TextBrush");
         Editor.SetResourceReference(TextBox.SelectionBrushProperty, "AccentBrush");
-        AutomationProperties.SetName(Editor, "Text editor");
+        AutomationProperties.SetName(Editor, "Text Editor");
         Editor.Language = System.Windows.Markup.XmlLanguage.GetLanguage(CultureInfo.CurrentCulture.IetfLanguageTag);
         SpellCheck.SetIsEnabled(Editor, false);
         SetColumn(Editor, 1); Children.Add(Editor);
@@ -104,7 +104,7 @@ public sealed class LineNumberGutter : FrameworkElement
     public LineNumberGutter(TextBox editor)
     {
         this.editor = editor; ClipToBounds = true; Focusable = false;
-        AutomationProperties.SetName(this, "Line numbers");
+        AutomationProperties.SetName(this, "Line Numbers");
         IsHitTestVisible = false;
         Loaded += (_, _) => RequestRefresh();
         SizeChanged += (_, _) => RequestRefresh();

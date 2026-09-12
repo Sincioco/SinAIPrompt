@@ -1,18 +1,4 @@
-// Read from a document saved by the running Word instance on 2026-09-12.
-// Word stores paragraph spacing in twips and automatic line spacing in 240ths.
-const bodyFont='Aptos, "Segoe UI", Arial, sans-serif';
-const displayFont='"Aptos Display", Aptos, "Segoe UI", Arial, sans-serif';
-const common={fontWeight:'400',fontStyle:'normal',color:'#000000',textAlign:'left',textIndent:'0',letterSpacing:'normal',marginLeft:'0',marginRight:'0',orphans:'2',widows:'2'};
-export const wordStyles = [
-  {id:'normal',name:'Normal',tag:'p',next:'normal',css:{...common,fontFamily:bodyFont,fontSize:'12pt',lineHeight:String(278/240),marginTop:'0pt',marginBottom:'8pt'}},
-  {id:'no-spacing',name:'No Spacing',tag:'p',next:'no-spacing',css:{...common,fontFamily:bodyFont,fontSize:'12pt',lineHeight:'1',marginTop:'0pt',marginBottom:'0pt'}},
-  {id:'heading',name:'Heading',tag:'h1',next:'normal',css:{...common,fontFamily:displayFont,fontSize:'20pt',color:'#0f4761',lineHeight:String(278/240),marginTop:'18pt',marginBottom:'4pt',breakAfter:'avoid',breakInside:'avoid'}},
-  {id:'heading2',name:'Heading2',tag:'h2',next:'normal',css:{...common,fontFamily:displayFont,fontSize:'16pt',color:'#0f4761',lineHeight:String(278/240),marginTop:'8pt',marginBottom:'4pt',breakAfter:'avoid',breakInside:'avoid'}},
-  {id:'title',name:'Title',tag:'p',next:'normal',css:{...common,fontFamily:displayFont,fontSize:'28pt',lineHeight:'1',marginTop:'0pt',marginBottom:'4pt',letterSpacing:'-.5pt'}}
-];
-export const styleById=id=>wordStyles.find(style=>style.id===id);
-export const cssText=properties=>Object.entries(properties).map(([key,value])=>`${key.replace(/[A-Z]/g,ch=>'-'+ch.toLowerCase())}:${value}`).join(';');
-export const wordDocumentStyles=`body{font-family:${bodyFont};font-size:12pt;color:#000;line-height:${278/240};font-kerning:normal;font-variant-ligatures:common-ligatures contextual}p{margin:0 0 8pt}h1{${cssText(styleById('heading').css)}}h2{${cssText(styleById('heading2').css)}}[data-sin-style=title]+[data-sin-style=title]{margin-top:-4pt}`;
+import {styleById,cssText} from './document-styles.js';
 
 export function currentBlock(doc) {
   const selection=doc.getSelection();let node=selection?.anchorNode;
@@ -49,7 +35,7 @@ function restoreBookmark(doc,{start,end,empty}) {
   const selection=doc.getSelection();selection.removeAllRanges();selection.addRange(range);
 }
 export function applyParagraphStyle(doc,id) {
-  const style=styleById(id);if(!style||!doc.getSelection()?.rangeCount)return;
+  const style=styleById(id,doc);if(!style||!doc.getSelection()?.rangeCount)return;
   const bookmark=textBookmark(doc);
   let blocks=selectedBlocks(doc);
   if(!blocks.length){doc.execCommand('formatBlock',false,'p');blocks=selectedBlocks(doc);}
@@ -83,7 +69,7 @@ export function previewParagraphStyle(doc,id) {
   if(!doc)return;
   doc.querySelector('style[data-sin-style-preview]')?.remove();
   if(!id)return;
-  const style=styleById(id),blocks=selectedBlocks(doc);if(!style||!blocks.length)return;
+  const style=styleById(id,doc),blocks=selectedBlocks(doc);if(!style||!blocks.length)return;
   const selectors=blocks.map(block=>{
     const parts=[];
     while(block!==doc.body){parts.unshift(`${block.localName}:nth-child(${[...block.parentElement.children].indexOf(block)+1})`);block=block.parentElement;}

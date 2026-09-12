@@ -27,7 +27,7 @@ export function report(error) { const bar = document.querySelector('#notice'); b
 export function ask(title, contents, buttons = [{value:'ok', label:'Apply'}]) {
   return new Promise(resolve => {
     const dialog = document.createElement('dialog'); dialog.className = 'form-dialog';
-    dialog.innerHTML = `<form method="dialog"><header><h2>${escapeHtml(title)}</h2></header><div class="dialog-content">${contents}</div><footer><button value="cancel">Cancel</button>${buttons.map(b => `<button class="primary" value="${b.value}">${escapeHtml(b.label)}</button>`).join('')}</footer></form>`;
+    dialog.innerHTML = `<form method="dialog"><header><h2>${escapeHtml(title)}</h2></header><div class="dialog-content">${contents}</div><footer><button value="cancel" formnovalidate>Cancel</button>${buttons.map(b => `<button class="primary" value="${b.value}">${escapeHtml(b.label)}</button>`).join('')}</footer></form>`;
     document.body.append(dialog); dialog.showModal();
     dialog.addEventListener('close', () => { const values = Object.fromEntries(new FormData(dialog.querySelector('form'))); resolve({choice:dialog.returnValue, values}); dialog.remove(); }, {once:true});
   });

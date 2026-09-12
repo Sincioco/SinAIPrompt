@@ -69,7 +69,7 @@ function command(name,value=null){
 }
 function syncFormatting(){ribbon.sync();}
 function selectImage(image){doc?.querySelectorAll('[data-sin-selected]').forEach(el=>el.removeAttribute('data-sin-selected'));selectedImage=image;$('#imagebar').hidden=!image;if(image){image.dataset.sinSelected='1';$('#imageWidth').value=Math.round(image.getBoundingClientRect().width);$('#imageHeight').value=Math.round(image.getBoundingClientRect().height);}}
-async function storageChoice(){const answer=await ask('Store image','<p>Choose how this image is stored with your HTML document.</p><p><b>Inline:</b> embed the lossless PNG in the HTML file.<br><b>Separate file:</b> store a PNG in a folder named after the HTML file.</p>',[{value:'inline',label:'Inline (Base64)'},{value:'separate',label:'Separate PNG file'}]);return ['inline','separate'].includes(answer.choice)?answer.choice:null;}
+async function storageChoice(){const answer=await ask('Store Image','<p>Choose how this image is stored with your HTML Document.</p><p><b>Inline:</b> embed the lossless PNG in the HTML file.<br><b>Separate file:</b> store a PNG in a folder named after the HTML file.</p>',[{value:'inline',label:'Inline (Base64)'},{value:'separate',label:'Separate PNG File'}]);return ['inline','separate'].includes(answer.choice)?answer.choice:null;}
 async function storeImage(png,mode){const source=mode==='separate'?await request('save-image',{data:png}):png;await loading;return source;}
 async function insertImage(source){saveSelection();const mode=await storageChoice();if(!mode)return;const png=await toPng(source),src=await storeImage(png.data,mode);restoreSelection();command('insertHTML',`<img src="${escapeHtml(src)}" data-sin-storage="${mode}" style="width:${png.width}px;max-width:100%;height:auto" alt=""><p><br></p>`);}
 async function paste(event){
@@ -81,7 +81,7 @@ async function paste(event){
 async function pasteCode(existing=null){
   saveSelection();const value=existing?.textContent||'',language=existing?.dataset.sinCode||'csharp';
   const options=RICH_SOURCE_TEXT_TYPES.filter(t=>t.value).map(t=>`<option value="${t.value}" ${t.value===language?'selected':''}>${escapeHtml(t.value==='tsql'?'SQL / T-SQL':t.label)}</option>`).join('');
-  const answer=await ask(existing?'Edit code block':'Paste Code',`<label>Language <select name="language">${options}</select></label><textarea name="code" aria-label="Code" spellcheck="false" autofocus>${escapeHtml(value)}</textarea><p class="hint">Common indentation is trimmed; indentation inside the code is preserved. Double-click the rendered block to edit it again.</p>`,[{value:'ok',label:existing?'Update code':'Insert code'}]);
+  const answer=await ask(existing?'Edit Code Block':'Paste Code',`<label>Language <select name="language">${options}</select></label><textarea name="code" aria-label="Code" spellcheck="false" autofocus>${escapeHtml(value)}</textarea><p class="hint">Common indentation is trimmed; indentation inside the code is preserved. Double-click the rendered block to edit it again.</p>`,[{value:'ok',label:existing?'Update Code':'Insert Code'}]);
   if(answer.choice!=='ok')return;
   const text=normalizeIndent(answer.values.code),highlight=prepareRichSourceHighlight(text,answer.values.language);
   const previousBlocks=new Set(doc.querySelectorAll('pre[data-sin-code]'));
@@ -99,13 +99,14 @@ async function pasteCode(existing=null){
   if(highlight.error)report(highlight.error);
 }
 async function openAnnotation(image=null){
-  saveSelection();const mode=image?.dataset.sinStorage||(image?(/^data:/.test(image.getAttribute('src'))?'inline':'separate'):await storageChoice());if(!mode)return;
+  saveSelection();let mode=image?.dataset.sinStorage||(image?(/^data:/.test(image.getAttribute('src'))?'inline':'separate'):null);
   let state;
   const displayWidth=image?.getBoundingClientRect().width||800;
   if(image?.dataset.sinAnnotation){state=JSON.parse(image.dataset.sinAnnotation);}
-  else if(image){const png=await toPng(image.src);state={version:1,width:png.width,height:png.height,background:'none',objects:[{id:id(),type:'embedded-image',name:'Original image',source:png.data,x:0,y:0,width:png.width,height:png.height,isOriginalImage:true,visible:true}]};}
+  else if(image){const png=await toPng(image.src);state={version:1,width:png.width,height:png.height,background:'none',objects:[{id:id(),type:'embedded-image',name:'Original Image',source:png.data,x:0,y:0,width:png.width,height:png.height,isOriginalImage:true,visible:true}]};}
   else {state={version:1,width:800,height:500,blankCanvas:true,background:'none',objects:[]};}
   const result=await annotate(state);if(!result)return;
+  if(!mode)mode=await storageChoice();if(!mode)return;
   const imageIndex=image?[...doc.images].indexOf(image):-1;
   const source=await storeImage(result.data,mode);
   if(imageIndex>=0)image=doc.images[imageIndex];
@@ -122,7 +123,11 @@ function shortcuts(event){
   if(action){event.preventDefault();changed();send('command',{command:action,html:html()});}
 }
 $('#pasteCode').onclick=()=>pasteCode().catch(report);
-$('#insertImage').onclick=()=>openAnnotation().catch(report);
+$('#insertImage').onclick=()=>openAnnotation(selectedImage?.isConnected?selectedImage:null).catch(report);
+$('#toolbar').addEventListener('click',event=>{
+  const action=event.target.closest('[data-native-command]')?.dataset.nativeCommand;
+  if(action)send('command',{command:action,html:html(true)});
+});
 $('#annotate').onclick=()=>openAnnotation(selectedImage).catch(report);
 $('#deleteImage').onclick=()=>{if(selectedImage){const r=doc.createRange();r.selectNode(selectedImage);selection=r;command('delete');selectImage(null);}};
 for(const dimension of ['Width','Height'])$('#image'+dimension).onchange=()=>{
@@ -134,8 +139,8 @@ for(const dimension of ['Width','Height'])$('#image'+dimension).onchange=()=>{
   const range=doc.createRange();range.selectNode(selectedImage);selection=range;
   command('insertHTML',replacement.outerHTML);selectImage(doc.images[index]);
 };
-$('#source').onclick=async()=>{if(native){send('source');return;}const answer=await ask('HTML source',`<textarea name="source" aria-label="HTML source" spellcheck="false">${escapeHtml(html())}</textarea>`);if(answer.choice==='ok'){await load(answer.values.source);changed();}};
-$('#link').onclick=async()=>{saveSelection();const answer=await ask('Insert link','<label>Address <input name="url" type="url" required placeholder="https://…"></label>');if(answer.choice==='ok')command('createLink',answer.values.url);};
+$('#source').onclick=async()=>{if(native){send('source');return;}const answer=await ask('HTML Source',`<textarea name="source" aria-label="HTML Source" spellcheck="false">${escapeHtml(html())}</textarea>`);if(answer.choice==='ok'){await load(answer.values.source);changed();}};
+$('#link').onclick=async()=>{saveSelection();const answer=await ask('Insert Link','<label>Address <input name="url" type="url" required placeholder="https://…"></label>');if(answer.choice==='ok')command('createLink',answer.values.url);};
 $('#notice').onclick=()=>$('#notice').hidden=true;
 window.editor={load,html,setBase,focus,command,insertImage,openAnnotation,pasteCode,renameImageFolder,ready:()=>loading,
   renameOpenImageFolder(oldName,newName){const updated=renameImageFolder(html(true),oldName,newName);load(updated);return updated;},

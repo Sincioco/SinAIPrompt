@@ -14,6 +14,8 @@ internal static class DocumentCommandSelfTest
         var previous = window.ActiveDocument!;
         var watch = System.Diagnostics.Stopwatch.StartNew();
         var draft = window.NewDocument();
+        check(System.Text.RegularExpressions.Regex.IsMatch(draft.Name, @"^\d{4}-\d{2}-\d{2} \d{4} - Prompt \d+$") &&
+            draft.Name.EndsWith($" - Prompt {draft.UntitledNumber}"), "New prompt name includes its creation date, minute and sequence number");
         var view = window.CurrentView!;
         try
         {
@@ -26,7 +28,7 @@ internal static class DocumentCommandSelfTest
             check(loaded, $"New prompt editor initializes ({watch.ElapsedMilliseconds} ms)");
             // No click, focus() call, selection setup, or editing command in this test:
             // real input must land in the blank paragraph created by New document.
-            await view.Browser.CoreWebView2.CallDevToolsProtocolMethodAsync("Input.insertText", "{\"text\":\"Ready to type\"}");
+            await view.Browser.CoreWebView2!.CallDevToolsProtocolMethodAsync("Input.insertText", "{\"text\":\"Ready to type\"}");
             check(await view.Browser.ExecuteScriptAsync("document.querySelector('#document').contentDocument.body.textContent === 'Ready to type'") == "true",
                 "A new prompt accepts typing immediately without clicking the document");
             check(await view.Browser.ExecuteScriptAsync("document.querySelectorAll('.style-strip [data-style]').length === 5 && [...document.fonts].every(face => face.display === 'swap')") == "true",
@@ -88,6 +90,17 @@ internal static class DocumentCommandSelfTest
         var bold = KeyPress(Key.B);
         window.RaiseEvent(bold);
         check(!bold.Handled, "Browser formatting shortcuts still pass through the native window");
+        var menu = window.CreateDocumentMenu(doc).Items.OfType<MenuItem>().ToArray();
+        check(menu[2].Header.ToString() == "Copy Full _Path" && menu[3].Header.ToString() == "Copy For _AI Use" && menu[3].IsEnabled,
+            "Copy For AI Use appears directly below Copy Full Path for a saved document");
+        check(MainWindow.FullPathText(@"D:\My Prompts\Test.html") == "\"D:\\My Prompts\\Test.html\"" &&
+            MainWindow.FullPathText(@"D:\Prompts\Test.html") == @"D:\Prompts\Test.html",
+            "Copy Full Path quotes paths with spaces and leaves other paths unquoted");
+        check(MainWindow.AiInstructionText(doc.Path!) == $"Read and execute the instructions in the \"{doc.Path}\" file.",
+            "Copy For AI Use includes the complete quoted document path");
+        await window.CurrentView!.Browser.ExecuteScriptAsync("window.editor.command('insertText','Toolbar save regression'); document.querySelector('[data-native-command=save]').click()");
+        for (int i = 0; i < 100 && !File.ReadAllText(doc.Path!).Contains("Toolbar save regression"); i++) await Task.Delay(20);
+        check(File.ReadAllText(doc.Path!).Contains("Toolbar save regression"), "Toolbar Save includes an edit made immediately before the click");
     }
 
     sealed class ControlKeyboard() : KeyboardDevice(InputManager.Current)

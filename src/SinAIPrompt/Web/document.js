@@ -1,5 +1,5 @@
 import { request, escapeHtml } from './bridge.js';
-import {wordDocumentStyles} from './word-styles.js';
+import {wordDocumentStyles,documentStyleMode,setDocumentStyle} from './document-styles.js';
 
 export const documentStyles = `${wordDocumentStyles}body{margin:32px;background:#fff;overflow-wrap:break-word}img{max-width:100%;height:auto}pre[data-sin-code]{white-space:pre;overflow:auto;padding:18px;border:1px solid #d8dfe6;border-radius:6px;background:#f6f8fa;color:#24292f;font:14px/1.6 Consolas,monospace;tab-size:4}pre[data-sin-code] code{font:inherit}.rich-source-token-keyword,.rich-source-token-property{color:#0954b5}.rich-source-token-comment{color:#50784a;font-style:italic}.rich-source-token-string{color:#a12623}.rich-source-token-number{color:#8250a3}table{border-collapse:collapse}td,th{border:1px solid #aaa;padding:6px 10px}`;
 export const editingStyles = `body{min-height:calc(100vh - 80px);outline:none}img[data-sin-selected]{outline:3px solid #156bc1;outline-offset:3px}pre[data-sin-code]{cursor:pointer}a{cursor:text}`;
@@ -12,9 +12,10 @@ export function normalizeIndent(code) {
   const minimum = indents.length ? Math.min(...indents) : 0;
   return lines.map(l => l.slice(Math.min(minimum, /^ */.exec(l)[0].length))).join('\n');
 }
-export function parseHtml(html) { return new DOMParser().parseFromString(html || '<!doctype html><html><head><meta charset="utf-8"><title>Prompt</title></head><body><p><br></p></body></html>', 'text/html'); }
+export function parseHtml(html) { return new DOMParser().parseFromString(html || '<!doctype html><html data-sin-style-mode="modern"><head><meta charset="utf-8"><title>Prompt</title></head><body><p><br></p></body></html>', 'text/html'); }
 export function ensureStyle(doc) {
   if (!doc.querySelector('style[data-sin-document]')) { const style = doc.createElement('style'); style.dataset.sinDocument = '1'; style.textContent = documentStyles; doc.head.append(style); }
+  if(documentStyleMode(doc)==='modern'&&!doc.querySelector('style[data-sin-theme]'))setDocumentStyle(doc,'modern');
 }
 export function serialize(doc) {
   const clone = doc.documentElement.cloneNode(true);

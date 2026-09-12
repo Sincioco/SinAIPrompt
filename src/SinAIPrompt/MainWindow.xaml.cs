@@ -94,9 +94,9 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         try { doc = DocumentFactory.Create(Preferences, excludedPath); }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
         {
-            doc = new Document { UntitledNumber = App.Current.NextNumber() };
+            doc = DocumentFactory.CreateDraft(App.Current.NextNumber());
             if (IsLoaded) MessageBox.Show(this, "The auto-save folder is unavailable. This document will stay open until you save it manually.\n\n" + ex.Message, "Could not create the file", MessageBoxButton.OK, MessageBoxImage.Warning);
-            else Dispatcher.BeginInvoke(() => MessageBox.Show(this, "The auto-save folder is unavailable. Use Save as to save this document.\n\n" + ex.Message, "Sin - AI Prompt"));
+            else Dispatcher.BeginInvoke(() => MessageBox.Show(this, "The auto-save folder is unavailable. Use Save As to save this document.\n\n" + ex.Message, "Sin - AI Prompt"));
         }
         AddDocument(doc); FocusEditor(); return doc;
     }
@@ -177,7 +177,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         string? path = destinationPath ?? doc.Path;
         if (saveAs || path == null)
         {
-            var dialog = new SaveFileDialog { Title = "Save as", FileName = doc.Path == null && !Path.HasExtension(doc.Name) ? doc.Name + ".html" : doc.Name, Filter = "HTML documents (*.html;*.htm)|*.html;*.htm|All files (*.*)|*.*", DefaultExt = ".html", AddExtension = true, OverwritePrompt = true, CheckPathExists = true };
+            var dialog = new SaveFileDialog { Title = "Save As", FileName = doc.Path == null && !Path.HasExtension(doc.Name) ? doc.Name + ".html" : doc.Name, Filter = "HTML Documents (*.html;*.htm)|*.html;*.htm|All files (*.*)|*.*", DefaultExt = ".html", AddExtension = true, OverwritePrompt = true, CheckPathExists = true };
             if (doc.Path != null) dialog.InitialDirectory = Path.GetDirectoryName(doc.Path);
             if (dialog.ShowDialog(this) != true) return false;
             path = dialog.FileName;
@@ -554,13 +554,13 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     void NewWindowClick(object sender, RoutedEventArgs e) { new MainWindow().Show(); }
     void OpenClick(object sender, RoutedEventArgs e)
     {
-        var dialog = new OpenFileDialog { Title = "Open", Multiselect = true, Filter = "HTML documents (*.html;*.htm)|*.html;*.htm|All files (*.*)|*.*", CheckFileExists = true };
+        var dialog = new OpenFileDialog { Title = "Open", Multiselect = true, Filter = "HTML Documents (*.html;*.htm)|*.html;*.htm|All files (*.*)|*.*", CheckFileExists = true };
         if (dialog.ShowDialog(this) == true)
         { if (Preferences.OpenInNewWindow) { var window = new MainWindow(); window.Show(); window.OpenPaths(dialog.FileNames); } else OpenPaths(dialog.FileNames); }
     }
     async void SaveClick(object sender, RoutedEventArgs e) { if (ActiveDocument != null) await SaveDocument(ActiveDocument); }
     async void SaveAsClick(object sender, RoutedEventArgs e) { if (ActiveDocument != null) await SaveDocument(ActiveDocument, true); }
-    async void SaveAllClick(object sender, RoutedEventArgs e) { foreach (var doc in Documents.ToArray()) if ((doc.Dirty || doc.Path == null) && !await SaveDocument(doc)) break; }
+    async void SaveAllClick(object sender, RoutedEventArgs e) => await SaveAllDocuments();
     async void CloseTabClick(object sender, RoutedEventArgs e) { if (ActiveDocument != null) await CloseDocument(ActiveDocument); }
     void WindowCloseClick(object sender, RoutedEventArgs e) => Close();
     void ExitClick(object sender, RoutedEventArgs e) => App.Current.ExitAll();
@@ -595,7 +595,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     {
         RecentMenu.Items.Clear();
         foreach (var path in Preferences.Recent.Take(Settings.RecentFileLimit).ToArray()) { var item = new MenuItem { Header = path.Replace("_", "__"), ToolTip = path }; item.Click += (_, _) => OpenPaths([path]); RecentMenu.Items.Add(item); }
-        if (RecentMenu.Items.Count == 0) RecentMenu.Items.Add(new MenuItem { Header = "No recently opened files", IsEnabled = false });
+        if (RecentMenu.Items.Count == 0) RecentMenu.Items.Add(new MenuItem { Header = "No Recently Opened Files", IsEnabled = false });
     }
     void NewlineClick(object sender, RoutedEventArgs e)
     {

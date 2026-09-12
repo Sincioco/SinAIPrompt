@@ -15,6 +15,42 @@ export async function runRibbonTests(check) {
   function style(id){click('.style-strip [data-style="'+id+'"]');}
   try {
     await load();
+    const beforeLink=window.editor.html();
+    for(const address of ['', 'invalid address']){
+      click('#link');
+      document.querySelector('dialog [name=url]').value=address;
+      click('dialog button[value=ok]');
+      check(document.querySelector('dialog[open]')&&window.editor.html()===beforeLink,'Insert Link still validates an empty or invalid URL');
+      click('dialog button[value=cancel]');await delay();
+      check(!document.querySelector('dialog[open]')&&window.editor.html()===beforeLink,'Cancel dismisses Insert Link without validating or changing the document');
+    }
+    select('#sample',0,5);click('#link');
+    document.querySelector('dialog [name=url]').value='https://example.invalid/reference';click('dialog button[value=ok]');await delay();
+    check(doc().querySelector('a')?.textContent==='Style'&&doc().querySelector('a').getAttribute('href')==='https://example.invalid/reference','Apply inserts a valid link at the saved selection');
+    await window.editor.load('');
+    let css=doc().defaultView.getComputedStyle(doc().querySelector('p'));
+    check(doc().documentElement.dataset.sinStyleMode==='modern'&&css.fontFamily.includes('Segoe UI')&&css.fontSize==='16px'&&css.lineHeight==='26.4px'&&css.marginBottom==='16px','New documents default to the reference Modern font, line spacing and paragraph spacing');
+    select('p');doc().execCommand('insertText',false,'Modern first paragraph');
+    await request('test-key',{parameters:{type:'keyDown',key:'Enter',code:'Enter',windowsVirtualKeyCode:13,text:'\r'}});
+    await request('test-key',{parameters:{type:'keyUp',key:'Enter',code:'Enter',windowsVirtualKeyCode:13}});
+    doc().execCommand('insertText',false,'Modern second paragraph');
+    css=doc().defaultView.getComputedStyle(doc().body.lastElementChild);
+    check(doc().body.children.length===2&&css.marginBottom==='16px'&&css.lineHeight==='26.4px','Enter in a Modern document keeps its paragraph spacing');
+    window.editor.command('insertHTML','<ul><li>First bullet</li><li id="secondBullet">Second bullet</li></ul>');
+    css=doc().defaultView.getComputedStyle(doc().querySelector('#secondBullet'));
+    check(Math.abs(parseFloat(css.marginTop)-5.6)<.05&&css.lineHeight==='26.4px','Modern bullets use the reference item and line spacing');
+    select('p',2);style('heading');
+    const heading=doc().querySelector('p'),content=doc().body.textContent;
+    css=doc().defaultView.getComputedStyle(heading);
+    check(css.fontSize==='32px'&&css.fontWeight==='600'&&css.color==='rgb(31, 35, 40)'&&css.borderBottomWidth==='1px','Modern Heading uses the reference size, color, weight and divider');
+    document.querySelector('#documentStyle').value='office';document.querySelector('#documentStyle').dispatchEvent(new Event('change'));
+    css=doc().defaultView.getComputedStyle(heading);
+    check(css.fontFamily.includes('Aptos Display')&&css.color==='rgb(15, 71, 97)'&&css.borderBottomStyle==='none'&&doc().body.textContent===content,'MS Office Style updates styled paragraphs without losing content');
+    document.querySelector('#documentStyle').value='modern';document.querySelector('#documentStyle').dispatchEvent(new Event('change'));
+    const modern=window.editor.html();await window.editor.load(modern);
+    check(doc().documentElement.dataset.sinStyleMode==='modern'&&document.querySelector('#documentStyle').value==='modern'&&doc().body.textContent===content&&doc().defaultView.getComputedStyle(doc().querySelector('p')).fontWeight==='600','Modern styling and toolbar choice survive HTML save and reload');
+    check([...document.querySelectorAll('[data-native-command]')].map(button=>button.textContent).join(',')==='Save,Save All,Rename'&&document.querySelector('#insertImage').textContent==='Editor','Toolbar includes Save, Save All, Rename and the image Editor');
+    await load();
     check(!document.querySelector('input[type=color]')&&document.querySelectorAll('.style-strip [data-style]').length===5,'Ribbon exposes five Word paragraph styles and replaces native color inputs');
     const fontCss=await request('editor-fonts');
     for(const family of ['Aptos','Aptos Display'])if(fontCss.includes("font-family:'"+family+"'")){

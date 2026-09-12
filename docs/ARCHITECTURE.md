@@ -18,7 +18,7 @@ Paths below are relative to `src/`; unqualified native filenames are under
 | Document data and persistence | `SinAIPrompt.Core/Documents.cs`: `Document`, settings/session records, `TextFiles`, `Store`, numbering, search | Core uses .NET APIs; no dependency on the WPF app or WebView. Save/conflict, recovery, numbering checks. |
 | Platform services | `HtmlAssets.cs`, `AnnotationClipboard.cs`, `FileAssociations.cs`, `StorageLocation.cs`; `Dialogs.cs` builds native dialogs | Narrow Windows/file operations. Clipboard, PNG, storage and native dialog tests. |
 | Browser editor | `SinAIPrompt/Web/editor.js`: live document, caret/selection, pending synchronization and exports | Uses `document.js`, annotation UI, highlighting, and bridge. Browser integration suite. |
-| Office-style formatting | `Web/ribbon.js` owns gallery/painter UI state; `word-styles.js` owns measured presets and paragraph operations; `text-formatting.js` owns a document's pending insertion font | Editor supplies document/selection/change callbacks. `ribbon-self-test.js` covers paragraph scope, spacing, fonts, undo, Enter, painter and clipboard. No imports back into the editor. |
+| Document styling and formatting | `Web/document-styles.js` owns Office/Modern presets and CSS; the HTML root owns its persisted style mode. `ribbon.js` owns gallery/painter UI state; `word-styles.js` owns paragraph operations; `text-formatting.js` owns a document's pending insertion font | Editor supplies document/selection/change callbacks. `ribbon-self-test.js` covers paragraph scope, spacing, fonts, undo, Enter, mode persistence, painter and clipboard. No imports back into the editor. |
 | Color palettes | `Web/color-picker.js` owns each temporary popup; callers own color values. `annotation-colors.js` adapts existing inspector values/events | Annotation retains scene/history ownership. Native color inputs replaced without moving annotation state. Browser palette/transparency checks. |
 | Text clipboard and Office fonts | `EditorClipboard.cs` owns Windows HTML/text exchange and isolated test clipboard; `EditorFonts.cs` owns an immutable cached catalog of existing local Aptos faces | `Web/editor-clipboard.js` operates on an explicit document selection. Font catalog reads run off the UI thread; a local WebView mapping serves existing Office fonts without copying, downloading or exporting them. Actual local-font loads and Unicode clipboard round trips tested. |
 | Annotation interaction | `Web/annotation-ui.js`: one dialog's scene, selection, gesture, zoom, history, inspector | Uses model, templates, clipboard, and bridge. Mouse/keyboard, crop, copy/paste, modal tests. |
@@ -109,6 +109,29 @@ instance; they are not distributed application components. Other PCs fall back t
 installed Aptos or Windows fonts. Saved HTML retains font names, not private cache
 paths or runtime font mappings. Existing browser/native integration debt and the
 616-line window baseline remain unchanged; no guardrail exceptions were added.
+
+Iteration 1 keeps date-prefixed draft naming in `DocumentFactory`, path-copy text
+in `FileActions`, and Save/Save All/Rename in the existing native file operations.
+The ribbon sends the existing document command message; no additional global
+state, application entry-point logic, or dependency is introduced. The Editor
+button reuses the existing selected-image/blank annotation entry point. New blank
+canvases ask for image storage when applied, so opening the editor is immediate.
+
+Preset data was separated from paragraph operations into `document-styles.js`
+when adding Modern. New blank documents use Modern; existing HTML without a mode
+keeps the prior Office defaults. Switching modes updates the document stylesheet
+and known paragraph presets without recreating the editor or rewriting its body.
+Saved/exported HTML carries the selected mode and CSS, with no reference to the
+supplied sample's path. Modern matches the supplied Segoe UI, 16px text, 1.65 line
+spacing, heading dividers, and paragraph/list spacing. Arbitrary imported HTML
+can still have its own CSS or character formatting. The document-wide mode is
+reversed using the style selector; native Undo remains for paragraph/content
+edits, not stylesheet changes. Extending that history is outside this iteration.
+
+The Insert Link regression is fixed in the shared form dialog: Cancel bypasses
+constraint validation, while Apply still validates the address. Its browser
+check covers both empty and invalid addresses, cancellation without a content
+change, and successful insertion at the saved selection.
 
 ## Template adoption
 

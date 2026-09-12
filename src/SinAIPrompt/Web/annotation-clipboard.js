@@ -4,8 +4,8 @@ import {captureTemplate} from './templates.js';
 
 export async function copyObjects(objects) {
   if(!objects.length)throw Error('Select objects to copy first.');
-  const template=captureTemplate(objects,'Copied objects');
-  const answer=await ask('Copy selected objects','<p>Choose a clipboard format. Pasting into this annotation editor keeps the objects editable.</p>',[{value:'svg',label:'SVG'},{value:'png',label:'PNG'}]);
+  const template=captureTemplate(objects,'Copied Objects');
+  const answer=await ask('Copy Selected Objects','<p>Choose a clipboard format. Pasting into this annotation editor keeps the objects editable.</p>',[{value:'svg',label:'SVG'},{value:'png',label:'PNG'}]);
   if(!['svg','png'].includes(answer.choice))return;
   const state={objects:template.objects,background:'none'};
   const content=answer.choice==='svg'?sceneSvg(state):(await renderPng(state)).data;

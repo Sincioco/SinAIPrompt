@@ -6,6 +6,8 @@ namespace SinAIPrompt;
 
 public partial class MainWindow
 {
+    void RenameDocument(Document doc) => Dialogs.RenameFile(this, doc.Name, name => RenameDocumentFile(doc, name));
+
     internal async Task RenameDocumentFile(Document doc, string name)
     {
         if (!Documents.Contains(doc)) throw new IOException("The document is no longer open.");

@@ -42,6 +42,12 @@
 #toolbar .ribbon-actions button{font-size:12px;min-height:25px;padding:2px 8px}
 .action-divider{height:18px;width:1px;background:var(--line);margin:0 3px}
 #source{margin-left:auto}.ribbon-hint{font-size:11px;color:#5a6974;margin-left:8px}
+.ribbon-actions{flex-wrap:wrap}
+#documentStyle{height:27px;padding:2px 5px;font-size:12px}
+#toolbar #insertImage{display:flex;align-items:center;gap:5px}
+#toolbar #insertImage svg{color:#185abd;width:27px;height:27px;stroke-width:1.7}
+#toolbar[data-style-mode=modern] .style-tile span{font-family:"Segoe UI",Arial,sans-serif;color:#1f2328}
+#toolbar[data-style-mode=modern] :is(.style-heading,.style-heading2,.style-title) span{font-weight:600}
 @media(max-width:800px){.ribbon-groups{grid-template-columns:152px 278px minmax(140px,1fr)}.styles-group{grid-column:1/-1;border-top:1px solid var(--line);padding-top:5px}.style-gallery{height:55px}.group-caption{padding-top:2px}.ribbon-group.paragraph-group{border-right:0}.ribbon-hint{display:none}}
 @media(max-width:580px){.ribbon-groups{grid-template-columns:140px minmax(270px,1fr)}.paragraph-group{grid-column:1/-1;flex-direction:row;align-items:center;gap:10px;border-top:1px solid var(--line)}.paragraph-row{gap:6px}.paragraph-group .group-caption{margin:0 0 0 auto}.ribbon-actions{flex-wrap:wrap}}
 :root[data-theme=dark] .style-tile{background:#fff!important;color:#000!important}

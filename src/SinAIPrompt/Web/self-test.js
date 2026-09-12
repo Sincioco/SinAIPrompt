@@ -42,7 +42,9 @@ export async function run(){
   image.click();document.querySelector('#imageWidth').value='220';document.querySelector('#imageWidth').dispatchEvent(new Event('change'));
   check(doc().querySelector('img').style.width==='220px','Image width control resizes selected image');
   window.editor.command('undo');check(doc().querySelector('img').style.width!=='220px','Image resize is undoable');
-  const dialogRun=window.editor.openAnnotation(doc().querySelector('img'));await waitFor('dialog.annotation');
+  doc().querySelector('img').click();
+  const dialogRun=document.querySelector('#insertImage').onclick();await waitFor('dialog.annotation');
+  check(document.querySelectorAll('[data-layer]').length===1,'Editor button opens the selected image and its existing layer');
   const fullLayout=await request('test-annotation-layout'),dialogBounds=document.querySelector('dialog.annotation').getBoundingClientRect();
   check(fullLayout.expanded&&!fullLayout.backgroundEnabled&&Math.abs(fullLayout.x)<1&&Math.abs(fullLayout.y)<1&&Math.abs(fullLayout.width-fullLayout.clientWidth)<1&&Math.abs(fullLayout.height-fullLayout.clientHeight)<1,'Annotation covers the native menu, document list, and status bar');
   check(dialogBounds.x===0&&dialogBounds.y===0&&dialogBounds.width===innerWidth&&dialogBounds.height===innerHeight,'Annotation fills its entire browser viewport');
@@ -129,7 +131,7 @@ export async function run(){
   const copiedBeforeCancel=await request('annotation-paste');
   click('[data-action=copy]');await waitFor('dialog.form-dialog button[value=cancel]');click('dialog.form-dialog button[value=cancel]');
   check(JSON.stringify(await request('annotation-paste'))===JSON.stringify(copiedBeforeCancel),'Canceling the format choice preserves the clipboard');
-  const original=[...document.querySelectorAll('[data-layer]')].find(el=>el.textContent.includes('Original image'));original.click();
+  const original=[...document.querySelectorAll('[data-layer]')].find(el=>el.textContent.includes('Original Image'));original.click();
   const crop=document.querySelector('[data-crop-value=left]');crop.value='20';crop.dispatchEvent(new Event('change',{bubbles:true}));
   const radius=document.querySelector('[data-radius=topLeft]');radius.value='16';radius.dispatchEvent(new Event('change',{bubbles:true}));
   click('[data-action=crop]');const cropHandle=document.querySelector('[data-crop=e]'),cropRect=cropHandle.getBoundingClientRect();
@@ -153,7 +155,8 @@ export async function run(){
   check(!exported.includes('data-sin-runtime')&&!exported.includes('data-sin-selected'),'Runtime selection and editor styles are excluded from saved HTML');
   const stored=window.editor.html();await window.editor.load('<html><head><title>Keep title</title></head><body><script>parent.document.body.dataset.unsafe="yes"</script><p onclick="parent.document.body.dataset.unsafe=\'yes\'">Scripts stay inert</p></body></html>');await delay(50);doc().querySelector('p').click();check(!document.body.dataset.unsafe,'Document scripts and event handlers cannot run in editor');check(window.editor.html().includes('Keep title')&&window.editor.html().includes('<script>'),'Source round-trip preserves document head and script text');
   await window.editor.load(stored);await window.editor.ready();
-  const blank=window.editor.openAnnotation();await waitFor('dialog button[value=inline]');click('dialog button[value=inline]');await waitFor('dialog.annotation');
+  doc().body.click();
+  const blank=document.querySelector('#insertImage').onclick();await waitFor('dialog.annotation');
   check(document.querySelectorAll('[data-layer]').length===0,'Insert an Image opens a blank drawing canvas');
   const imageBlob=await (await fetch(png)).blob();
   async function pasteCanvasImage(name){const transfer=new DataTransfer();transfer.items.add(new File([imageBlob],name,{type:'image/png'}));document.querySelector('dialog.annotation').dispatchEvent(new ClipboardEvent('paste',{clipboardData:transfer,bubbles:true,cancelable:true}));}
@@ -161,7 +164,7 @@ export async function run(){
   await pasteCanvasImage('Second.png');for(let i=0;i<100&&document.querySelectorAll('[data-layer]').length<2;i++)await delay(20);
   check(document.querySelectorAll('[data-layer]').length===2,'Pasting multiple images creates independent canvas layers');
   check(Number(document.querySelector('[data-geometry=x]').value)>360,'Second pasted image expands the virtual canvas');
-  click('[data-action=apply]');await blank;
+  click('[data-action=apply]');await waitFor('dialog button[value=inline]');click('dialog button[value=inline]');await blank;
   check(doc().querySelectorAll('img[data-sin-annotation]').length===2,'Blank canvas with multiple images inserts into the HTML document');
   const latest=doc().querySelectorAll('img[data-sin-annotation]')[1];const originalWidth=latest.style.width;
   const reopen=window.editor.openAnnotation(latest);await waitFor('dialog.annotation');

@@ -164,15 +164,22 @@ public sealed class WindowSession
 public sealed class Session { public int Version { get; set; } = 1; public List<WindowSession> Windows { get; set; } = []; }
 public static class DocumentFactory
 {
+    public static Document CreateDraft(int number) => new()
+    {
+        UntitledNumber = number,
+        DraftName = DateTime.Now.ToString("yyyy-MM-dd HHmm", System.Globalization.CultureInfo.InvariantCulture) + $" - Prompt {number}"
+    };
+
     public static Document Create(Settings settings, string? excludedPath = null)
     {
         settings.NextDocumentNumber = Math.Max(1, settings.NextDocumentNumber);
-        if (string.IsNullOrWhiteSpace(settings.AutoSaveDirectory)) return new Document { UntitledNumber = settings.NextDocumentNumber++ };
+        if (string.IsNullOrWhiteSpace(settings.AutoSaveDirectory)) return CreateDraft(settings.NextDocumentNumber++);
         string directory = System.IO.Path.GetFullPath(settings.AutoSaveDirectory);
         Directory.CreateDirectory(directory);
         while (true)
         {
-            var doc = new Document { UntitledNumber = settings.NextDocumentNumber++, AutoSave = true };
+            var doc = CreateDraft(settings.NextDocumentNumber++);
+            doc.AutoSave = true;
             string path = System.IO.Path.Combine(directory, doc.Name + ".html");
             if (string.Equals(path, excludedPath, StringComparison.OrdinalIgnoreCase)) continue;
             // Reserve the filename atomically: resetting numbering can never overwrite an existing file.

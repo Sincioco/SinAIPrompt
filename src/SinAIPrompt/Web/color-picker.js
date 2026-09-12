@@ -4,13 +4,13 @@ const theme = [
   ['White','#ffffff',['#f2f2f2','#d9d9d9','#bfbfbf','#a6a6a6','#808080']],
   ['Black','#000000',['#808080','#595959','#404040','#262626','#0d0d0d']],
   ['Light gray','#e8e8e8',['#d0cece','#aeaaaa','#757171','#514d4d','#343232']],
-  ['Dark blue','#0e2841',['#dbe5f1','#b8cce4','#8ea9c1','#0b2034','#071421']],
+  ['Dark Blue','#0e2841',['#dbe5f1','#b8cce4','#8ea9c1','#0b2034','#071421']],
   ['Blue','#156082',['#c0e6f5','#83cceb','#46b1e1','#0f4761','#0a3041']],
   ['Orange','#e97132',['#fbe2d5','#f7c6ac','#f2aa84','#be5014','#80350e']],
   ['Green','#196b24',['#c1f0c8','#84e291','#47d45a','#13511b','#0c3612']],
   ['Teal','#0f9ed5',['#caedfb','#95dcf7','#61cbf3','#0b769f','#084f6a']],
   ['Purple','#a02b93',['#f2ceef','#e59edd','#d86dcc','#78206e','#501549']],
-  ['Light green','#4ea72e',['#d9f2d0','#b2e5a0','#8ed973','#3a7d22','#275417']]
+  ['Light Green','#4ea72e',['#d9f2d0','#b2e5a0','#8ed973','#3a7d22','#275417']]
 ];
 const standard = ['#c00000','#ff0000','#ffc000','#ffff00','#92d050','#00b050','#00b0f0','#0070c0','#002060','#7030a0'];
 
@@ -37,12 +37,12 @@ export function createColorPicker(button,{getValue=()=>button.value,onChange,emp
   function open(){
     if(popup){close();return;}
     popup=document.createElement('div');popup.className='color-palette';popup.setAttribute('popover','auto');
-    popup.setAttribute('role','dialog');popup.setAttribute('aria-label',label+' palette');
+    popup.setAttribute('role','dialog');popup.setAttribute('aria-label',label+' Palette');
     popup.innerHTML=`<button type="button" class="palette-automatic" data-color="${emptyValue}"><span class="automatic-sample" style="--swatch:${emptyValue==='none'?'transparent':emptyValue}"></span>${escapeHtml(emptyLabel)}</button>
       <h4>Theme Colors</h4><div class="palette-grid theme-colors">${theme.map(([name,color])=>swatch(color,name)).join('')}</div>
-      <div class="palette-grid theme-shades">${[0,1,2,3,4].map(row=>theme.map(([name,,shades])=>swatch(shades[row],name+' shade '+(row+1))).join('')).join('')}</div>
+      <div class="palette-grid theme-shades">${[0,1,2,3,4].map(row=>theme.map(([name,,shades])=>swatch(shades[row],name+' Shade '+(row+1))).join('')).join('')}</div>
       <h4>Standard Colors</h4><div class="palette-grid standard-colors">${standard.map(value=>swatch(value,'Standard')).join('')}</div>
-      <details class="custom-color"><summary>More Colors…</summary><label>Hex color <input aria-label="Custom hex color" placeholder="#RRGGBB" maxlength="7" spellcheck="false"></label><button type="button" data-custom>Apply color</button><p role="alert" hidden>Enter a hex color such as #156082.</p></details>`;
+      <details class="custom-color"><summary>More Colors…</summary><label>Hex Color <input aria-label="Custom Hex Color" placeholder="#RRGGBB" maxlength="7" spellcheck="false"></label><button type="button" data-custom>Apply Color</button><p role="alert" hidden>Enter a hex color such as #156082.</p></details>`;
     (button.closest('dialog')||document.body).append(popup);
     popup.addEventListener('mousedown',event=>{if(event.target.closest('button'))event.preventDefault();});
     popup.addEventListener('click',event=>{

@@ -15,11 +15,16 @@ public partial class MainWindow
         finally { fileOperationDepth--; }
     }
     void SourceClick(object sender, RoutedEventArgs e) => CurrentView?.ToggleSource();
+    async Task SaveAllDocuments()
+    {
+        foreach (var doc in Documents.ToArray())
+            if ((doc.Dirty || doc.Path == null) && !await SaveDocument(doc)) break;
+    }
     async void ExportHtmlClick(object sender, RoutedEventArgs e)
     {
         if (CurrentView == null || ActiveDocument == null) return;
         var view = CurrentView;
-        var dialog = new Microsoft.Win32.SaveFileDialog { Title = "Export as Standalone HTML", FileName = Path.GetFileNameWithoutExtension(ActiveDocument.Name) + " - Standalone.html", Filter = "HTML document|*.html", DefaultExt = ".html" };
+        var dialog = new Microsoft.Win32.SaveFileDialog { Title = "Export As Standalone HTML", FileName = Path.GetFileNameWithoutExtension(ActiveDocument.Name) + " - Standalone.html", Filter = "HTML Document|*.html", DefaultExt = ".html" };
         if (dialog.ShowDialog(this) != true) return;
         try { TextFiles.AtomicWrite(dialog.FileName, new UTF8Encoding(false).GetBytes(await view.ExportAsync())); MessageBox.Show(this, "Standalone HTML exported successfully.", "Sin - AI Prompt"); }
         catch (Exception ex) { MessageBox.Show(this, "Export could not finish.\n\n" + ex.Message, "Sin - AI Prompt"); }
@@ -30,6 +35,8 @@ public partial class MainWindow
         {
             case "save": if (ActiveDocument != null) await SaveDocument(ActiveDocument); break;
             case "saveAs": if (ActiveDocument != null) await SaveDocument(ActiveDocument, true); break;
+            case "saveAll": await SaveAllDocuments(); break;
+            case "rename": if (ActiveDocument != null) RenameDocument(ActiveDocument); break;
             case "new": NewDocument(); break;
             case "open": OpenClick(this, new RoutedEventArgs()); break;
             case "close": if (ActiveDocument != null) await CloseDocument(ActiveDocument); break;

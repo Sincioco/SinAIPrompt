@@ -1,4 +1,5 @@
-import {currentBlock,styleById,applyParagraphStyle} from './word-styles.js';
+import {currentBlock,applyParagraphStyle} from './word-styles.js';
+import {styleById} from './document-styles.js';
 
 export const inlineProperties=['fontFamily','fontSize','fontWeight','fontStyle','textDecoration','color','backgroundColor','letterSpacing'];
 export function selectionElement(doc) {
@@ -81,7 +82,7 @@ export function createTextFormatting(doc) {
   doc.addEventListener('keydown',event=>{if(['ArrowLeft','ArrowRight','ArrowUp','ArrowDown','Home','End'].includes(event.key))pendingSize=null;});
   function followingParagraph(event) {
     if(event.inputType!=='insertParagraph')return;
-    const previous=currentBlock(doc),style=styleById(previous?.dataset.sinStyle);
+    const previous=currentBlock(doc),style=styleById(previous?.dataset.sinStyle,doc);
     if(!style||style.next===style.id)return;
     // The browser performs the split (and owns undo); style only its new paragraph.
     doc.addEventListener('input',()=>{

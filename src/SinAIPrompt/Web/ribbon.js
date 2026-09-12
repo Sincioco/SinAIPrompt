@@ -1,9 +1,11 @@
 import {report} from './bridge.js';
 import {createColorPicker} from './color-picker.js';
-import {wordStyles,currentBlock,applyParagraphStyle,previewParagraphStyle} from './word-styles.js';
+import {currentBlock,applyParagraphStyle,previewParagraphStyle} from './word-styles.js';
+import {wordStyles,stylesFor,documentStyleMode,setDocumentStyle} from './document-styles.js';
 import {createTextFormatting,selectionElement,captureFormat,applyInlineFormat,selectWordAtCaret} from './text-formatting.js';
 
 const icons={
+  editor:'<path d="m3 21 2-7L16 2l4 4L9 18zM5 14l4 4M3 21l6-3M13 9h9M12 14h7M11 19h5"/>',
   paste:'<path d="M8 5H4v17h15V5h-4M9 3h5v4H9z"/><path d="M8 11h7M8 15h7M8 19h5"/>',
   cut:'<circle cx="5" cy="18" r="3"/><circle cx="18" cy="18" r="3"/><path d="m7 16 12-13M16 16 3 3"/>',
   copy:'<path d="M8 6H3v15h12v-4M9 2h8l5 5v10H9zM17 2v5h5"/>',
@@ -30,18 +32,18 @@ export function createRibbon(root,{getDocument,saveSelection,restoreSelection,co
       <button id="formatPainter" aria-pressed="false" title="Format Painter: click once for one selection; double-click to keep painting. Esc cancels.">${icon('paint')}<span>Format Painter</span></button></div></div><div class="group-caption">Clipboard</div></section>
     <section class="ribbon-group font-group" aria-label="Font"><div class="font-top">
       <select id="font" aria-label="Font">${['Aptos','Aptos Display','Segoe UI','Arial','Calibri','Cambria','Verdana','Georgia','Times New Roman','Consolas','Courier New'].map(name=>`<option>${name}</option>`).join('')}</select>
-      <input id="fontSize" aria-label="Font size in points" title="Font size in points" type="number" min="1" max="400" step=".5" value="12" list="fontSizes"><datalist id="fontSizes">${fontSizes.map(size=>`<option value="${size}">`).join('')}</datalist>
-      <button id="growFont" aria-label="Increase font size" title="Increase font size"><span class="grow-a">A</span><sup>⌃</sup></button><button id="shrinkFont" aria-label="Decrease font size" title="Decrease font size">A<sup>⌄</sup></button>
+      <input id="fontSize" aria-label="Font Size In Points" title="Font Size In Points" type="number" min="1" max="400" step=".5" value="12" list="fontSizes"><datalist id="fontSizes">${fontSizes.map(size=>`<option value="${size}">`).join('')}</datalist>
+      <button id="growFont" aria-label="Increase Font Size" title="Increase Font Size"><span class="grow-a">A</span><sup>⌃</sup></button><button id="shrinkFont" aria-label="Decrease Font Size" title="Decrease Font Size">A<sup>⌄</sup></button>
     </div><div class="font-bottom">
       ${button('bold','Bold (Ctrl+B)','<b>B</b>')}${button('italic','Italic (Ctrl+I)','<i>I</i>')}${button('underline','Underline (Ctrl+U)','<u>U</u>')}${button('strikeThrough','Strikethrough','<s>ab</s>')}
       ${button('subscript','Subscript','x<sub>2</sub>')}${button('superscript','Superscript','x<sup>2</sup>')}
-      <button id="backColor" value="#ffff00" class="text-color highlight-color" aria-label="Text highlight color"><span class="color-glyph">▰</span></button><button id="fontColor" value="#000000" class="text-color" aria-label="Font color"><span class="color-glyph">A</span></button>
+      <button id="backColor" value="#ffff00" class="text-color highlight-color" aria-label="Text Highlight Color"><span class="color-glyph">▰</span></button><button id="fontColor" value="#000000" class="text-color" aria-label="Font Color"><span class="color-glyph">A</span></button>
     </div><div class="group-caption">Font</div></section>
     <section class="ribbon-group paragraph-group" aria-label="Paragraph"><div class="paragraph-row">
-      ${button('insertUnorderedList','Bullets',icon('bullets'))}${button('insertOrderedList','Numbering',icon('numbering'))}${button('outdent','Decrease indent',icon('outdent'))}${button('indent','Increase indent',icon('indent'))}
-    </div><div class="paragraph-row">${['Left','Center','Right','Full'].map((alignment,i)=>button('justify'+alignment,['Align left','Center','Align right','Justify'][i],icon(['left','center','right','justify'][i]))).join('')}</div><div class="group-caption">Paragraph</div></section>
-    <section class="ribbon-group styles-group" aria-label="Styles"><div class="style-gallery"><div class="style-strip">${wordStyles.map(styleTile).join('')}</div><button id="moreStyles" aria-label="More styles" title="More styles" aria-expanded="false">⌄</button></div><div class="group-caption">Styles</div></section>
-  </div><div class="ribbon-actions">${button('undo','Undo (Ctrl+Z)','↶')}${button('redo','Redo (Ctrl+Y)','↷')}<span class="action-divider"></span><button id="link">Link</button><button id="pasteCode">&lt;/&gt; Paste Code</button><button id="insertImage">▧ Insert an Image</button><span class="ribbon-hint" id="painterHint" hidden>Select text to paint its formatting · Esc cancels</span><button id="source">View Source</button></div>`;
+      ${button('insertUnorderedList','Bullets',icon('bullets'))}${button('insertOrderedList','Numbering',icon('numbering'))}${button('outdent','Decrease Indent',icon('outdent'))}${button('indent','Increase Indent',icon('indent'))}
+    </div><div class="paragraph-row">${['Left','Center','Right','Full'].map((alignment,i)=>button('justify'+alignment,['Align Left','Center','Align Right','Justify'][i],icon(['left','center','right','justify'][i]))).join('')}</div><div class="group-caption">Paragraph</div></section>
+    <section class="ribbon-group styles-group" aria-label="Styles"><div class="style-gallery"><div class="style-strip">${wordStyles.map(styleTile).join('')}</div><button id="moreStyles" aria-label="More Styles" title="More Styles" aria-expanded="false">⌄</button></div><div class="group-caption">Styles</div></section>
+  </div><div class="ribbon-actions"><button data-native-command="save" title="Save (Ctrl+S)">Save</button><button data-native-command="saveAll" title="Save All (Ctrl+Alt+S)">Save All</button><button data-native-command="rename">Rename</button><span class="action-divider"></span>${button('undo','Undo (Ctrl+Z)','↶')}${button('redo','Redo (Ctrl+Y)','↷')}<button id="link">Link</button><button id="pasteCode">&lt;/&gt; Paste Code</button><select id="documentStyle" aria-label="Document Style" title="Document Style"><option value="modern">Modern</option><option value="office">MS Office Style</option></select><span class="ribbon-hint" id="painterHint" hidden>Select text to paint its formatting · Esc cancels</span><button id="source">View Source</button><button id="insertImage" title="Edit the selected image, or create a new image">${icon('editor')}<span>Editor</span></button></div>`;
   const $=selector=>root.querySelector(selector);
   let formatting=null,painter=null,locked=false,painterSheet=null,stylePopup=null,syncFrame=0;
   const colorPickers=[
@@ -50,6 +52,16 @@ export function createRibbon(root,{getDocument,saveSelection,restoreSelection,co
   ];
   function cancelPainter(){painter=null;locked=false;painterSheet?.remove();painterSheet=null;$('#formatPainter').setAttribute('aria-pressed','false');$('#painterHint').hidden=true;}
   function finishChange(){saveSelection();changed();sync();}
+  function refreshStyles(){
+    const doc=getDocument();root.dataset.styleMode=documentStyleMode(doc);
+    $('#documentStyle').value=documentStyleMode(doc);
+    $('.style-strip').innerHTML=stylesFor(doc).map(styleTile).join('');
+    stylePopup?.hidePopover();
+  }
+  $('#documentStyle').onchange=()=>{
+    const doc=getDocument();previewParagraphStyle(doc,null);restoreSelection();
+    setDocumentStyle(doc,$('#documentStyle').value);refreshStyles();finishChange();
+  };
   function applyStyle(id){const doc=getDocument();previewParagraphStyle(doc,null);restoreSelection();applyParagraphStyle(doc,id);finishChange();stylePopup?.hidePopover();}
   function wireGallery(gallery){
     gallery.addEventListener('mouseover',event=>{const tile=event.target.closest('[data-style]');if(tile)previewParagraphStyle(getDocument(),tile.dataset.style);});
@@ -59,8 +71,8 @@ export function createRibbon(root,{getDocument,saveSelection,restoreSelection,co
   wireGallery($('.style-strip'));
   $('#moreStyles').onclick=()=>{
     if(stylePopup){stylePopup.remove();stylePopup=null;$('#moreStyles').setAttribute('aria-expanded','false');return;}
-    stylePopup=document.createElement('div');stylePopup.className='styles-popup';stylePopup.setAttribute('popover','auto');stylePopup.setAttribute('role','group');stylePopup.setAttribute('aria-label','Paragraph styles');
-    stylePopup.innerHTML=wordStyles.map(styleTile).join('');root.append(stylePopup);wireGallery(stylePopup);
+    stylePopup=document.createElement('div');stylePopup.className='styles-popup';stylePopup.setAttribute('popover','auto');stylePopup.setAttribute('role','group');stylePopup.setAttribute('aria-label','Paragraph Styles');
+    stylePopup.innerHTML=stylesFor(getDocument()).map(styleTile).join('');root.append(stylePopup);wireGallery(stylePopup);
     stylePopup.addEventListener('mousedown',event=>event.preventDefault());
     stylePopup.addEventListener('toggle',event=>{if(event.newState==='closed'){previewParagraphStyle(getDocument(),null);stylePopup?.remove();stylePopup=null;$('#moreStyles').setAttribute('aria-expanded','false');}});
     stylePopup.showPopover();const rect=$('#moreStyles').getBoundingClientRect();stylePopup.style.top=rect.bottom+4+'px';stylePopup.style.left=Math.max(8,Math.min(rect.right-stylePopup.offsetWidth,innerWidth-stylePopup.offsetWidth-8))+'px';$('#moreStyles').setAttribute('aria-expanded','true');
@@ -84,7 +96,7 @@ export function createRibbon(root,{getDocument,saveSelection,restoreSelection,co
     $('#formatPainter').setAttribute('aria-pressed','true');$('#painterHint').hidden=false;
   };
   function attach(doc){
-    cancelPainter();formatting=createTextFormatting(doc);
+    cancelPainter();formatting=createTextFormatting(doc);refreshStyles();
     doc.addEventListener('pointerup',()=>{
       if(!painter)return;
       if(selectWordAtCaret(doc)&&applyInlineFormat(doc,painter)){if(!locked)cancelPainter();finishChange();}

@@ -18,7 +18,7 @@ export async function parseTemplate(text) {
     for(const key of (['arrow','line'].includes(o.type)?['x1','y1','x2','y2']:['x','y','width','height'])) if(!Number.isFinite(o[key])) throw Error('Invalid object geometry in template.');
     if(o.type==='embedded-image') o.source=(await toPng(o.source)).data;
   }
-  return {...template,id:id(),name:String(template.name||'Imported template').slice(0,120)};
+  return {...template,id:id(),name:String(template.name||'Imported Template').slice(0,120)};
 }
 export function templateJson(template){return JSON.stringify({format:templateFormat,version:1,template},null,2);}
 export function instantiate(template,center) {
