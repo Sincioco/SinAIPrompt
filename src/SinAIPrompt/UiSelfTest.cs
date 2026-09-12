@@ -23,6 +23,7 @@ internal static class UiSelfTest
             Check(first.Path!.EndsWith("Prompt 1.html") && second.Path!.EndsWith("Prompt 2.html"), "HTML numbering avoids existing files");
             first.Text = "<!doctype html><html><head><title>Test prompt</title></head><body><h1>Sin - AI Prompt</h1><p>Write, format, and illustrate your ideas.</p></body></html>";
             TextFiles.Save(first, first.Path!);
+            first.Path = null; first.AutoSave = false;
             window = new MainWindow(new WindowSession { Documents = [first], Width = 1280, Height = 840 });
             app.MainWindow = window; window.Show();
             var view = window.CurrentView!;
@@ -33,10 +34,13 @@ internal static class UiSelfTest
                 if (view.Browser.CoreWebView2 != null && await view.Browser.ExecuteScriptAsync("!!window.editor && !!document.querySelector('#document').contentDocument?.body?.isContentEditable") == "true") { loaded = true; break; }
             }
             Check(loaded, "Native WebView2 HTML editor initializes from installed Visual Studio components");
+            Check(await window.SaveDocument(first, destinationPath: Path.Combine(documents, "Prompt 1.html")), "First save changes the unsaved prompt's asset folder");
             var exceptionEvent = view.Browser.CoreWebView2!.GetDevToolsProtocolEventReceiver("Runtime.exceptionThrown");
             var browserErrors = new List<string>();
             exceptionEvent.DevToolsProtocolEventReceived += (_, e) => browserErrors.Add(e.ParameterObjectAsJson);
             await view.Browser.CoreWebView2.CallDevToolsProtocolMethodAsync("Runtime.enable", "{}");
+            int hiddenSourceUpdates = 0;
+            view.Editor.TextChanged += (_, _) => hiddenSourceUpdates++;
             await view.Browser.ExecuteScriptAsync("import('./self-test.js').then(m=>m.run()).then(r=>window.smokeResult={results:r}).catch(e=>window.smokeResult={error:e.stack||e.message})");
             JsonElement result = default;
             for (int i = 0; i < 1200; i++)
@@ -48,16 +52,26 @@ internal static class UiSelfTest
             Check(result.ValueKind == JsonValueKind.Object, "Browser integration checks finish");
             if (result.TryGetProperty("error", out var error)) throw new Exception(error.GetString());
             foreach (var item in result.GetProperty("results").EnumerateArray()) results.Add("PASS " + item.GetString());
+            Check(hiddenSourceUpdates == 0, "Visual editing does not rebuild the hidden WPF source editor");
             await view.FlushAsync();
             Check(first.Text.Contains("data-sin-annotation") && first.Text.Contains("data-sin-code"), "Native document receives annotation and code metadata");
             Check(await window.SaveDocument(first), "Native save synchronizes visual HTML");
             Check(TextFiles.Open(first.Path!).Text.Contains("data-sin-annotation"), "HTML file retains editable annotation layers");
+            await view.Browser.ExecuteScriptAsync("window.editor.command('insertText','Immediate save regression')");
+            Check(await window.SaveDocument(first) && File.ReadAllText(first.Path!).Contains("Immediate save regression"), "Saving immediately after typing includes the pending edit");
+            first.AutoSave = true;
+            await view.Browser.ExecuteScriptAsync("window.editor.command('insertText','Deferred autosave regression')");
+            for (int i = 0; i < 50 && !first.Text.Contains("Deferred autosave regression"); i++) await Task.Delay(20);
+            Check(window.FlushAutoSaves(true) && File.ReadAllText(first.Path!).Contains("Deferred autosave regression"), "Deferred typing synchronization still queues native autosave");
+            first.AutoSave = false;
             var portable = await view.ExportAsync();
             File.WriteAllText(Path.Combine(folder, "standalone.html"), portable);
             Check(portable.Contains("data:image/png;base64,"), "Standalone export contains embedded PNG");
+            await view.Browser.ExecuteScriptAsync("window.editor.command('insertText','Source switch regression')");
             await view.SetSourceAsync(true);
             Check(!view.IsVisual && view.Editor.IsVisible, "Native View Source exposes editable HTML");
             view.Editor.Text = view.Editor.Text.Replace("Write, format", "Create, format");
+            await Task.Delay(250);
             await view.SetSourceAsync(false); await Task.Delay(200);
             Check((await view.Browser.ExecuteScriptAsync("window.editor.html()")).Contains("Create, format"), "Source changes appear in visual editor");
             window.SetDocumentList(true);Check(window.IsDocumentList, "Cloned Document List navigation works");
@@ -74,6 +88,10 @@ internal static class UiSelfTest
             await view.Browser.ExecuteScriptAsync("window.editor.command('insertHTML','<p><img src=\"' + document.querySelector(\"#document\").contentDocument.querySelector(\"img\").getAttribute(\"src\") + '\" data-sin-storage=\"separate\"></p>')");
             string copied = Path.Combine(movedFolder, "Saved prompt.html");
             Check(await window.SaveDocument(first, destinationPath: copied), "Save As copies document and assets to another folder");
+            await view.Browser.ExecuteScriptAsync("window.savedImagesReady=null;window.editor.ready().then(()=>Promise.all([...document.querySelector('#document').contentDocument.images].map(image=>image.decode()))).then(()=>window.savedImagesReady=true).catch(()=>window.savedImagesReady=false)");
+            string savedImagesReady = "null";
+            for (int i = 0; i < 100 && savedImagesReady == "null"; i++) { await Task.Delay(20); savedImagesReady = await view.Browser.ExecuteScriptAsync("window.savedImagesReady"); }
+            Check(savedImagesReady == "true", "Images remain visible after Save As changes the asset folder");
             Check(Directory.GetFiles(Path.Combine(movedFolder, "Saved prompt"), "*.png").Length > 0 && File.Exists(Path.Combine(documents, "Prompt 1.html")), "Save As retains separate PNG storage and preserves the original file");
             Check(app.Store.Read<List<JsonElement>>("templates.json").Count > 0, "Object templates persist as JSON outside HTML documents");
             Check(app.SaveState(), "Session recovery written as JSON");

@@ -13,6 +13,10 @@ export async function run(){
   const waitFor=async selector=>{for(let i=0;i<100;i++){const el=document.querySelector(selector);if(el)return el;await delay(50);}throw Error('Timed out: '+selector);};
   await window.editor.ready();
   check(doc().body.isContentEditable,'Visual HTML is editable');
+  const savedCaret=doc().createRange();savedCaret.setStart(doc().querySelector('p').firstChild,7);savedCaret.collapse(true);
+  doc().getSelection().removeAllRanges();doc().getSelection().addRange(savedCaret);doc().dispatchEvent(new Event('selectionchange'));
+  await window.editor.setBase(doc().baseURI);
+  check(doc().getSelection().anchorNode===doc().querySelector('p').firstChild&&doc().getSelection().anchorOffset===7,'Refreshing the saved asset folder preserves the text insertion point');
   selectText('p');document.querySelector('#fontSize').value='28';document.querySelector('#fontSize').dispatchEvent(new Event('change'));
   check(doc().querySelector('p').innerHTML.includes('28px'),'Font size control applies the requested pixel size');
   selectText('p');window.editor.command('bold');check(/font-weight: bold|<b>|<strong>/.test(window.editor.html()),'Bold applies to selected text');
@@ -31,6 +35,7 @@ export async function run(){
   const canvas=document.createElement('canvas');canvas.width=360;canvas.height=200;const ctx=canvas.getContext('2d');ctx.fillStyle='#dce9f8';ctx.fillRect(0,0,360,200);ctx.fillStyle='#145c96';ctx.font='bold 30px Segoe UI';ctx.fillText('Prompt canvas',25,70);ctx.font='18px Segoe UI';ctx.fillText('Images + editable annotations',25,110);const png=canvas.toDataURL('image/png');
   const insertion=window.editor.insertImage(png);await waitFor('dialog button[value=separate]');click('dialog button[value=separate]');await insertion;
   const image=doc().querySelector('img');check(image&&image.getAttribute('src').includes('/image-'),'Image storage dialog creates separate PNG reference');
+  await image.decode();check(image.naturalWidth===360,'Separate PNG is visible immediately after saving the prompt');
   image.click();document.querySelector('#imageWidth').value='220';document.querySelector('#imageWidth').dispatchEvent(new Event('change'));
   check(doc().querySelector('img').style.width==='220px','Image width control resizes selected image');
   window.editor.command('undo');check(doc().querySelector('img').style.width!=='220px','Image resize is undoable');
@@ -38,6 +43,16 @@ export async function run(){
   const pointer=async(type,x,y)=>request('test-mouse',{parameters:{type,x,y,button:type==='mouseMoved'?'none':'left',buttons:type==='mouseReleased'?0:1,clickCount:1}});
   const canvasPoint=(x,y)=>{const matrix=document.querySelector('#canvas').getScreenCTM();return new DOMPoint(x,y).matrixTransform(matrix);};
   const drag=async(from,to)=>{await pointer('mousePressed',from.x,from.y);await pointer('mouseMoved',to.x,to.y);await pointer('mouseReleased',to.x,to.y);};
+  const imageWidth=()=>document.querySelector('#canvas image').getBoundingClientRect().width;
+  const initialImageWidth=imageWidth();
+  for(const [x,y] of [[-180,-100],[180,-100],[180,100],[-180,100]]){
+    const imageRect=document.querySelector('#canvas image').getBoundingClientRect();
+    const center={x:imageRect.x+imageRect.width/2,y:imageRect.y+imageRect.height/2};
+    await drag(center,{x:center.x+x,y:center.y+y});await delay(50);
+    check(Math.abs(imageWidth()-initialImageWidth)<1,'Moving image toward corner '+x+','+y+' preserves its displayed size');
+    check(Number(document.querySelector('[data-geometry=width]').value)===360&&Number(document.querySelector('[data-geometry=height]').value)===200,'Moving image preserves its pixel dimensions');
+    click('[data-action=undo]');
+  }
   click('[data-tool=arrow]');await drag(canvasPoint(50,150),canvasPoint(430,75));
   check(document.querySelectorAll('[data-layer]').length===2,'Dragging draws an arrow on a separate layer');
   const endpoint=document.querySelector('[data-end="2"]');const endRect=endpoint.getBoundingClientRect();
@@ -93,5 +108,24 @@ export async function run(){
   check(document.querySelectorAll('[data-layer]').length===2,'Reopening annotation restores every image layer');
   click('[data-action=apply]');await reopen;
   check(doc().querySelectorAll('img[data-sin-annotation]')[1].style.width===originalWidth,'Annotation apply preserves document display width like PMT');
+  const savedHtml=window.editor.html();
+  await window.editor.load('<p id="typing">Typing:</p>');
+  const largeImage=doc().createElement('img');largeImage.src=png;
+  largeImage.dataset.sinAnnotation=JSON.stringify({version:1,width:360,height:200,objects:Array.from({length:200},()=>({id:id(),type:'embedded-image',x:0,y:0,width:360,height:200,source:png}))});
+  doc().body.append(largeImage);selectText('#typing');doc().getSelection().collapseToEnd();doc().body.focus();
+  const root=doc().documentElement,originalClone=root.cloneNode;let snapshots=0;
+  root.cloneNode=function(...args){snapshots++;return originalClone.apply(this,args);};
+  const timings=[];
+  try{
+    for(const letter of 'responsive typing'){
+      const start=performance.now();doc().execCommand('insertText',false,letter);timings.push(performance.now()-start);await delay(15);
+    }
+    check(snapshots===0,'Typing in a document with 2 MB of image metadata avoids full HTML snapshots on each key');
+    const typed=parseHtml(window.editor.html()).querySelector('#typing').textContent.replace(/\u00a0/g,' ');
+    check(typed==='Typing:responsive typing','Immediate save reads the latest text before the deferred update');
+    const beforeIdle=snapshots;await delay(250);
+    check(snapshots===beforeIdle+1,'A typing burst synchronizes one HTML snapshot after the user pauses');
+    results.push('Typing input handling: maximum '+Math.max(...timings).toFixed(1)+' ms per character with '+(largeImage.dataset.sinAnnotation.length/1048576).toFixed(1)+' MB of image metadata');
+  }finally{delete root.cloneNode;await window.editor.load(savedHtml);doc().body.dispatchEvent(new Event('input',{bubbles:true}));}
   return results;
 }

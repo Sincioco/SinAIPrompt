@@ -12,8 +12,10 @@ public sealed partial class EditorView
 {
     public WebView2 Browser { get; private set; } = null!;
     public bool IsVisual { get; private set; } = true;
+    public event EventHandler? HtmlChanged;
     bool ready, receiving, disposed;
     string? saveAsPath;
+    string? mappedFolder;
     readonly TaskCompletionSource initialized = new();
     Button sourceBack = null!;
     static string Json(object? value) => JsonSerializer.Serialize(value);
@@ -43,7 +45,7 @@ public sealed partial class EditorView
             if (disposed) return;
             await Browser.EnsureCoreWebView2Async(environment);
             Browser.CoreWebView2.SetVirtualHostNameToFolderMapping("sin-editor.local", Path.Combine(AppContext.BaseDirectory, "Web"), CoreWebView2HostResourceAccessKind.DenyCors);
-            RefreshBase();
+            await RefreshBase();
             Browser.CoreWebView2.Settings.AreDefaultContextMenusEnabled = true;
             Browser.CoreWebView2.Settings.AreDevToolsEnabled = App.Current.TestMode;
             Browser.CoreWebView2.Settings.IsStatusBarEnabled = false;
@@ -60,16 +62,26 @@ public sealed partial class EditorView
         }
     }
 
-    public void RefreshBase()
+    public async Task RefreshBase(bool reloadDocument = true)
     {
         if (Browser.CoreWebView2 == null) return;
         string folder = Document.Path == null ? App.Current.Store.DirectoryPath : Path.GetDirectoryName(Document.Path)!;
+        if (string.Equals(folder, mappedFolder, StringComparison.OrdinalIgnoreCase)) return;
         Browser.CoreWebView2.SetVirtualHostNameToFolderMapping("sin-document.local", folder, CoreWebView2HostResourceAccessKind.Allow);
-        if (ready) _ = Browser.ExecuteScriptAsync("window.editor.setBase('https://sin-document.local/')");
+        mappedFolder = folder;
+        if (ready && reloadDocument) await Browser.ExecuteScriptAsync("window.editor.setBase('https://sin-document.local/')");
     }
     void LoadHtml() => _ = Browser.ExecuteScriptAsync($"window.editor.load({Json(Document.Text)},'https://sin-document.local/')");
     public void AcceptHtml(string html)
     {
+        if (IsVisual)
+        {
+            string normalized = TextFiles.Normalize(html);
+            if (Document.Text == normalized) return;
+            // The hidden WPF TextBox is populated only when source view is opened.
+            Document.Text = normalized; Document.Notify(); App.Current.MarkChanged();
+            HtmlChanged?.Invoke(this, EventArgs.Empty); return;
+        }
         receiving = true;
         try { if (TextFiles.Normalize(Editor.Text) != TextFiles.Normalize(html)) Editor.Text = html; }
         finally { receiving = false; }
@@ -121,14 +133,20 @@ public sealed partial class EditorView
     public async Task FlushAsync()
     {
         if (!ready || !IsVisual || disposed) return;
-        string result = await Browser.ExecuteScriptAsync("window.editor.html()");
+        string result = await Browser.ExecuteScriptAsync("window.editor.html(true)");
         AcceptHtml(JsonSerializer.Deserialize<string>(result) ?? Document.Text);
     }
     public async void ToggleSource() => await SetSourceAsync(IsVisual);
     public async void ShowSource() { if (IsVisual) await SetSourceAsync(true); }
     public async Task SetSourceAsync(bool source)
     {
-        if (source) await FlushAsync();
+        if (source)
+        {
+            await FlushAsync();
+            receiving = true;
+            try { Editor.Text = Document.Text; }
+            finally { receiving = false; }
+        }
         IsVisual = !source;
         if (IsVisual && ready) LoadHtml();
         UpdateMode(); FocusEditing();

@@ -2,7 +2,21 @@
 
 Validated on September 12, 2026 using the local Windows / Visual Studio 2026 installation.
 
-## Completed checks
+## Image and typing fixes
+
+Validated September 12, 2026 with PowerShell 7 and the installed Visual Studio 2026 components.
+
+- `Build.ps1 -Package` succeeded with zero build warnings/errors and no package downloads. `Test.ps1 -Packaged` passed the browser/native smoke suite.
+- All eight JavaScript modules passed `node --check`; `git diff --check` passed.
+- Reproduced the first-save image failure through the real Windows Save dialog in an isolated profile: the PNG existed, but the browser could not decode its relative URL. The same check passed after refreshing the sandboxed document's resource mapping. Automated coverage checks first-save mapping, preserved caret position, image decoding, and visibility after Save As.
+- Reproduced annotation shrinking with native browser mouse input. Regression checks now move the image toward all four corners and verify constant displayed and pixel dimensions; existing resize, crop, endpoint, and undo/redo checks pass.
+- Typing with 2.4 MB of image metadata takes no full-document snapshots during the input burst and synchronizes once after a 150 ms pause. The packaged run measured a maximum of 0.3 ms per character inside the browser input operation; this measures input handling, not end-to-end display latency.
+- Native checks verify the hidden source TextBox is not rebuilt during visual editing, immediate Save includes pending input, deferred synchronization queues autosave, and switching to source view cancels pending updates before source edits.
+- Inspected editor and annotation screenshots from the native test profile. Tests use isolated profiles under ignored `work/`.
+
+Reopen the desktop application to use the rebuilt package. No user compilation or browser Ctrl+F5 is required. Changing the asset folder reloads the sandboxed document to apply WebView2's mapping; its contents and caret survive, but earlier visual undo history resets at that reload. Ordinary saves in the same folder do not reload.
+
+## Initial release checks
 
 - .NET Release build: zero warnings, zero errors; package sources disabled.
 - Final packaged integration run: 64 checks passed under Windows PowerShell 5.1.

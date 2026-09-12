@@ -31,8 +31,14 @@ export async function annotate(initial) {
     const b=union([{x:0,y:0,width:state.width||800,height:state.height||500},...state.objects.map(o=>bounds(o))]);
     return {x:b.x-90,y:b.y-90,width:b.width+180,height:b.height+180};
   }
-  function render(keepInspector=false) {
-    if(!gesture){viewBox=workspace();if($('#canvasZoom').value==='fit')zoom=Math.min(1,Math.max(.05,(viewport.clientWidth-100)/viewBox.width),Math.max(.05,(viewport.clientHeight-100)/viewBox.height));else zoom=Number($('#canvasZoom').value)/100;}
+  function render(keepInspector=false,fit=false) {
+    const previous=viewBox;
+    if(!gesture){
+      viewBox=workspace();
+      // Fit on opening, a window resize, or an explicit zoom choice. Moving artwork
+      // expands the scrollable workspace without repeatedly shrinking everything.
+      if(fit||!previous){if($('#canvasZoom').value==='fit')zoom=Math.min(1,Math.max(.05,(viewport.clientWidth-100)/viewBox.width),Math.max(.05,(viewport.clientHeight-100)/viewBox.height));else zoom=Number($('#canvasZoom').value)/100;}
+    }
     svg.setAttribute('viewBox',`${viewBox.x} ${viewBox.y} ${viewBox.width} ${viewBox.height}`);svg.setAttribute('width',viewBox.width*zoom);svg.setAttribute('height',viewBox.height*zoom);
     let content=state.background && state.background!=='none'?`<rect x="${viewBox.x}" y="${viewBox.y}" width="${viewBox.width}" height="${viewBox.height}" fill="${escapeHtml(state.background)}"/>`:'';
     content+=state.objects.filter(o=>o.visible!==false).map(o=>objectSvg(o,true)).join('');
@@ -44,6 +50,7 @@ export async function annotate(initial) {
       else if(selected.length===1){const c=cropMode&&o.type==='embedded-image'?imageClip(o):b;for(const [key,x,y] of [['nw',c.x,c.y],['ne',c.x+c.width,c.y],['se',c.x+c.width,c.y+c.height],['sw',c.x,c.y+c.height],['n',c.x+c.width/2,c.y],['e',c.x+c.width,c.y+c.height/2],['s',c.x+c.width/2,c.y+c.height],['w',c.x,c.y+c.height/2]])content+=handle(x,y,`${cropMode&&o.type==='embedded-image'?'data-crop':'data-handle'}="${key}"`);}
     }
     svg.innerHTML=content;svg.style.cursor=tool==='select'?'default':'crosshair';
+    if(previous&&!gesture&&!fit){viewport.scrollLeft+=(previous.x-viewBox.x)*zoom;viewport.scrollTop+=(previous.y-viewBox.y)*zoom;}
     $$('#layers .layer').length;$('#layers').innerHTML=[...state.objects].reverse().map(o=>`<button class="layer ${selected.includes(o.id)?'selected':''}" data-layer="${o.id}" title="${escapeHtml(o.name||o.type)}"><input type="checkbox" data-visible="${o.id}" aria-label="Show ${escapeHtml(o.name||o.type)}" ${o.visible!==false?'checked':''}><span>${escapeHtml(o.name||o.type)}</span></button>`).join('');
     $$('[data-tool]').forEach(b=>b.classList.toggle('active',b.dataset.tool===tool));
     $('[data-action=undo]').disabled=historyIndex===0;$('[data-action=redo]').disabled=historyIndex===history.length-1;
@@ -123,7 +130,7 @@ export async function annotate(initial) {
   dialog.addEventListener('change',event=>{
     const el=event.target,o=one();
     if(el.dataset.visible){change(()=>{state.objects.find(o=>o.id===el.dataset.visible).visible=el.checked;});return;}
-    if(el.id==='canvasZoom'){render();return;}
+    if(el.id==='canvasZoom'){render(false,true);return;}
     if(['stroke','fill','noStroke','noFill','strokeWidth','arrowSize','opacity'].includes(el.id)){change(()=>selectedObjects().forEach(o=>Object.assign(o,style())));return;}
     if(['canvasColor','canvasTransparent'].includes(el.id)){change(()=>state.background=$('#canvasTransparent').checked?'none':$('#canvasColor').value);return;}
     if(!o)return;
@@ -147,6 +154,6 @@ export async function annotate(initial) {
   dialog.addEventListener('paste',event=>{const files=[...event.clipboardData.items].filter(i=>i.type.startsWith('image/')).map(i=>i.getAsFile());if(!files.length)return;event.preventDefault();event.stopPropagation();(async()=>{for(const file of files)await addImage(file);})().catch(error);});
   request('templates-load').then(values=>{templates=values||[];renderTemplates();}).catch(error);
   $('#canvasTransparent').checked=!state.background||state.background==='none';if(!$('#canvasTransparent').checked)$('#canvasColor').value=state.background;
-  const observer=new ResizeObserver(()=>{if(!gesture)render();});observer.observe(viewport);render();
+  const observer=new ResizeObserver(()=>{if(!gesture)render(false,true);});observer.observe(viewport,{box:'border-box'});render();
   return new Promise(resolve=>dialog.addEventListener('close',()=>{if(finished)return;finished=true;observer.disconnect();const result=dialog.result;dialog.remove();resolve(result||null);},{once:true}));
 }

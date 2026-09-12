@@ -31,6 +31,8 @@ The annotation window provides:
 - Reversible image cropping with draggable handles and numeric top/right/bottom/left insets. Each corner has its own radius control.
 - Multiple images on an expanding canvas, with undo and redo. Apply retains the image's document width, matching PMT, while fitting expanded artwork into it.
 
+Dragging keeps the current canvas scale while the scrollable workspace expands. Choose a zoom percentage or Fit to change the scale; resizing the annotation window recalculates Fit.
+
 The displayed image is a lossless PNG. Editable original image sources and objects are retained in the HTML image's `data-sin-annotation` metadata, so copying the HTML also preserves its editing state. Cropping does not discard original pixels. Large annotated files can contain both source images and the rendered PNG.
 
 ## Object templates

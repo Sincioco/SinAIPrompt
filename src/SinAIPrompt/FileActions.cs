@@ -83,7 +83,7 @@ public partial class MainWindow
         TextFiles.Rename(oldPath, destination);
         foreach (var (window, open) in references)
         {
-            open.Path = destination; open.Notify(); window.editors[open.Id].RefreshBase();
+            open.Path = destination; open.Notify(); _ = window.editors[open.Id].RefreshBase();
             window.noticedVersions.Remove(open.Id);
             if (open == window.ActiveDocument) window.ExternalNotice.Visibility = Visibility.Collapsed;
         }

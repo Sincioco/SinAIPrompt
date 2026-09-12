@@ -6,12 +6,18 @@ import {id,outputBounds} from './annotation-model.js';
 
 const frame=document.querySelector('#document'),$=s=>document.querySelector(s);
 let doc=null,selection=null,selectedImage=null,currentRaw='',base='https://sin-document.local/',loading=Promise.resolve(),loadingNow=false;
+let changeTimer;
 const exports=new Map();
 function saveSelection(){if(!doc)return;const s=doc.getSelection();if(s.rangeCount && doc.body.contains(s.anchorNode))selection=s.getRangeAt(0).cloneRange();}
 function restoreSelection(){if(!doc)return;doc.body.focus();const s=doc.getSelection();if(selection&&doc.body.contains(selection.startContainer)){s.removeAllRanges();s.addRange(selection);}else {const range=doc.createRange();range.selectNodeContents(doc.body);range.collapse(false);s.removeAllRanges();s.addRange(range);}}
-function changed(){if(!doc||loadingNow)return;saveSelection();currentRaw=serialize(doc);send('change',{html:currentRaw});}
-function html(){return loadingNow?currentRaw:doc?serialize(doc):currentRaw;}
+function changed(){
+  if(!doc||loadingNow)return;saveSelection();clearTimeout(changeTimer);
+  // Keep full-document serialization and native synchronization out of keystrokes.
+  changeTimer=setTimeout(()=>{currentRaw=serialize(doc);send('change',{html:currentRaw});},150);
+}
+function html(flush=false){if(flush)clearTimeout(changeTimer);return loadingNow?currentRaw:doc?serialize(doc):currentRaw;}
 async function load(raw,newBase=base){
+  clearTimeout(changeTimer);
   currentRaw=raw||'';base=newBase;loadingNow=true;selection=null;selectedImage=null;$('#imagebar').hidden=true;
   const input=parseHtml(raw);ensureStyle(input);
   const baseTag=input.createElement('base');baseTag.href=base;baseTag.dataset.sinRuntime='1';
@@ -30,7 +36,17 @@ async function load(raw,newBase=base){
   };frame.srcdoc='<!DOCTYPE html>'+input.documentElement.outerHTML;});
   return loading;
 }
-function setBase(newBase){base=newBase;const el=doc?.querySelector('base[data-sin-runtime]');if(el)el.href=base;}
+async function setBase(newBase){
+  saveSelection();
+  const path=node=>{const indexes=[];while(node&&node!==doc.body){indexes.unshift([...node.parentNode.childNodes].indexOf(node));node=node.parentNode;}return indexes;};
+  const saved=selection?{start:path(selection.startContainer),end:path(selection.endContainer),startOffset:selection.startOffset,endOffset:selection.endOffset}:null;
+  const scroll={x:doc.defaultView.scrollX,y:doc.defaultView.scrollY};
+  // WebView2 applies changed folder mappings to newly loaded documents.
+  // Reload only the sandboxed document, keeping the pending paste and its caret.
+  await load(html(),newBase);
+  if(saved){const node=indexes=>indexes.reduce((parent,index)=>parent.childNodes[index],doc.body);selection=doc.createRange();selection.setStart(node(saved.start),saved.startOffset);selection.setEnd(node(saved.end),saved.endOffset);}
+  restoreSelection();doc.defaultView.scrollTo(scroll.x,scroll.y);
+}
 function command(name,value=null){
   if(!doc)return;restoreSelection();
   doc.execCommand('styleWithCSS',false,true);
@@ -40,7 +56,7 @@ function command(name,value=null){
 function syncFormatting(){for(const b of document.querySelectorAll('[data-cmd]'))b.setAttribute('aria-pressed',String(doc?.queryCommandState(b.dataset.cmd)||false));}
 function selectImage(image){doc?.querySelectorAll('[data-sin-selected]').forEach(el=>el.removeAttribute('data-sin-selected'));selectedImage=image;$('#imagebar').hidden=!image;if(image){image.dataset.sinSelected='1';$('#imageWidth').value=Math.round(image.getBoundingClientRect().width);$('#imageHeight').value=Math.round(image.getBoundingClientRect().height);}}
 async function storageChoice(){const answer=await ask('Store image','<p>Choose how this image is stored with your HTML document.</p><p><b>Inline:</b> embed the lossless PNG in the HTML file.<br><b>Separate file:</b> store a PNG in a folder named after the HTML file.</p>',[{value:'inline',label:'Inline (Base64)'},{value:'separate',label:'Separate PNG file'}]);return ['inline','separate'].includes(answer.choice)?answer.choice:null;}
-async function storeImage(png,mode){return mode==='separate'?await request('save-image',{data:png}):png;}
+async function storeImage(png,mode){const source=mode==='separate'?await request('save-image',{data:png}):png;await loading;return source;}
 async function insertImage(source){saveSelection();const mode=await storageChoice();if(!mode)return;const png=await toPng(source),src=await storeImage(png.data,mode);restoreSelection();command('insertHTML',`<img src="${escapeHtml(src)}" data-sin-storage="${mode}" style="width:${png.width}px;max-width:100%;height:auto" alt=""><p><br></p>`);}
 async function paste(event){
   const images=[...event.clipboardData.items].filter(i=>i.type.startsWith('image/')).map(i=>i.getAsFile());
@@ -76,7 +92,9 @@ async function openAnnotation(image=null){
   else if(image){const png=await toPng(image.src);state={version:1,width:png.width,height:png.height,background:'none',objects:[{id:id(),type:'embedded-image',name:'Original image',source:png.data,x:0,y:0,width:png.width,height:png.height,isOriginalImage:true,visible:true}]};}
   else {state={version:1,width:800,height:500,blankCanvas:true,background:'none',objects:[]};}
   const result=await annotate(state);if(!result)return;
+  const imageIndex=image?[...doc.images].indexOf(image):-1;
   const source=await storeImage(result.data,mode);
+  if(imageIndex>=0)image=doc.images[imageIndex];
   // PMT retains the document width and fits the expanded annotation bounds into it.
   const width=Math.max(1,Math.round(displayWidth));
   const markup=`<img src="${escapeHtml(source)}" data-sin-storage="${mode}" data-sin-annotation="${escapeHtml(JSON.stringify(result.state))}" style="width:${width}px;max-width:100%;height:auto" alt="${escapeHtml(image?.alt||'Annotated image')}">`;

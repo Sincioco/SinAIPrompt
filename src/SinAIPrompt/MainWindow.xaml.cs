@@ -108,7 +108,9 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         Documents.Add(doc);
         doc.PropertyChanged += (_, _) => { if (doc == ActiveDocument) { Title = "Sin - AI Prompt - " + doc.Name; UpdateStatus(); } };
         view.Editor.SelectionChanged += (_, _) => { if (doc == ActiveDocument) UpdateStatus(); };
-        view.Editor.TextChanged += (_, _) => { if (doc.AutoSave) { pendingAutoSaves[doc.Id] = DateTime.UtcNow; autoSaveErrors.Remove(doc.Id); } if (doc == ActiveDocument) { UpdateStatus(); UpdateSearchStatus(); } };
+        void ContentChanged(object? sender, EventArgs args) { if (doc.AutoSave) { pendingAutoSaves[doc.Id] = DateTime.UtcNow; autoSaveErrors.Remove(doc.Id); } if (doc == ActiveDocument) { UpdateStatus(); UpdateSearchStatus(); } }
+        view.Editor.TextChanged += ContentChanged;
+        view.HtmlChanged += ContentChanged;
         view.Editor.PreviewMouseWheel += (_, e) => { if (Keyboard.Modifiers.HasFlag(ModifierKeys.Control)) { ChangeZoom(e.Delta > 0 ? 10 : -10); e.Handled = true; } };
         ActiveDocument = doc; UpdateTabWidths(); App.Current.MarkChanged();
         if (doc.AutoSave && doc.Dirty) pendingAutoSaves[doc.Id] = DateTime.UtcNow;
@@ -180,7 +182,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             if (relocated != null) doc.Text = relocated;
             try { TextFiles.Save(doc, path!, conflict); }
             catch { doc.Text = original; throw; }
-            editors[doc.Id].RefreshBase();
+            await editors[doc.Id].RefreshBase(reloadDocument: relocated == null);
             if (relocated != null) { editors[doc.Id].AcceptHtml(doc.Text); editors[doc.Id].ReloadSavedHtml(); }
             AddRecent(path!); noticedVersions.Remove(doc.Id); autoSaveErrors.Remove(doc.Id); pendingAutoSaves.Remove(doc.Id); ExternalNotice.Visibility = Visibility.Collapsed; UpdateStatus(); App.Current.MarkChanged(); return true;
         }
@@ -326,12 +328,19 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     void UpdateStatus()
     {
         if (Editor == null || CurrentView == null || ActiveDocument == null || PositionStatus == null) return;
-        var position = CurrentView.Gutter.Position(Editor.CaretIndex);
-        PositionStatus.Text = $"Ln {position.Line:N0}, Col {position.Column:N0}";
-        if (CurrentView.IsVisual) PositionStatus.Text = "Visual HTML";
-        int totalLines = CurrentView.Gutter.LineCount;
-        int count = TextFiles.Normalize(Editor.Text).Length;
-        CountStatus.Text = $"{totalLines:N0} {(totalLines == 1 ? "line" : "lines")}  ·  {count:N0} characters" + (Editor.SelectionLength > 0 ? $"  ·  {Editor.SelectionLength:N0} selected" : "");
+        if (CurrentView.IsVisual)
+        {
+            PositionStatus.Text = "Visual HTML";
+            CountStatus.Text = $"{ActiveDocument.Text.Length:N0} characters";
+        }
+        else
+        {
+            var position = CurrentView.Gutter.Position(Editor.CaretIndex);
+            PositionStatus.Text = $"Ln {position.Line:N0}, Col {position.Column:N0}";
+            int totalLines = CurrentView.Gutter.LineCount;
+            int count = TextFiles.Normalize(Editor.Text).Length;
+            CountStatus.Text = $"{totalLines:N0} {(totalLines == 1 ? "line" : "lines")}  ·  {count:N0} characters" + (Editor.SelectionLength > 0 ? $"  ·  {Editor.SelectionLength:N0} selected" : "");
+        }
         if (ActiveDocument.AutoSave) CountStatus.Text += autoSaveErrors.ContainsKey(ActiveDocument.Id) ? "  ·  Auto-save paused" : ActiveDocument.Dirty ? "  ·  Saving…" : "  ·  Saved";
         CountStatus.ToolTip = autoSaveErrors.GetValueOrDefault(ActiveDocument.Id) ?? (ActiveDocument.AutoSave ? ActiveDocument.Path : null);
         ZoomStatus.Content = $"{ActiveDocument.Zoom}%";
