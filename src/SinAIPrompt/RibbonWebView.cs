@@ -5,11 +5,14 @@ using Microsoft.Web.WebView2.Wpf;
 
 namespace SinAIPrompt;
 
+internal enum EditorPresentation { Hidden, Ribbon, Document, Complete }
+
 // Keep one hardware-accelerated browser. Its native window leaves a cutout for
 // WPF navigation beneath the ribbon; no extra browser or composition SDK is needed.
 public sealed class RibbonWebView : WebView2
 {
     double inset, ribbon;
+    EditorPresentation presentation = EditorPresentation.Complete;
     Rect[] popups = [];
     internal bool IsModal { get; private set; }
     (int Width, int Height, int Left, int Top, double Zoom)? previous;
@@ -21,6 +24,11 @@ public sealed class RibbonWebView : WebView2
     internal void SetChrome(double left, double top)
     {
         inset = left; ribbon = top; UpdateRegion();
+    }
+    internal void SetPresentation(EditorPresentation value)
+    {
+        if (presentation == value) return;
+        presentation = value; previous = null; UpdateRegion();
     }
     internal void SetPopups(Rect[] bounds, bool modal)
     {
@@ -34,16 +42,22 @@ public sealed class RibbonWebView : WebView2
             (int)Math.Round(inset * dpi.DpiScaleX), (int)Math.Round(ribbon * dpi.DpiScaleY), ZoomFactor);
         if (previous == bounds) return;
         previous = bounds;
-        if (bounds.Item3 == 0) { SetWindowRgn(Handle, IntPtr.Zero, true); return; }
-        nint region = CreateRectRgn(0, 0, bounds.Item1, bounds.Item4);
+        if (presentation == EditorPresentation.Complete && bounds.Item3 == 0) { SetWindowRgn(Handle, IntPtr.Zero, true); return; }
+        nint region = CreateRectRgn(0, 0, 0, 0);
         try
         {
-            Union(region, bounds.Item3, bounds.Item4, bounds.Item1, bounds.Item2);
-            // Only the popup's actual rectangle may cover native navigation.
-            // Restoring the entire browser window would paint the sidebar blank.
-            foreach (var popup in popups)
-                Union(region, (int)Math.Floor(popup.Left * dpi.DpiScaleX * ZoomFactor), (int)Math.Floor(popup.Top * dpi.DpiScaleY * ZoomFactor),
-                    (int)Math.Ceiling(popup.Right * dpi.DpiScaleX * ZoomFactor), (int)Math.Ceiling(popup.Bottom * dpi.DpiScaleY * ZoomFactor));
+            if (presentation is EditorPresentation.Ribbon or EditorPresentation.Complete)
+                Union(region, 0, 0, bounds.Item1, bounds.Item4);
+            if (presentation is EditorPresentation.Document or EditorPresentation.Complete)
+                Union(region, bounds.Item3, bounds.Item4, bounds.Item1, bounds.Item2);
+            if (presentation == EditorPresentation.Complete)
+            {
+                // Only the popup's actual rectangle may cover native navigation.
+                // Restoring the entire browser window would paint the sidebar blank.
+                foreach (var popup in popups)
+                    Union(region, (int)Math.Floor(popup.Left * dpi.DpiScaleX * ZoomFactor), (int)Math.Floor(popup.Top * dpi.DpiScaleY * ZoomFactor),
+                        (int)Math.Ceiling(popup.Right * dpi.DpiScaleX * ZoomFactor), (int)Math.Ceiling(popup.Bottom * dpi.DpiScaleY * ZoomFactor));
+            }
             if (SetWindowRgn(Handle, region, true) != 0) region = 0; // Windows takes ownership.
         }
         finally { if (region != 0) DeleteObject(region); }

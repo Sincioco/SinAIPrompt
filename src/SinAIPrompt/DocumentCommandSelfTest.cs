@@ -12,6 +12,7 @@ internal static class DocumentCommandSelfTest
     public static async Task NewPromptReady(MainWindow window, Action<bool, string> check)
     {
         var previous = window.ActiveDocument!;
+        var previousView = window.CurrentView!;
         double previousRibbon = window.DocumentPane.Margin.Top;
         var watch = System.Diagnostics.Stopwatch.StartNew();
         var draft = window.NewDocument();
@@ -20,6 +21,9 @@ internal static class DocumentCommandSelfTest
         var view = window.CurrentView!;
         check(previousRibbon > 0 && window.DocumentPane.Margin.Top == previousRibbon && view.RibbonHeight == previousRibbon,
             "First visit reserves the current ribbon height before the new WebView has initialized");
+        check(!view.FirstPaint.IsCompleted && NavigationSelfTest.RegionContains(previousView.Browser, 20, 20) &&
+            !NavigationSelfTest.RegionContains(previousView.Browser, 500, 300),
+            "A first visit retains only the previous painted ribbon while the selected document initializes");
         try
         {
             bool loaded = false;
@@ -34,9 +38,13 @@ internal static class DocumentCommandSelfTest
             await view.Browser.CoreWebView2!.CallDevToolsProtocolMethodAsync("Input.insertText", "{\"text\":\"Ready to type\"}");
             check(await view.Browser.ExecuteScriptAsync("document.querySelector('#document').contentDocument.body.textContent === 'Ready to type'") == "true",
                 "A new prompt accepts typing immediately without clicking the document");
+            await view.FirstPaint.WaitAsync(TimeSpan.FromSeconds(3));
+            check(NavigationSelfTest.RegionContains(view.Browser, 20, 20) && !NavigationSelfTest.RegionContains(previousView.Browser, 20, 20),
+                "The selected ribbon replaces the fallback only after initial formatting has painted");
             check(await view.Browser.ExecuteScriptAsync("document.querySelectorAll('.style-strip [data-style]').length === 5 && [...document.fonts].every(face => face.display === 'swap')") == "true",
                 "All five Styles labels render without waiting for local Office fonts");
-            int unloaded = 0; view.Unloaded += (_, _) => unloaded++;
+            int unloaded = 0, visibilityChanges = 0; view.Unloaded += (_, _) => unloaded++;
+            view.IsVisibleChanged += (_, _) => visibilityChanges++;
             nint browserHandle = view.Browser.Handle;
             await view.Browser.ExecuteScriptAsync("window.ribbonMoves=0;window.ribbonObserver=new MutationObserver(records=>window.ribbonMoves+=records.length);window.ribbonObserver.observe(document.querySelector('.ribbon-groups'),{childList:true})");
             for (int i = 0; i < 8; i++)
@@ -48,6 +56,27 @@ internal static class DocumentCommandSelfTest
                 "Rapid document switching retains loaded browser windows without visual-tree teardown");
             check(await view.Browser.ExecuteScriptAsync("window.ribbonObserver.disconnect();window.ribbonMoves===0") == "true",
                 "Rapid document switching preserves ribbon groups without rebuilding their layout");
+            check(visibilityChanges == 0, "Rapid document switching keeps painted browser surfaces visible instead of hiding and showing the ribbon");
+            check(NavigationSelfTest.RegionContains(view.Browser, 20, 20) && !NavigationSelfTest.RegionContains(previousView.Browser, 20, 20) && !previousView.IsEnabled,
+                "Only the selected document's native ribbon is exposed and accepts input");
+            await view.SetSourceAsync(true);
+            check(view.Editor.IsVisible && !view.Browser.IsVisible && !NavigationSelfTest.RegionContains(previousView.Browser, 20, 20),
+                "Cached inactive browsers cannot cover the selected document's source editor");
+            await view.SetSourceAsync(false);
+            string previewPath = Path.Combine(App.Current.Store.DirectoryPath, "switch-preview.txt");
+            File.WriteAllText(previewPath, "Read-only preview remains above retained editors");
+            using var preview = new ExplorerPreview(previewPath, App.Current.Store.DirectoryPath, () => window.EditorHost.Content = view);
+            window.EditorHost.Content = preview;
+            await preview.LoadAsync(CancellationToken.None);
+            check(!NavigationSelfTest.RegionContains(view.Browser, 20, 20) && !NavigationSelfTest.RegionContains(previousView.Browser, 20, 20),
+                "Opening a file preview clips every inactive native browser out of the preview");
+            window.EditorHost.Content = view;
+            window.SetAnnotationMode(view, true);
+            check(view.Parent == window.AnnotationHost && view.IsEnabled && !NavigationSelfTest.RegionContains(previousView.Browser, 20, 20),
+                "Full-content annotation retains its active browser without exposing other documents");
+            window.SetAnnotationMode(view, false);
+            check(NavigationSelfTest.RegionContains(view.Browser, 20, 20) && view.IsEnabled && view.Parent == window.EditorHost,
+                "Returning from preview and annotation restores the selected ribbon and input");
         }
         finally { window.ActiveDocument = previous; window.RemoveDocument(draft); }
         bool show = App.Current.Preferences.ShowToolbar, wrap = App.Current.Preferences.WrapToolbar;

@@ -43,6 +43,8 @@ public sealed partial class EditorView
     string? mappedFolder;
     readonly TaskCompletionSource initialized = new();
     internal Task Initialization => initialized.Task;
+    readonly TaskCompletionSource painted = new();
+    internal Task FirstPaint => painted.Task;
     Button sourceBack = null!;
     static string Json(object? value) => JsonSerializer.Serialize(value);
     internal MainWindow? HostWindow { get; set; }
@@ -62,11 +64,16 @@ public sealed partial class EditorView
             // Fullscreen temporarily reparents the host. Check the settled layout
             // before stopping media when switching documents or opening source.
             await System.Windows.Threading.Dispatcher.Yield(System.Windows.Threading.DispatcherPriority.ContextIdle);
-            if (ready && !disposed && !Browser.IsVisible) await Browser.ExecuteScriptAsync("window.editor.stopMedia()");
+            if (!Browser.IsVisible) StopMedia();
         };
         UpdateMode();
         Editor.TextChanged += (_, _) => { if (!receiving && ready && IsVisual) LoadHtml(); };
         Loaded += OnHtmlLoaded;
+    }
+
+    internal void StopMedia()
+    {
+        if (ready && !disposed) _ = Browser.ExecuteScriptAsync("window.editor.stopMedia()");
     }
 
     async void OnHtmlLoaded(object sender, RoutedEventArgs e)
@@ -101,7 +108,7 @@ public sealed partial class EditorView
             // Closing an editor aborts its pending WebView creation. Disposal has
             // already canceled waiters; it is not a missing-runtime/startup failure.
             if (disposed) return;
-            initialized.TrySetException(ex); await SetSourceAsync(true);
+            initialized.TrySetException(ex); await SetSourceAsync(true); painted.TrySetResult();
             MessageBox.Show("The visual editor could not start. HTML source remains available.\n\n" + ex.Message, "Sin - AI Prompt");
         }
     }
@@ -159,6 +166,7 @@ public sealed partial class EditorView
                 case "open-files": await Owner.OpenDroppedPathsAsync(e.AdditionalObjects.OfType<CoreWebView2File>().Select(file => file.Path).ToArray()); break;
                 case "test-path-status" when App.Current.TestMode: result = PathStatus.Text; break;
                 case "ready": ready = true; LoadHtml(); ApplyHtmlPreferences(); ApplyReadOnly(); initialized.TrySetResult(); break;
+                case "painted": painted.TrySetResult(); break;
                 case "change": AcceptHtml(message.GetProperty("html").GetString()!); break;
                 case "source": await SetSourceAsync(true); break;
                 case "annotation-mode": Owner.SetAnnotationMode(this, message.GetProperty("open").GetBoolean()); break;
@@ -254,7 +262,7 @@ public sealed partial class EditorView
         // The native browser can receive focus before its editable iframe exists.
         // Honor that request once ready, unless the user has moved elsewhere.
         try { await initialized.Task; } catch { return; }
-        if (disposed || !IsVisual || !IsVisible || Owner.ActiveDocument != Document) return;
+        if (disposed || !IsVisual || !IsVisible || Owner.CurrentView != this) return;
         await Browser.ExecuteScriptAsync("window.editor.focus()");
     }
     public async void Command(string name, string? value = null)
@@ -336,5 +344,5 @@ public sealed partial class EditorView
         }
         throw new IOException("Export timed out. Check that all referenced images are available.");
     }
-    public void Dispose() { disposed = true; initialized.TrySetCanceled(); (Parent as EditorSurface)?.Release(this); Browser.Dispose(); }
+    public void Dispose() { disposed = true; initialized.TrySetCanceled(); painted.TrySetCanceled(); (Parent as EditorSurface)?.Release(this); Browser.Dispose(); }
 }

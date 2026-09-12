@@ -83,6 +83,7 @@ async function load(raw,newBase=base){
     doc.addEventListener('dragover',event=>{if(event.dataTransfer.types.includes('Files'))event.preventDefault();});
     doc.addEventListener('drop',event=>{const files=[...event.dataTransfer.files].filter(f=>f.type.startsWith('image/'));if(files.length){event.preventDefault();(async()=>{for(const f of files)await insertImage(await blobData(f));})().catch(report);}});
     resolve();
+    requestAnimationFrame(()=>requestAnimationFrame(()=>send('painted')));
   };frame.srcdoc='<!DOCTYPE html>'+input.documentElement.outerHTML;});
   return loading;
 }

@@ -121,7 +121,7 @@ internal static class NavigationSelfTest
             window.Topmost = topmost;
         }
     }
-    static bool RegionContains(RibbonWebView browser, double x, double y)
+    internal static bool RegionContains(RibbonWebView browser, double x, double y)
     {
         nint region = CreateRectRgn(0, 0, 0, 0); var dpi = VisualTreeHelper.GetDpi(browser);
         try { return GetWindowRgn(browser.Handle, region) > 0 && PtInRegion(region, (int)(x * browser.ZoomFactor * dpi.DpiScaleX), (int)(y * browser.ZoomFactor * dpi.DpiScaleY)); }

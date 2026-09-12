@@ -591,3 +591,28 @@ introduced. Native regression checks cover all three actual controls in both nav
 modes, modal input blocking, bounded overlap and removal cleanup. Full-window captures
 include the real WPF sidebar; browser-only screenshots cannot validate native navigation.
 Existing host partial-class coupling remains debt; architecture limits are unchanged.
+
+## Document-switch painting and V3 icon (September 13)
+
+`EditorSurface` owns the selected child, retention of visited editors, and one temporary
+ribbon fallback during a first visit. A first-paint signal from the editor replaces
+that fallback after initial formatting/layout has rendered; stale completions cannot
+change the current selection. The fallback is disabled and exposes no old document body.
+It now switches native clipping and input eligibility instead of WPF visibility;
+the previous visibility transition was still interrupting WebView2 presentation.
+`RibbonWebView` owns one presentation mode and reuses its existing region calculation
+to clip inactive browsers completely, including their popups. WPF stacking keeps the
+selected source view or preview above retained controls. Annotation transfers the
+selected editor through the existing host with its complete browser surface.
+
+`HtmlEditorHost` explicitly stops media when an editor is deselected and checks the
+actual displayed editor before completing a deferred focus request. No shared ribbon,
+document state, dependency, preload, or startup scan was introduced. First visits still
+initialize their editor lazily; visited documents keep their browser and ribbon state.
+Regression checks cover first-visit ribbon handoff, rapid-switch visibility/layout stability, inactive input and
+native clipping, source/preview display, and annotation transfer/return. MainWindow
+remains unchanged at 545 lines; no limits, baselines or exceptions changed.
+
+The canonical `Assets/SinAIPrompt.png` now permanently contains the supplied V3 artwork,
+with a nine-resolution ICO generated using Windows drawing APIs. Existing executable,
+WPF window and file-association resource wiring consumes that ICO; splash art is separate.
