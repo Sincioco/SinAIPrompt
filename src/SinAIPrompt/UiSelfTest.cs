@@ -44,7 +44,9 @@ internal static class UiSelfTest
                 if (view.Browser.CoreWebView2 != null && await view.Browser.ExecuteScriptAsync("!!window.editor && !!document.querySelector('#document').contentDocument?.body?.isContentEditable") == "true") { loaded = true; break; }
             }
             Check(loaded, "Native WebView2 HTML editor initializes from installed Visual Studio components");
+            await DocumentCommandSelfTest.RenameDraft(window, Check);
             Check(await window.SaveDocument(first, destinationPath: Path.Combine(documents, "Prompt 1.html")), "First save changes the unsaved prompt's asset folder");
+            await DocumentCommandSelfTest.SaveShortcut(window, Check);
             var exceptionEvent = view.Browser.CoreWebView2!.GetDevToolsProtocolEventReceiver("Runtime.exceptionThrown");
             var browserErrors = new List<string>();
             exceptionEvent.DevToolsProtocolEventReceived += (_, e) => browserErrors.Add(e.ParameterObjectAsJson);

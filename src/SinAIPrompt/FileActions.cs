@@ -47,7 +47,7 @@ public partial class MainWindow
             };
             menu.Items.Add(item);
         }
-        Add("_Rename…", () => Dialogs.RenameFile(this, doc.Name, name => RenameDocumentFile(doc, name)), true);
+        Add("_Rename…", () => Dialogs.RenameFile(this, doc.Name, name => RenameDocumentFile(doc, name)), true, needsPath: doc.Path != null);
         Add("_Delete…", () => DeleteDocumentFile(doc, (path, dirty) => Dialogs.DeleteFile(this, path, dirty)), true);
         menu.Items.Add(new Separator());
         Add("Copy full _path", () => Clipboard.SetText(doc.Path!), false);

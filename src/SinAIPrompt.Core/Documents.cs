@@ -11,6 +11,7 @@ public sealed class Document : INotifyPropertyChanged
 {
     public Guid Id { get; set; } = Guid.NewGuid();
     public string? Path { get; set; }
+    public string? DraftName { get; set; }
     public string Text { get; set; } = "";
     public string SavedText { get; set; } = "";
     public string EncodingName { get; set; } = "UTF-8";
@@ -26,7 +27,7 @@ public sealed class Document : INotifyPropertyChanged
     public double HorizontalScroll { get; set; }
     public int Zoom { get; set; } = 100;
     public bool Dirty => Text != SavedText || EncodingName != SavedEncoding || NewLine != SavedNewLine;
-    public string Name => Path != null ? System.IO.Path.GetFileName(Path) : $"Prompt {UntitledNumber}";
+    public string Name => Path != null ? System.IO.Path.GetFileName(Path) : DraftName ?? $"Prompt {UntitledNumber}";
     public string AccessibleName => $"{Name}. {(Dirty ? "Modified" : "Unmodified")}.";
     public string Tooltip => (Path ?? Name) + (Dirty ? "\nUnsaved changes" : "");
     public string Marker => Dirty ? "•" : "";
@@ -88,11 +89,16 @@ public static class TextFiles
     public static bool ChangedOnDisk(Document doc) => doc.Path != null && doc.Fingerprint != null && (!File.Exists(doc.Path) || Hash(File.ReadAllBytes(doc.Path)) != doc.Fingerprint);
     public static string RenamePath(string path, string fileName)
     {
+        ValidateFileName(fileName);
+        return Path.Combine(Path.GetDirectoryName(Path.GetFullPath(path))!, fileName);
+    }
+    public static void ValidateFileName(string fileName)
+    {
         if (string.IsNullOrWhiteSpace(fileName) || fileName.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0 ||
+            string.IsNullOrWhiteSpace(Path.GetFileNameWithoutExtension(fileName)) ||
             fileName.EndsWith('.') || fileName.EndsWith(' ') || fileName.Length > 255 ||
             Regex.IsMatch(fileName, @"^(CON|PRN|AUX|NUL|CONIN\$|CONOUT\$|COM[1-9¹²³]|LPT[1-9¹²³])(\.|$)", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant))
             throw new ArgumentException("Enter a valid file name, including its extension, without a folder path or reserved Windows name.");
-        return Path.Combine(Path.GetDirectoryName(Path.GetFullPath(path))!, fileName);
     }
     public static void Rename(string path, string destination)
     {
@@ -111,6 +117,7 @@ public static class TextFiles
         if (!doc.Dirty && doc.Path != null && File.Exists(doc.Path) && !ChangedOnDisk(doc)) bytes = File.ReadAllBytes(doc.Path);
         else { var enc = EncodingFor(doc.EncodingName); bytes = [.. enc.GetPreamble(), .. enc.GetBytes(doc.Text.Replace("\n", doc.NewLine))]; }
         AtomicWrite(path, bytes);
+        doc.DraftName = null;
         doc.Path = path; doc.SavedText = doc.Text; doc.SavedEncoding = doc.EncodingName; doc.SavedNewLine = doc.NewLine; doc.Fingerprint = Hash(bytes); doc.Notify();
     }
     public static void AtomicWrite(string path, byte[] bytes, bool backup = false)

@@ -8,7 +8,15 @@ public partial class MainWindow
 {
     internal async Task RenameDocumentFile(Document doc, string name)
     {
-        if (!Documents.Contains(doc) || doc.Path == null) throw new IOException("The document is no longer open as a saved file.");
+        if (!Documents.Contains(doc)) throw new IOException("The document is no longer open.");
+        if (doc.Path == null)
+        {
+            TextFiles.ValidateFileName(name);
+            doc.DraftName = name;
+            doc.Notify();
+            App.Current.MarkChanged();
+            return;
+        }
         string oldPath = Path.GetFullPath(doc.Path), destination = TextFiles.RenamePath(oldPath, name);
         if (oldPath == destination) return;
         bool sameFile = string.Equals(oldPath, destination, StringComparison.OrdinalIgnoreCase);

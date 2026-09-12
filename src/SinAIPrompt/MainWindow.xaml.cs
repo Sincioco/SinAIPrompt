@@ -177,7 +177,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         string? path = destinationPath ?? doc.Path;
         if (saveAs || path == null)
         {
-            var dialog = new SaveFileDialog { Title = "Save as", FileName = doc.Path == null ? $"Prompt {doc.UntitledNumber}.html" : Path.GetFileName(doc.Path), Filter = "HTML documents (*.html;*.htm)|*.html;*.htm|All files (*.*)|*.*", DefaultExt = ".html", AddExtension = true, OverwritePrompt = true, CheckPathExists = true };
+            var dialog = new SaveFileDialog { Title = "Save as", FileName = doc.Path == null && !Path.HasExtension(doc.Name) ? doc.Name + ".html" : doc.Name, Filter = "HTML documents (*.html;*.htm)|*.html;*.htm|All files (*.*)|*.*", DefaultExt = ".html", AddExtension = true, OverwritePrompt = true, CheckPathExists = true };
             if (doc.Path != null) dialog.InitialDirectory = Path.GetDirectoryName(doc.Path);
             if (dialog.ShowDialog(this) != true) return false;
             path = dialog.FileName;
@@ -467,11 +467,12 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     async void WindowKeyDown(object sender, KeyEventArgs e)
     {
         if (IsAnnotating) return;
-        ModifierKeys modifiers = Keyboard.Modifiers;
+        ModifierKeys modifiers = e.KeyboardDevice.Modifiers;
         if (CurrentView?.IsVisual == false && TryInsertShortcut(e.Key, modifiers)) { e.Handled = true; return; }
         bool ctrl = modifiers.HasFlag(ModifierKeys.Control), shift = modifiers.HasFlag(ModifierKeys.Shift), alt = modifiers.HasFlag(ModifierKeys.Alt);
         if (ctrl)
         {
+            e.Handled = true;
             switch (e.Key)
             {
                 case Key.N: if (shift) NewWindowClick(this, e); else NewDocument(); break;
@@ -490,9 +491,8 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                 case Key.OemPlus: case Key.Add: ChangeZoom(10); break;
                 case Key.OemMinus: case Key.Subtract: ChangeZoom(-10); break;
                 case Key.D0: case Key.NumPad0: ChangeZoom(100, true); break;
-                default: return;
+                default: e.Handled = false; return;
             }
-            e.Handled = true;
         }
         else if (e.Key == Key.F3) { FindNext(shift); e.Handled = true; }
         else if (e.Key == Key.F5) { InsertDate(); e.Handled = true; }
