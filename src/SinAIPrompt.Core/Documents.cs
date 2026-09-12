@@ -166,6 +166,7 @@ public sealed class Settings
     public bool DocumentList { get; set; }
     public bool ExplorerMode { get; set; } = true;
     public bool ContentView { get; set; }
+    public double ContentWidth { get; set; } = 220;
     public bool ExplorerShowFolders { get; set; } = true;
     public string ExplorerDirectory { get; set; } = "";
     public string DocumentSort { get; set; } = "newest";

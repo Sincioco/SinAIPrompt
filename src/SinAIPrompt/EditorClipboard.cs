@@ -39,7 +39,7 @@ internal static class EditorClipboard
             try
             {
                 var fragment = JsonSerializer.Deserialize<DocumentFragment>(internalJson);
-                if (fragment?.Document == documentKey) return new { html = fragment.Html, text = data.GetData(DataFormats.UnicodeText) as string ?? "" };
+                if (fragment?.Document == documentKey) return new { html = fragment.Html, text = data.GetData(DataFormats.UnicodeText) as string ?? "", preserveImageMarkup = true };
             }
             catch (JsonException) { }
         }
@@ -65,7 +65,7 @@ internal static class EditorClipboard
                 start = Offset("StartFragment:"); end = Offset("EndFragment:");
                 html = start >= 0 && end >= start && end <= bytes.Length ? Encoding.UTF8.GetString(bytes, start, end - start) : html[html.IndexOf('<')..];
             }
-            return new { html, text };
+            return new { html, text, preserveImageMarkup = data.GetDataPresent(imageFormat) };
         }
         if (data.GetData("PNG") is MemoryStream png) return new { image = "data:image/png;base64," + Convert.ToBase64String(png.ToArray()) };
         if (data.GetData(DataFormats.Bitmap) is BitmapSource bitmap)

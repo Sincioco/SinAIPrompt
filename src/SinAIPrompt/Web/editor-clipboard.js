@@ -27,7 +27,16 @@ export async function clipboardCommand(doc,name,{changed,insertImage}) {
     doc.body.focus();selection.removeAllRanges();selection.addRange(range);
     if(!data.image&&pasteYouTube(doc,data.text,changed))return;
     if(await pasteMarkdown(doc,data.markdown??data.text??'',changed,data.base??'',data.markdown!=null))return;
-    if(data.html)editVideoAtoms(doc,()=>doc.execCommand('insertHTML',false,pasteSafeHtml(data.html)));
+    if(data.html){
+      const markup=pasteSafeHtml(data.html),fragment=parseHtml(markup);
+      const image=fragment.images.length===1?fragment.images[0]:null;
+      // Photos supplies file:// image HTML. Read and store its pixels through the
+      // same native path as other image pastes; the sandbox cannot display that URL.
+      if(!data.preserveImageMarkup&&image?.getAttribute('src')&&!fragment.body.textContent.trim()){
+        await insertImage(image.getAttribute('src'));return;
+      }
+      editVideoAtoms(doc,()=>doc.execCommand('insertHTML',false,markup));
+    }
     else if(data.image){await insertImage(data.image);return;}
     else if(data.text)editVideoAtoms(doc,()=>doc.execCommand('insertText',false,data.text));
     changed();return;

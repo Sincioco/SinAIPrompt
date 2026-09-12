@@ -245,7 +245,10 @@ internal static class ScreenCaptureSelfTest
         finally
         {
             select.Stop();
-            await view.Browser.ExecuteScriptAsync("window.editor.setImageStorage('');window.editor.load(" + System.Text.Json.JsonSerializer.Serialize(original) + ")");
+            await view.Browser.CoreWebView2.CallDevToolsProtocolMethodAsync("Runtime.evaluate", System.Text.Json.JsonSerializer.Serialize(new
+            {
+                expression = "window.editor.setImageStorage('');window.editor.load(" + System.Text.Json.JsonSerializer.Serialize(original) + ")", awaitPromise = true
+            }));
             view.AcceptHtml(original);
         }
     }

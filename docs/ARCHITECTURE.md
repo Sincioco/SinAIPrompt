@@ -616,3 +616,33 @@ remains unchanged at 545 lines; no limits, baselines or exceptions changed.
 The canonical `Assets/SinAIPrompt.png` now permanently contains the supplied V3 artwork,
 with a nine-resolution ICO generated using Windows drawing APIs. Existing executable,
 WPF window and file-association resource wiring consumes that ICO; splash art is separate.
+
+## Content View resizing and Photos image paste (September 13, 01:16)
+
+`DocumentContents` owns its right-edge resize handle, keyboard resizing, preferred width,
+and available-space limit. `Settings.ContentWidth` persists the preference with the old
+220-pixel default. Headings wrap within the list viewport. The existing chrome layout
+already observes the pane's measured width and updates the document inset, so no new
+window coordination or sibling-column wiring is needed. The pane reserves editor space
+while temporarily clamping its width when the window gets smaller.
+
+`editor-clipboard.js` routes external, image-only HTML through the existing image-insertion
+owner, which reads local pixels through `HtmlAssets`, normalizes PNGs and applies storage
+preferences and hashing. It does not insert an unreadable file URL into the sandbox.
+`EditorClipboard` marks application image fragments for markup preservation, both for
+same-document references and portable cross-document copies, keeping their annotation
+metadata and intended size. Mixed rich-text HTML continues through its existing path.
+The annotation adapter uses decoded scene width when the source image has no natural
+dimensions instead of retaining the browser's broken-image placeholder width.
+
+Regressions cover image-only file HTML, both storage modes, repeated-image reuse,
+cross-document annotation/size preservation, broken-image repair, pane drag/inset updates,
+wrapping, width persistence and available editor space. MainWindow remains 545 lines;
+no dependencies, modules, guardrail exceptions or startup scans were added. Existing
+native-host coupling remains debt. Tests reproduce captured Windows Photos HTML byte
+offsets and comment markers alongside its Bitmap/FileDrop alternatives, using isolated
+test data rather than changing the user's Windows clipboard.
+
+Explicit outline refreshes cancel their pending debounce timer. Screen-capture test
+cleanup now awaits the editor-load promise before the next outline scenario begins,
+preventing overlapping fixture restoration from replacing the next test document.

@@ -55,6 +55,7 @@ internal static class UiSelfTest
             await DocumentCommandSelfTest.RenameDraft(window, Check);
             Check(await window.SaveDocument(first, destinationPath: Path.Combine(documents, "Prompt 1.html")), "First save changes the unsaved prompt's asset folder");
             await DocumentCommandSelfTest.SaveShortcut(window, Check);
+            await HtmlAssetsSelfTest.Paste(window, Check);
             await DocumentCommandSelfTest.Appearance(window, Check);
             await ScreenCaptureSelfTest.RegionShortcut(window, Check);
             await DocumentContentSelfTest.Run(window, Check);
