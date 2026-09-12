@@ -8,14 +8,14 @@ const icons={
   cut:'<circle cx="5" cy="18" r="3"/><circle cx="18" cy="18" r="3"/><path d="m7 16 12-13M16 16 3 3"/>',
   copy:'<path d="M8 6H3v15h12v-4M9 2h8l5 5v10H9zM17 2v5h5"/>',
   paint:'<path d="m3 3 10 2-2 8-9-2zM11 9l7 2-1 5-5-1-1 7h-3l2-10"/>',
-  bullets:'<path d="M8 5h14M8 12h14M8 19h14"/><circle cx="3" cy="5" r="1"/><circle cx="3" cy="12" r="1"/><circle cx="3" cy="19" r="1"/>',
-  numbering:'<path d="M9 5h13M9 12h13M9 19h13M2 3h2v5M2 12c0-3 4-3 4 0l-4 4h4M2 19h4l-2 2h2v2H2"/>',
+  bullets:'<path d="M9 4h13M9 12h13M9 20h13"/><path d="M2 3h2v2H2zM2 11h2v2H2zM2 19h2v2H2z" fill="#1996c4" stroke="none"/>',
+  numbering:'<path d="M10 4h12M10 12h12M10 20h12"/><g fill="currentColor" stroke="none" font-family="Segoe UI,Arial,sans-serif" font-size="8"><text x="1" y="7">1</text><text x="1" y="15">2</text><text x="1" y="23">3</text></g>',
   left:'<path d="M2 4h20M2 9h13M2 14h20M2 19h13"/>',
   center:'<path d="M2 4h20M6 9h12M2 14h20M6 19h12"/>',
   right:'<path d="M2 4h20M9 9h13M2 14h20M9 19h13"/>',
   justify:'<path d="M2 4h20M2 9h20M2 14h20M2 19h20"/>',
-  outdent:'<path d="M2 3h20M11 8h11M11 13h11M2 20h20m3-6-4-4 4-4"/>',
-  indent:'<path d="M2 3h20M11 8h11M11 13h11M2 20h20M1 6l4 4-4 4"/>'
+  outdent:'<path d="M2 4h20M12 9h10M12 15h10M2 20h20"/><path d="m6 9-3 3 3 3M3 12h6" stroke="#1996c4"/>',
+  indent:'<path d="M2 4h20M12 9h10M12 15h10M2 20h20"/><path d="m5 9 3 3-3 3M2 12h6" stroke="#1996c4"/>'
 };
 const icon=name=>`<svg viewBox="0 0 24 24" aria-hidden="true">${icons[name]}</svg>`;
 const button=(command,label,content)=>`<button type="button" data-cmd="${command}" aria-label="${label}" title="${label}">${content}</button>`;

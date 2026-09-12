@@ -15,6 +15,14 @@ const exports=new Map();
 const ribbon=createRibbon($('#toolbar'),{getDocument:()=>doc,saveSelection,restoreSelection,command,changed});
 function saveSelection(){if(!doc)return;const s=doc.getSelection();if(s.rangeCount && doc.body.contains(s.anchorNode))selection=s.getRangeAt(0).cloneRange();}
 function restoreSelection(){if(!doc)return;doc.body.focus();const s=doc.getSelection();if(selection&&doc.body.contains(selection.startContainer)){s.removeAllRanges();s.addRange(selection);}else {const range=doc.createRange();range.selectNodeContents(doc.body);range.collapse(false);s.removeAllRanges();s.addRange(range);}}
+async function focus(){
+  await loading;
+  if(!doc||!document.hasFocus()||document.activeElement?.matches('input,select,button')||document.querySelector('dialog[open]'))return;
+  if(!selection&&!currentRaw.trim()){
+    selection=doc.createRange();selection.selectNodeContents(doc.body.querySelector('p,h1,h2,h3,h4,h5,h6')||doc.body);selection.collapse(true);
+  }
+  restoreSelection();saveSelection();syncFormatting();
+}
 function changed(){
   if(!doc||loadingNow)return;saveSelection();clearTimeout(changeTimer);
   // Keep full-document serialization and native synchronization out of keystrokes.
@@ -129,7 +137,7 @@ for(const dimension of ['Width','Height'])$('#image'+dimension).onchange=()=>{
 $('#source').onclick=async()=>{if(native){send('source');return;}const answer=await ask('HTML source',`<textarea name="source" aria-label="HTML source" spellcheck="false">${escapeHtml(html())}</textarea>`);if(answer.choice==='ok'){await load(answer.values.source);changed();}};
 $('#link').onclick=async()=>{saveSelection();const answer=await ask('Insert link','<label>Address <input name="url" type="url" required placeholder="https://…"></label>');if(answer.choice==='ok')command('createLink',answer.values.url);};
 $('#notice').onclick=()=>$('#notice').hidden=true;
-window.editor={load,html,setBase,command,insertImage,openAnnotation,pasteCode,renameImageFolder,ready:()=>loading,
+window.editor={load,html,setBase,focus,command,insertImage,openAnnotation,pasteCode,renameImageFolder,ready:()=>loading,
   renameOpenImageFolder(oldName,newName){const updated=renameImageFolder(html(true),oldName,newName);load(updated);return updated;},
   beginPortable(){const key=id();(async()=>{await loading;return await portableHtml(html(),base);})().then(html=>exports.set(key,{html})).catch(error=>exports.set(key,{error:error.message}));return key;},
   beginRelocate(){

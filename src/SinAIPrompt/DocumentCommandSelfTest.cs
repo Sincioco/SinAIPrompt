@@ -9,6 +9,32 @@ namespace SinAIPrompt;
 
 internal static class DocumentCommandSelfTest
 {
+    public static async Task NewPromptReady(MainWindow window, Action<bool, string> check)
+    {
+        var previous = window.ActiveDocument!;
+        var watch = System.Diagnostics.Stopwatch.StartNew();
+        var draft = window.NewDocument();
+        var view = window.CurrentView!;
+        try
+        {
+            bool loaded = false;
+            for (int i = 0; i < 200; i++)
+            {
+                await Task.Delay(20);
+                if (view.Browser.CoreWebView2 != null && await view.Browser.ExecuteScriptAsync("!!window.editor && !!document.querySelector('#document').contentDocument?.body?.isContentEditable") == "true") { loaded = true; break; }
+            }
+            check(loaded, $"New prompt editor initializes ({watch.ElapsedMilliseconds} ms)");
+            // No click, focus() call, selection setup, or editing command in this test:
+            // real input must land in the blank paragraph created by New document.
+            await view.Browser.CoreWebView2.CallDevToolsProtocolMethodAsync("Input.insertText", "{\"text\":\"Ready to type\"}");
+            check(await view.Browser.ExecuteScriptAsync("document.querySelector('#document').contentDocument.body.textContent === 'Ready to type'") == "true",
+                "A new prompt accepts typing immediately without clicking the document");
+            check(await view.Browser.ExecuteScriptAsync("document.querySelectorAll('.style-strip [data-style]').length === 5 && [...document.fonts].every(face => face.display === 'swap')") == "true",
+                "All five Styles labels render without waiting for local Office fonts");
+        }
+        finally { window.RemoveDocument(draft); window.ActiveDocument = previous; }
+    }
+
     public static async Task RenameDraft(MainWindow window, Action<bool, string> check)
     {
         var doc = window.ActiveDocument!;

@@ -44,7 +44,7 @@ internal static class EditorFonts
                             string style = face.Style == System.Windows.FontStyles.Italic ? "italic" : "normal";
                             if (!faces.Add($"{family}/{weight}/{style}")) continue;
                             string url = "https://sin-office-fonts.local/" + Uri.EscapeDataString(family) + "/" + Uri.EscapeDataString(Path.GetFileName(path));
-                            rules.Add($"@font-face{{font-family:'{family}';font-weight:{weight};font-style:{style};src:local('{family}{(weight == 700 ? " Bold" : "")}{(style == "italic" ? " Italic" : "")}'),url('{url}');}}");
+                            rules.Add($"@font-face{{font-family:'{family}';font-weight:{weight};font-style:{style};font-display:swap;src:local('{family}{(weight == 700 ? " Bold" : "")}{(style == "italic" ? " Italic" : "")}'),url('{url}');}}");
                         }
                         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException) { }
                     }

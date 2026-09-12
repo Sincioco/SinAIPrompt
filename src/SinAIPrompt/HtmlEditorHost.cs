@@ -177,7 +177,16 @@ public sealed partial class EditorView
         Editor.Visibility = IsVisual ? Visibility.Collapsed : Visibility.Visible;
         Gutter.Visibility = !IsVisual && App.Current.Preferences.LineNumbers ? Visibility.Visible : Visibility.Collapsed;
     }
-    public void FocusEditing() { if (IsVisual) Browser.Focus(); else Editor.Focus(); }
+    public async void FocusEditing()
+    {
+        if (!IsVisual) { Editor.Focus(); return; }
+        Browser.Focus();
+        // The native browser can receive focus before its editable iframe exists.
+        // Honor that request once ready, unless the user has moved elsewhere.
+        try { await initialized.Task; } catch { return; }
+        if (disposed || !IsVisual || !IsVisible || Owner.ActiveDocument != Document) return;
+        await Browser.ExecuteScriptAsync("window.editor.focus()");
+    }
     public async void Command(string name, string? value = null)
     {
         if (!ready) return;
