@@ -3,6 +3,7 @@ import {prepareRichSourceHighlight} from './source-highlighting.js';
 import {captureTemplate,parseTemplate,templateJson} from './templates.js';
 import {renderPng,outputBounds,move,id} from './annotation-model.js';
 import {request} from './bridge.js';
+import {runRibbonTests} from './ribbon-self-test.js';
 
 export async function run(){
   const results=[];const check=(value,name)=>{if(!value)throw Error(name);results.push(name);};
@@ -20,13 +21,13 @@ export async function run(){
   await window.editor.setBase(doc().baseURI);
   check(doc().getSelection().anchorNode===doc().querySelector('p').firstChild&&doc().getSelection().anchorOffset===7,'Refreshing the saved asset folder preserves the text insertion point');
   selectText('p');document.querySelector('#fontSize').value='28';document.querySelector('#fontSize').dispatchEvent(new Event('change'));
-  check(doc().querySelector('p').innerHTML.includes('28px'),'Font size control applies the requested pixel size');
+  check(doc().querySelector('p').innerHTML.includes('28pt'),'Font size control applies the requested point size');
   selectText('p');window.editor.command('bold');check(/font-weight: bold|<b>|<strong>/.test(window.editor.html()),'Bold applies to selected text');
   window.editor.command('italic');window.editor.command('underline');window.editor.command('strikeThrough');
   window.editor.command('foreColor','#c22c44');window.editor.command('hiliteColor','#fff2a6');
   check(window.editor.html().includes('text-decoration')&&window.editor.html().includes('rgb(194, 44, 68)'),'Text decoration and selection colors persist');
   selectText('p');document.querySelector('#fontSize').value='22';document.querySelector('#fontSize').dispatchEvent(new Event('change'));
-  check(doc().querySelector('p').innerHTML.includes('22px'),'Font size can change after other rich-text formatting');
+  check(doc().querySelector('p').innerHTML.includes('22pt'),'Font size can change after other rich-text formatting');
   check(normalizeIndent('    if (ready) {\n        run();\n    }')==='if (ready) {\n    run();\n}','Code indentation preserves internal alignment');
   for(const language of ['csharp','html','javascript','css','tsql'])check(prepareRichSourceHighlight(language==='html'?'<div>Hello</div>':'SELECT const public color 123 "hello"',language).highlighted,'PMT highlighting supports '+language);
   const range=doc().createRange();range.selectNodeContents(doc().body);range.collapse(false);doc().getSelection().removeAllRanges();doc().getSelection().addRange(range);doc().dispatchEvent(new Event('selectionchange'));
@@ -45,6 +46,11 @@ export async function run(){
   const fullLayout=await request('test-annotation-layout'),dialogBounds=document.querySelector('dialog.annotation').getBoundingClientRect();
   check(fullLayout.expanded&&!fullLayout.backgroundEnabled&&Math.abs(fullLayout.x)<1&&Math.abs(fullLayout.y)<1&&Math.abs(fullLayout.width-fullLayout.clientWidth)<1&&Math.abs(fullLayout.height-fullLayout.clientHeight)<1,'Annotation covers the native menu, document list, and status bar');
   check(dialogBounds.x===0&&dialogBounds.y===0&&dialogBounds.width===innerWidth&&dialogBounds.height===innerHeight,'Annotation fills its entire browser viewport');
+  check(document.querySelectorAll('dialog.annotation .color-picker').length===4&&!document.querySelector('input[type=color]'),'Annotation outline, fill, text and canvas use the Office palette');
+  click('#canvasColor');click('.color-palette [data-color="#156082"]');
+  check(document.querySelector('#canvas > rect').getAttribute('fill')==='#156082'&&!document.querySelector('#canvasTransparent').checked,'Canvas palette updates the background and clears transparency');
+  click('#canvasColor');click('.color-palette [data-color=none]');
+  check(document.querySelector('#canvasTransparent').checked&&document.querySelector('dialog.annotation').open,'No Color restores transparency without closing annotation');
   const pointer=async(type,x,y,modifiers=0)=>request('test-mouse',{parameters:{type,x,y,modifiers,button:type==='mouseMoved'?'none':'left',buttons:type==='mouseReleased'?0:1,clickCount:1}});
   const canvasPoint=(x,y)=>{const matrix=document.querySelector('#canvas').getScreenCTM();return new DOMPoint(x,y).matrixTransform(matrix);};
   const drag=async(from,to,modifiers=0)=>{await pointer('mousePressed',from.x,from.y,modifiers);await pointer('mouseMoved',to.x,to.y,modifiers);await pointer('mouseReleased',to.x,to.y,modifiers);};
@@ -171,6 +177,7 @@ export async function run(){
     check(!layout.expanded&&layout.backgroundEnabled&&window.editor.html()===beforeCancel,'Annotation '+cancel+' restores the shell without changing the document');
   }
   const savedHtml=window.editor.html();
+  await runRibbonTests(check);
   await window.editor.load('<p id="typing">Typing:</p>');
   const largeImage=doc().createElement('img');largeImage.src=png;
   largeImage.dataset.sinAnnotation=JSON.stringify({version:1,width:360,height:200,objects:Array.from({length:200},()=>({id:id(),type:'embedded-image',x:0,y:0,width:360,height:200,source:png}))});

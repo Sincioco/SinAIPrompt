@@ -3,11 +3,16 @@ import {parseHtml,ensureStyle,editingStyles,serialize,normalizeIndent,codeHtml,t
 import {prepareRichSourceHighlight,RICH_SOURCE_TEXT_TYPES} from './source-highlighting.js';
 import {annotate} from './annotation-ui.js';
 import {id,outputBounds} from './annotation-model.js';
+import {createRibbon} from './ribbon.js';
+import {clipboardCommand} from './editor-clipboard.js';
 
+const fontCss=native?await request('editor-fonts'):'';
+if(fontCss){const style=document.createElement('style');style.textContent=fontCss;document.head.append(style);}
 const frame=document.querySelector('#document'),$=s=>document.querySelector(s);
 let doc=null,selection=null,selectedImage=null,currentRaw='',base='https://sin-document.local/',loading=Promise.resolve(),loadingNow=false;
 let changeTimer;
 const exports=new Map();
+const ribbon=createRibbon($('#toolbar'),{getDocument:()=>doc,saveSelection,restoreSelection,command,changed});
 function saveSelection(){if(!doc)return;const s=doc.getSelection();if(s.rangeCount && doc.body.contains(s.anchorNode))selection=s.getRangeAt(0).cloneRange();}
 function restoreSelection(){if(!doc)return;doc.body.focus();const s=doc.getSelection();if(selection&&doc.body.contains(selection.startContainer)){s.removeAllRanges();s.addRange(selection);}else {const range=doc.createRange();range.selectNodeContents(doc.body);range.collapse(false);s.removeAllRanges();s.addRange(range);}}
 function changed(){
@@ -23,9 +28,10 @@ async function load(raw,newBase=base){
   const baseTag=input.createElement('base');baseTag.href=base;baseTag.dataset.sinRuntime='1';
   // An explicit document base wins. Otherwise resolve its relative assets against the HTML folder.
   if(!input.querySelector('base[href]'))input.head.prepend(baseTag);
-  const style=input.createElement('style');style.dataset.sinRuntime='1';style.textContent=editingStyles;input.head.append(style);
+  const style=input.createElement('style');style.dataset.sinRuntime='1';style.textContent=fontCss+editingStyles;input.head.append(style);
   loading=new Promise(resolve=>{frame.onload=()=>{
     doc=frame.contentDocument;doc.body.contentEditable='true';doc.body.spellcheck=true;loadingNow=false;
+    ribbon.attach(doc);
     doc.addEventListener('selectionchange',()=>{saveSelection();syncFormatting();});doc.addEventListener('input',changed);
     doc.addEventListener('click',event=>{if(event.target.closest('a'))event.preventDefault();selectImage(event.target.closest('img'));});
     doc.addEventListener('dblclick',event=>{const image=event.target.closest('img'),code=event.target.closest('pre[data-sin-code]');if(image){selectImage(image);openAnnotation(image).catch(report);}else if(code)pasteCode(code).catch(report);});
@@ -49,11 +55,11 @@ async function setBase(newBase){
 }
 function command(name,value=null){
   if(!doc)return;restoreSelection();
+  if(['cut','copy','paste'].includes(name))return clipboardCommand(doc,name,{changed,insertImage}).catch(report);
   doc.execCommand('styleWithCSS',false,true);
-  if(name==='paste'){doc.execCommand('paste');return;}
   doc.execCommand(name,false,value);changed();syncFormatting();
 }
-function syncFormatting(){for(const b of document.querySelectorAll('[data-cmd]'))b.setAttribute('aria-pressed',String(doc?.queryCommandState(b.dataset.cmd)||false));}
+function syncFormatting(){ribbon.sync();}
 function selectImage(image){doc?.querySelectorAll('[data-sin-selected]').forEach(el=>el.removeAttribute('data-sin-selected'));selectedImage=image;$('#imagebar').hidden=!image;if(image){image.dataset.sinSelected='1';$('#imageWidth').value=Math.round(image.getBoundingClientRect().width);$('#imageHeight').value=Math.round(image.getBoundingClientRect().height);}}
 async function storageChoice(){const answer=await ask('Store image','<p>Choose how this image is stored with your HTML document.</p><p><b>Inline:</b> embed the lossless PNG in the HTML file.<br><b>Separate file:</b> store a PNG in a folder named after the HTML file.</p>',[{value:'inline',label:'Inline (Base64)'},{value:'separate',label:'Separate PNG file'}]);return ['inline','separate'].includes(answer.choice)?answer.choice:null;}
 async function storeImage(png,mode){const source=mode==='separate'?await request('save-image',{data:png}):png;await loading;return source;}
@@ -107,24 +113,6 @@ function shortcuts(event){
   if(event.key==='F5')action='date';
   if(action){event.preventDefault();changed();send('command',{command:action,html:html()});}
 }
-$('#toolbar').addEventListener('mousedown',event=>{saveSelection();if(event.target.closest('button'))event.preventDefault();});
-$('#toolbar').addEventListener('click',event=>{const cmd=event.target.closest('[data-cmd]')?.dataset.cmd;if(cmd)command(cmd);});
-$('#font').onchange=()=>command('fontName',$('#font').value);
-$('#block').onchange=()=>command('formatBlock',$('#block').value);
-$('#fontColor').oninput=()=>command('foreColor',$('#fontColor').value);
-$('#backColor').oninput=()=>command('hiliteColor',$('#backColor').value);
-$('#fontSize').onchange=()=>{
-  restoreSelection();
-  // Generate a recognizable font marker even after another command enabled CSS formatting.
-  doc.execCommand('styleWithCSS',false,false);
-  doc.execCommand('fontSize',false,'7');
-  doc.querySelectorAll('font[size="7"]').forEach(el=>{
-    el.removeAttribute('size');
-    el.style.fontSize=Math.max(6,Math.min(144,Number($('#fontSize').value)||16))+'px';
-  });
-  doc.execCommand('styleWithCSS',false,true);
-  changed();
-};
 $('#pasteCode').onclick=()=>pasteCode().catch(report);
 $('#insertImage').onclick=()=>openAnnotation().catch(report);
 $('#annotate').onclick=()=>openAnnotation(selectedImage).catch(report);

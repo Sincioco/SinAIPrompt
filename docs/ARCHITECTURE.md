@@ -18,6 +18,9 @@ Paths below are relative to `src/`; unqualified native filenames are under
 | Document data and persistence | `SinAIPrompt.Core/Documents.cs`: `Document`, settings/session records, `TextFiles`, `Store`, numbering, search | Core uses .NET APIs; no dependency on the WPF app or WebView. Save/conflict, recovery, numbering checks. |
 | Platform services | `HtmlAssets.cs`, `AnnotationClipboard.cs`, `FileAssociations.cs`, `StorageLocation.cs`; `Dialogs.cs` builds native dialogs | Narrow Windows/file operations. Clipboard, PNG, storage and native dialog tests. |
 | Browser editor | `SinAIPrompt/Web/editor.js`: live document, caret/selection, pending synchronization and exports | Uses `document.js`, annotation UI, highlighting, and bridge. Browser integration suite. |
+| Office-style formatting | `Web/ribbon.js` owns gallery/painter UI state; `word-styles.js` owns measured presets and paragraph operations; `text-formatting.js` owns a document's pending insertion font | Editor supplies document/selection/change callbacks. `ribbon-self-test.js` covers paragraph scope, spacing, fonts, undo, Enter, painter and clipboard. No imports back into the editor. |
+| Color palettes | `Web/color-picker.js` owns each temporary popup; callers own color values. `annotation-colors.js` adapts existing inspector values/events | Annotation retains scene/history ownership. Native color inputs replaced without moving annotation state. Browser palette/transparency checks. |
+| Text clipboard and Office fonts | `EditorClipboard.cs` owns Windows HTML/text exchange and isolated test clipboard; `EditorFonts.cs` owns an immutable cached catalog of existing local Aptos faces | `Web/editor-clipboard.js` operates on an explicit document selection. Font catalog reads run off the UI thread; a local WebView mapping serves existing Office fonts without copying, downloading or exporting them. Actual local-font loads and Unicode clipboard round trips tested. |
 | Annotation interaction | `Web/annotation-ui.js`: one dialog's scene, selection, gesture, zoom, history, inspector | Uses model, templates, clipboard, and bridge. Mouse/keyboard, crop, copy/paste, modal tests. |
 | Annotation representation | `Web/annotation-model.js`: geometry, movement, SVG/PNG rendering; no persistent scene ownership | Explicit scene/object arguments; image/escaping utilities. Geometry and render behavior covered through browser tests. |
 | Exchange and utilities | `Web/templates.js`, `annotation-clipboard.js`, `document.js`, `source-highlighting.js` | Focused data operations. `bridge.js` owns pending native requests and small browser dialogs; it must not become a feature/state hub. |
@@ -96,6 +99,16 @@ Add CI invocation when CI exists. Revisit test budgets, languages, generated-fil
 classifications, and module contracts as those needs appear, with explicit review.
 Do not add speculative frameworks, compile-time infrastructure, or repository-wide
 refactors now.
+
+The Office-style ribbon preserves HTML block types and uses explicit paragraph
+styles (plus accessible heading roles). It does not implement Word's layout engine
+or character-linked styles; the requested happy path applies styles to whole
+paragraphs. Presets were measured from the running Word instance on this PC.
+Existing locally cached Office fonts are optional data sources for matching that
+instance; they are not distributed application components. Other PCs fall back to
+installed Aptos or Windows fonts. Saved HTML retains font names, not private cache
+paths or runtime font mappings. Existing browser/native integration debt and the
+616-line window baseline remain unchanged; no guardrail exceptions were added.
 
 ## Template adoption
 

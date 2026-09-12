@@ -11,18 +11,8 @@ button:disabled{opacity:.45;cursor:default}
 .primary:hover{background:#08588f}
 input,select,textarea{background:var(--surface);border:1px solid var(--line);padding:6px;border-radius:4px}
 input[type=number]{width:76px}
-input[type=color]{padding:1px;width:29px;height:24px}
 input[type=checkbox]{accent-color:var(--accent)}
 label{display:flex;align-items:center;gap:6px}
-#toolbar{display:flex;flex-wrap:wrap;align-items:center;gap:5px;padding:9px 12px;background:var(--surface);border-bottom:1px solid var(--line)}
-#toolbar button[data-cmd]{min-width:32px}
-#font{width:124px}
-#fontSize{width:54px}
-#block{width:114px}
-.unit{color:#6d7883;margin-right:4px}
-.divider{height:25px;width:1px;background:var(--line);margin:0 4px}
-.color-label{flex-direction:column;gap:0;font-weight:600;line-height:12px}
-.color-label input{height:12px;width:30px}
 #document{flex:1;width:100%;border:0;background:white;min-height:0}
 #imagebar{display:flex;align-items:center;flex-wrap:wrap;gap:12px;padding:8px 12px;background:#eaf3fb;border-bottom:1px solid #c4d9ec}
 #imagebar span{color:#516578}

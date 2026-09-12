@@ -72,7 +72,10 @@ public sealed partial class EditorView
         if (string.Equals(folder, mappedFolder, StringComparison.OrdinalIgnoreCase)) return;
         Browser.CoreWebView2.SetVirtualHostNameToFolderMapping("sin-document.local", folder, CoreWebView2HostResourceAccessKind.Allow);
         mappedFolder = folder;
-        if (ready && reloadDocument) await Browser.ExecuteScriptAsync("window.editor.setBase('https://sin-document.local/')");
+        // ExecuteScriptAsync returns before a JavaScript Promise settles. Wait for
+        // the iframe reload so a command immediately after Save reaches the new DOM.
+        if (ready && reloadDocument) await Browser.CoreWebView2.CallDevToolsProtocolMethodAsync("Runtime.evaluate",
+            Json(new { expression = "window.editor.setBase('https://sin-document.local/')", awaitPromise = true, returnByValue = true }));
     }
     void LoadHtml() => _ = Browser.ExecuteScriptAsync($"window.editor.load({Json(Document.Text)},'https://sin-document.local/')");
     public void AcceptHtml(string html)
@@ -107,6 +110,9 @@ public sealed partial class EditorView
                 case "annotation-mode": Owner.SetAnnotationMode(this, message.GetProperty("open").GetBoolean()); break;
                 case "annotation-copy": AnnotationClipboard.Copy(message.GetProperty("format").GetString()!, message.GetProperty("content").GetString()!, message.GetProperty("objects").GetString()!); break;
                 case "annotation-paste": result = AnnotationClipboard.Read(); break;
+                case "editor-copy": EditorClipboard.Copy(message.GetProperty("html").GetString()!, message.GetProperty("text").GetString()!); break;
+                case "editor-paste": result = EditorClipboard.Read(); break;
+                case "editor-fonts": result = await EditorFonts.StyleSheetAsync(Browser.CoreWebView2); break;
                 case "test-clipboard-formats" when App.Current.TestMode: result = AnnotationClipboard.TestData?.GetFormats(false); break;
                 case "command":
                     if (message.TryGetProperty("html", out var html)) AcceptHtml(html.GetString()!);
@@ -175,7 +181,6 @@ public sealed partial class EditorView
     public async void Command(string name, string? value = null)
     {
         if (!ready) return;
-        if (name == "paste" && Clipboard.ContainsImage()) { await Browser.ExecuteScriptAsync($"window.editor.insertImage({Json(HtmlAssets.ClipboardPng())})"); return; }
         await Browser.ExecuteScriptAsync($"window.editor.command({Json(name)},{Json(value)})");
     }
     void ApplyHtmlPreferences()
