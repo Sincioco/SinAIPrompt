@@ -2,6 +2,13 @@
 
 Validated on September 12, 2026 using the local Windows / Visual Studio 2026 installation.
 
+## Application icon
+
+- Preserved the supplied `SinAIPrompt.png` in `src/SinAIPrompt/Assets`; SHA-256 comparison confirms it is byte-identical to the original. Generated transparent ICO frames at 16, 20, 24, 32, 40, 48, 64, 128, and 256 pixels using Windows/.NET drawing APIs, with no downloads or runtime conversion dependency.
+- The existing project icon resource embeds the new ICO in the executable; `MainWindow.xaml` explicitly uses the same resource. The native 32-pixel icon extracted from the packaged executable matches the generated ICO pixel for pixel and was visually inspected.
+- `Build.ps1 -Package` passed with zero compiler warnings/errors. `Test.ps1 -Packaged` passed 16 guardrail cases and 125 native/browser checks in `work/smoke-89b0807e75e64244b2a63380e9eab373`; JavaScript syntax and whitespace checks passed. The existing 616-line architecture warning remains unchanged.
+- Asset ownership stays in `Assets`; there are no new state owners or application algorithms. The window markup has no line-count growth. Reopening the app loads the new window/taskbar icon, and its existing Windows association notification refreshes shell icon associations. No browser refresh is involved.
+
 ## Architecture guardrail adoption
 
 - Ingested the five local generic guardrail templates and adapted the shared policy, existing-project workflow, and routine reminder. No application feature or source refactor was performed.

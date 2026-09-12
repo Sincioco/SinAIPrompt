@@ -89,6 +89,7 @@ Startup registers Windows file associations in the background, streams recovery 
 
 ## Source origins
 
+- Application artwork: the original supplied PNG is preserved at `src/SinAIPrompt/Assets/SinAIPrompt.png`; `SinAIPrompt.ico` beside it contains transparent 16–256 pixel Windows icon sizes and is embedded in the executable and WPF window.
 - Native shell and document persistence: Sin - Notepad at `b4e1197c43935b32be53a0de19dc5a4cbe162503`.
 - Code highlighting: PMT's `wwwroot/js/shared/source-highlighting.js`, copied from the local codebase at `fbeeadd769d6785d194b48940640c35afddefa8f`.
 - Annotation behavior and template schema: PMT Diagram 2 and its shared image-annotation implementation at that same reference commit. The focused annotation editor here excludes PMT's database features.
