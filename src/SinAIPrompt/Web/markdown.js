@@ -1,8 +1,13 @@
 import {escapeHtml} from './bridge.js';
-import {toPng} from './document.js';
+import {toPng,parseHtml,ensureStyle,serialize} from './document.js';
 import {setDocumentStyle} from './document-styles.js';
 
 const safeUrl=value=>/^(?:javascript|vbscript|data):/i.test(value.trim())?'':value.trim();
+export function markdownDocument(text){
+  const doc=parseHtml(markdownToHtml(text));
+  ensureStyle(doc);setDocumentStyle(doc,'modern');
+  return serialize(doc);
+}
 export const looksLikeMarkdown=text=>/^(?:#{1,6}\s|\s*[-+*]\s|\s*\d+[.)]\s|>\s|```|~~~)|\*\*\S|!\[[^\]]*\]\(/m.test(text);
 export async function pasteMarkdown(doc,text,changed,base='',force=false){
   if(doc.body.textContent.trim()||doc.body.querySelector('img,pre,table')||(!force&&!looksLikeMarkdown(text)))return false;

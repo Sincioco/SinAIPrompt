@@ -67,15 +67,18 @@ internal static class PromptExplorerSelfTest
             window.UpdateLayout(); assetRow.IsSelected = true;
             check(window.CurrentView!.PathStatus.Text == assets, "Folder navigation displays its path in the muted status bar: " + window.CurrentView.PathStatus.Text);
             await window.OpenExplorerFile(imagePath, CancellationToken.None);
-            var preview = (ExplorerPreview)((ContentControl)window.FindName("EditorHost")).Content;
+            var preview = (ExplorerPreview)((EditorSurface)window.FindName("EditorHost")).Content!;
             check(window.CurrentView == null && window.Documents.Count == documents && preview.PathStatus.Text == imagePath &&
                 ScreenCaptureSelfTest.Controls(preview).OfType<Image>().Any(i => i.Source != null), "Images render in a separate read-only document-area preview");
             await window.OpenExplorerFile(Path.Combine(folder, "notes.md"), CancellationToken.None);
-            preview = (ExplorerPreview)((ContentControl)window.FindName("EditorHost")).Content;
-            check(ScreenCaptureSelfTest.Controls(preview).OfType<TextBox>().Any(t => t.IsReadOnly && t.Text == "Preview text"), "Markdown and text previews cannot overwrite the underlying HTML document");
+            preview = (ExplorerPreview)((EditorSurface)window.FindName("EditorHost")).Content!;
+            var markdownBrowser = ScreenCaptureSelfTest.Controls(preview).OfType<Microsoft.Web.WebView2.Wpf.WebView2>().Single();
+            await MarkdownImportSelfTest.WaitFor(markdownBrowser, "document.querySelector('#preview')?.contentDocument?.body?.textContent==='Preview text'");
+            check(await markdownBrowser.ExecuteScriptAsync("!document.querySelector('#preview').contentDocument.body.isContentEditable") == "true" && window.Documents.Count == documents,
+                "Markdown previews render read-only HTML without replacing the underlying document");
             string pdf = Path.Combine(folder, "reference.pdf"); WritePdf(pdf);
             await window.OpenExplorerFile(pdf, CancellationToken.None);
-            preview = (ExplorerPreview)((ContentControl)window.FindName("EditorHost")).Content;
+            preview = (ExplorerPreview)((EditorSurface)window.FindName("EditorHost")).Content!;
             var pdfBrowser = ScreenCaptureSelfTest.Controls(preview).OfType<Microsoft.Web.WebView2.Wpf.WebView2>().Single();
             for (int i = 0; i < 100; i++)
             {

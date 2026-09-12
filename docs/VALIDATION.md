@@ -200,3 +200,504 @@ Changed source-file physical growth (new modules start at zero):
 | src/SinAIPrompt/Web/ribbon.js | 139 | 139 | 0 |
 | src/SinAIPrompt/Web/self-test.js | 277 | 281 | 4 |
 | src/SinAIPrompt/Web/youtube.js | 0 | 67 | 67 |
+
+## YouTube, tabs and compact ribbon — September 12, 2026 (19:21 request)
+
+Implemented from `D:\Sin - AI Prompt - Contents\2026-09-12 1921 - YouTube.html`
+and inspected its embedded reference images. Changes remain uncommitted for review.
+
+- YouTube URLs pasted alone become full-width, centered cards immediately. The
+  thumbnail has a centered play control; the frame/title selects editing chrome.
+- Blue frame outline, two proportional resize handles, bottom editing toolbar,
+  five alignment/wrap choices, URL/title editing, external opening and Copy/Delete.
+  Clipboard cut/paste and native Undo preserve cards and neighboring wrapped videos.
+- Crowded tabs retain readable widths and expose horizontal buttons/wheel scrolling.
+  Pin and modified markers use their measured width. Tabs can be shown independently
+  of the existing Document List / Prompt Explorer pane; session visibility persists.
+- View > Wrap Toolbar / Ribbon keeps the existing wrapping by default. Turning it
+  off moves whole groups into More ribbon tools, retaining palette/Styles submenus.
+  Link and Paste Code now have large local SVG icons in Tools.
+
+Validation performed:
+
+- `Test.ps1`: source build and native/browser suite passed; final source log
+  `work/youtube-tests-final2.log`, profile `work/smoke-cdbda57da63a491f917d3fdb9e5d8732`.
+- `Build.ps1 -Package`: succeeded with zero compiler warnings/errors, using only
+  installed Microsoft components. Log: `work/youtube-package.log`.
+- `Test.ps1 -Packaged`: **503 native/browser checks passed**, including final selection
+  ownership changes, all four tab/sidebar combinations, native ribbon View commands,
+  overflow submenus, real-pointer video resize, URL/title edit and cancellation,
+  clipboard insert/cut/replacement/Undo, unchanged adjacent wrapped video, fullscreen
+  expansion/restoration, sandboxing and 100-document lazy startup. Log:
+  `work/youtube-packaged-tests.log`; profile `work/smoke-1003e5bb2abf41f981de67a977c6c886`.
+- All **35 JavaScript modules** passed `node --check`; **16 architecture fixture
+  checks** passed. Architecture checker passed for **104 handwritten source files**,
+  with two review notices for MainWindow (562 exceeds the 500-line review trigger;
+  it is below its unchanged 564-line maximum). `git diff --check` passed.
+- Inspected the updated application with an isolated `work/youtube-live` sample:
+  full-width video thumbnail, centered play control and compact ribbon rendering.
+  User acceptance remains manual. The saved card acts as ordinary links outside
+  this app; no player scripts are added to the document.
+
+Ownership and limits:
+
+Video selection/gestures live in `video-selection.js`; card metadata/player and the
+synchronous native-edit adapter remain in `youtube.js`. Tab width/scrolling lives in
+`TabStripLayout`; visibility stays in `NavigationLayout`. Ribbon overflow has one
+small owner and retains the original controls. MainWindow decreased **564 → 562**
+lines. No dependency, architecture exception, baseline increase or exclusion change.
+Existing host/native partial coupling remains debt. The specific WebView2 noneditable
+figure workaround and validation are documented in ARCHITECTURE.md.
+
+Watch Later opens YouTube, where the user can save the video to their account. Share
+copies its public URL. The actual embedded player controls and availability are
+provided by YouTube, with no guarantee of Confluence's exact control placement;
+see [YouTube's supported player parameters](https://developers.google.com/youtube/player_parameters).
+Playback/remote thumbnails require a connection and remain subject to video restrictions.
+The app adds no account API, downloaded library or build-time network dependency.
+Existing saved cards retain their older layout until edited or reinserted.
+
+The .NET package has been rebuilt. Relaunch loads the bundled CSS/modules with
+WebView caching disabled; the user does not need to compile or press Ctrl+F5.
+
+Changed source-file growth:
+
+| File | Before | After | Delta |
+| --- | ---: | ---: | ---: |
+| src/SinAIPrompt.Core/Documents.cs | 214 | 217 | 3 |
+| src/SinAIPrompt/App.xaml | 49 | 49 | 0 |
+| src/SinAIPrompt/HtmlEditorHost.cs | 295 | 295 | 0 |
+| src/SinAIPrompt/MainWindow.xaml | 63 | 65 | 2 |
+| src/SinAIPrompt/MainWindow.xaml.cs | 564 | 562 | -2 |
+| src/SinAIPrompt/NavigationLayout.cs | 42 | 53 | 11 |
+| src/SinAIPrompt/UiSelfTest.cs | 185 | 186 | 1 |
+| src/SinAIPrompt/Web/color-picker.js | 74 | 74 | 0 |
+| src/SinAIPrompt/Web/document.js | 107 | 107 | 0 |
+| src/SinAIPrompt/Web/editor-clipboard.js | 34 | 38 | 4 |
+| src/SinAIPrompt/Web/editor.css | 97 | 104 | 7 |
+| src/SinAIPrompt/Web/editor.js | 176 | 183 | 7 |
+| src/SinAIPrompt/Web/media-self-test.js | 53 | 97 | 44 |
+| src/SinAIPrompt/Web/ribbon-self-test.js | 131 | 144 | 13 |
+| src/SinAIPrompt/Web/ribbon.css | 62 | 70 | 8 |
+| src/SinAIPrompt/Web/ribbon.js | 139 | 142 | 3 |
+| src/SinAIPrompt/Web/youtube.js | 67 | 118 | 51 |
+| src/SinAIPrompt/NavigationSelfTest.cs | 0 | 69 | 69 |
+| src/SinAIPrompt/TabStripLayout.cs | 0 | 66 | 66 |
+| src/SinAIPrompt/Web/ribbon-overflow.js | 0 | 28 | 28 |
+| src/SinAIPrompt/Web/video-selection.js | 0 | 135 | 135 |
+
+## Document Content (20:54) validation
+
+Source integration: 523 checks passed in
+`work/smoke-2ad435a9f42f44858a45236b85e32bd8`.
+Build: zero compiler warnings/errors. JavaScript: all 39 modules syntax-checked.
+Architecture: 117 handwritten files passed; 16 checker fixtures passed. The two
+review notices concern MainWindow's existing warning threshold and its reduced
+563-line size; the 564-line ceiling is unchanged.
+
+Coverage includes the native region options/defaults and actual capture, exclusive
+Content View with the active outline, Windows ReadOnly persistence/reopening/title,
+visual/source editing and Replace All protection, cleanup reference snapshots and
+rechecking, four YouTube presentation transitions, neighboring content, Undo and
+Unlink. Existing image rename/asset rollback, save/conflict, clipboard, annotation,
+search, tab layout, and 100-document lazy startup checks remain exercised.
+
+Native visual inspection used an isolated profile under work/document-content-review.
+Verified the full-width ribbon, Content View below it, URL/Inline/Card appearances
+with a loaded thumbnail, and Find beside navigation beneath the same ribbon. The
+isolated review app was closed. User acceptance testing remains the final check of
+appearance and online YouTube behavior.
+
+Limits: cleanup checks HTML documents in the selected folder tree plus all open
+document snapshots; unopened documents outside that tree and remote stylesheets
+are outside the scan. Junctions/reparse descendants are not followed; failed reads
+abort the scan. Recycle operations use Windows with no permanent-delete fallback.
+Native browser editing/Undo retains the previously documented WebView2 sensitivity.
+ReadOnly follows the Windows file attribute, refreshed on opening/activation; it
+is an editing guard, not a separate permissions system. YouTube remains dependent
+on the provider/network and may omit metadata the provider does not expose.
+
+The package was rebuilt with Build.ps1 -Package. CSS/modules use the existing
+cache-disabled WebView setup; no user compilation or Ctrl+F5 is required after
+relaunch. Prior unreviewed changes remain uncommitted for the requested review.
+
+Cumulative source growth from a94a9d4 (includes the preceding uncommitted YouTube
+iteration) follows. This is a growth review, not a claim that line counts establish
+cohesion; ownership and coupling are described in ARCHITECTURE.md.
+
+| File | Before | After | Delta |
+| --- | ---: | ---: | ---: |
+| src/SinAIPrompt.Core/DocumentAccess.cs | 0 | 19 | 19 |
+| src/SinAIPrompt.Core/Documents.cs | 214 | 226 | 12 |
+| src/SinAIPrompt.Core/UnusedImages.cs | 0 | 27 | 27 |
+| src/SinAIPrompt/App.xaml | 49 | 49 | 0 |
+| src/SinAIPrompt/Dialogs.cs | 116 | 116 | 0 |
+| src/SinAIPrompt/DocumentContents.cs | 0 | 56 | 56 |
+| src/SinAIPrompt/DocumentContentSelfTest.cs | 0 | 57 | 57 |
+| src/SinAIPrompt/DocumentLock.cs | 0 | 18 | 18 |
+| src/SinAIPrompt/EditorChromeLayout.cs | 0 | 48 | 48 |
+| src/SinAIPrompt/EditorSearch.cs | 67 | 68 | 1 |
+| src/SinAIPrompt/EditorView.cs | 189 | 191 | 2 |
+| src/SinAIPrompt/FileActions.cs | 224 | 229 | 5 |
+| src/SinAIPrompt/HtmlEditorHost.cs | 295 | 323 | 28 |
+| src/SinAIPrompt/HtmlFileActions.cs | 66 | 68 | 2 |
+| src/SinAIPrompt/HtmlFileRename.cs | 135 | 136 | 1 |
+| src/SinAIPrompt/MainWindow.xaml | 63 | 65 | 2 |
+| src/SinAIPrompt/MainWindow.xaml.cs | 564 | 563 | -1 |
+| src/SinAIPrompt/NavigationLayout.cs | 42 | 53 | 11 |
+| src/SinAIPrompt/NavigationSelfTest.cs | 0 | 69 | 69 |
+| src/SinAIPrompt/PromptExplorer.xaml | 22 | 22 | 0 |
+| src/SinAIPrompt/PromptExplorer.xaml.cs | 247 | 267 | 20 |
+| src/SinAIPrompt/RegionCaptureOptions.cs | 0 | 25 | 25 |
+| src/SinAIPrompt/RibbonWebView.cs | 0 | 46 | 46 |
+| src/SinAIPrompt/ScreenCaptureDialog.cs | 165 | 167 | 2 |
+| src/SinAIPrompt/ScreenCaptureSelfTest.cs | 211 | 217 | 6 |
+| src/SinAIPrompt/SettingsDialog.cs | 118 | 120 | 2 |
+| src/SinAIPrompt/TabStripLayout.cs | 0 | 66 | 66 |
+| src/SinAIPrompt/UiSelfTest.cs | 185 | 187 | 2 |
+| src/SinAIPrompt/UnusedImageCleanup.cs | 0 | 65 | 65 |
+| src/SinAIPrompt/Web/color-picker.js | 74 | 74 | 0 |
+| src/SinAIPrompt/Web/content-self-test.js | 0 | 31 | 31 |
+| src/SinAIPrompt/Web/document-access.js | 0 | 18 | 18 |
+| src/SinAIPrompt/Web/document-outline.js | 0 | 9 | 9 |
+| src/SinAIPrompt/Web/document.js | 107 | 107 | 0 |
+| src/SinAIPrompt/Web/editor-clipboard.js | 34 | 38 | 4 |
+| src/SinAIPrompt/Web/editor.css | 97 | 108 | 11 |
+| src/SinAIPrompt/Web/editor.js | 176 | 193 | 17 |
+| src/SinAIPrompt/Web/image-actions.js | 37 | 40 | 3 |
+| src/SinAIPrompt/Web/media-self-test.js | 53 | 97 | 44 |
+| src/SinAIPrompt/Web/ribbon-overflow.js | 0 | 28 | 28 |
+| src/SinAIPrompt/Web/ribbon-self-test.js | 131 | 144 | 13 |
+| src/SinAIPrompt/Web/ribbon.css | 62 | 71 | 9 |
+| src/SinAIPrompt/Web/ribbon.js | 139 | 151 | 12 |
+| src/SinAIPrompt/Web/self-test.js | 281 | 285 | 4 |
+| src/SinAIPrompt/Web/video-presentation.js | 0 | 31 | 31 |
+| src/SinAIPrompt/Web/video-selection.js | 0 | 153 | 153 |
+| src/SinAIPrompt/Web/youtube.js | 67 | 118 | 51 |
+
+Final packaged validation passed all 525 checks in
+`work/smoke-6feb380ce6a8499d95747f6abf5805d4`.
+The first packaged attempt caught a clipboard test-fixture issue: a second marquee
+following Undo selected two objects rather than the intended five. The independent
+marquee tests remain unchanged; the clipboard-format loop now restores its fixture
+through the existing Select All command and verifies five selected objects. Both
+SVG and PNG clipboard checks and all annotation checks pass. This changed only the
+test setup, not annotation behavior. self-test.js is now 285 lines (+4 from HEAD).
+The final JavaScript syntax check and git diff --check passed.
+
+The normal packaged application was relaunched after all older/test windows closed.
+Verified its full-width ribbon and restored last document, 2026-09-12 2204 - Ribbon Changes.html.
+
+## Ribbon Changes (September 12, 22:04)
+
+Read the saved request and all five local reference images. Implemented the full Styles
+priority/overflow layout, combined Numbering split button with a drawn chevron, removal
+of the View Source strip, annotation Pan tool, save-and-lock Copy for AI Use, rename with
+an uneditable extension, large translucent countdown, enlarged grid magnifier, temporary
+pointer speed control, sticky click/click selection, and retained browser hosts for smoother
+document switching. Ctrl+Shift+U and the native View menu still provide source editing.
+
+Source validation passed all 543 checks in `work/smoke-17429600ee314252ba4c525d2fb50fd3`.
+This includes real Windows pointer speed adjustment/restoration, capture cancellation,
+first-click restoration, sticky selection completion, browser pan without geometry changes,
+1500/1900-pixel single-row ribbon sizing, rapid document switching without Unloaded events,
+no native browser handle changes or ribbon group mutations, and 100-document lazy startup.
+The rename UI fixture was updated to enter the new extension-free name; its existing real
+modal/save/image-folder/reference checks passed. JavaScript syntax: all 40 modules passed.
+The offline package build passed with zero compiler warnings or errors. Architecture:
+120 handwritten files and 16 guardrail fixtures passed; two existing MainWindow review
+notices, no exceptions or baseline changes. `git diff --check` passed.
+
+Changed-file growth below is relative to the start of this task, preserving the earlier
+uncommitted YouTube/Document Content changes. Same-size edits also touched Dialogs.cs,
+HtmlFileRename.cs, MainWindow.xaml, PromptExplorer.xaml.cs, PromptExplorerSelfTest.cs,
+and Web/ribbon.js. MainWindow.xaml.cs had no change in this task (563 lines).
+
+| File | Before | After | Growth |
+| --- | ---: | ---: | ---: |
+| src/SinAIPrompt/CaptureMagnifier.cs | 49 | 62 | 13 |
+| src/SinAIPrompt/CapturePointerSpeed.cs | 0 | 30 | 30 |
+| src/SinAIPrompt/CaptureRegionWindow.cs | 96 | 121 | 25 |
+| src/SinAIPrompt/DocumentCommandSelfTest.cs | 209 | 230 | 21 |
+| src/SinAIPrompt/DocumentWorkflowSelfTest.cs | 116 | 119 | 3 |
+| src/SinAIPrompt/EditorChromeLayout.cs | 48 | 52 | 4 |
+| src/SinAIPrompt/EditorSurface.cs | 0 | 33 | 33 |
+| src/SinAIPrompt/FileActions.cs | 229 | 236 | 7 |
+| src/SinAIPrompt/HtmlEditorHost.cs | 323 | 326 | 3 |
+| src/SinAIPrompt/ScreenCaptureDialog.cs | 167 | 168 | 1 |
+| src/SinAIPrompt/ScreenCaptureSelfTest.cs | 217 | 249 | 32 |
+| src/SinAIPrompt/Web/annotation-pan.js | 0 | 21 | 21 |
+| src/SinAIPrompt/Web/annotation-ui.js | 239 | 242 | 3 |
+| src/SinAIPrompt/Web/editor.css | 108 | 110 | 2 |
+| src/SinAIPrompt/Web/editor.js | 193 | 192 | -1 |
+| src/SinAIPrompt/Web/ribbon-overflow.js | 28 | 36 | 8 |
+| src/SinAIPrompt/Web/ribbon-self-test.js | 144 | 151 | 7 |
+| src/SinAIPrompt/Web/ribbon.css | 71 | 72 | 1 |
+| src/SinAIPrompt/Web/self-test.js | 285 | 289 | 4 |
+
+Final packaged validation passed all 543 checks in
+`work/smoke-1f45f977c7b446f58248df08fcd4f860`.
+The old app closed gracefully and the rebuilt package was relaunched with its normal
+profile and last saved document restored. Inspected the live native ribbon: all five
+Styles visible, Tools in overflow, no source strip. Also visually inspected the actual
+three-second translucent countdown and 326-by-360 magnifier, including its visible grid,
+transparent crosshairs and mouse-speed label, then canceled capture without inserting.
+The direct RenderTargetBitmap magnifier diagnostic was blank because its Canvas offset
+lay outside the diagnostic bitmap; the live native screenshot was used for visual review.
+
+MainWindow stayed at 563 lines. No architecture exceptions or new dependencies. The
+first visit to a document still initializes its editor lazily; visited editors retain
+layout/undo/selection during switches. Pointer speed restoration was verified on normal
+capture/cancel paths; abrupt process termination cannot run an in-process restore handler.
+No commit or push: the existing one-time user review hold remains in effect.
+
+## Splash Screen (September 12, 22:51)
+
+Read the saved HTML request and all five unique reference images. Copied all seven splash
+assets into `src/SinAIPrompt/Assets/Splash Screens` and embedded the requested 2400-by-1440
+image. Replaced the canonical PNG and regenerated the nine-size Windows ICO from V2.
+Source/project SHA-256 hashes match for the V2 PNG and chosen splash artwork.
+
+Startup shows the splash before settings/session restoration and yields for painting,
+without a minimum display time. Help/About uses that artwork with author, compile date,
+version and native links, covering the artwork's startup caption to prevent overlap.
+The closing-menu focus race found by the first check was fixed by deferring About opening
+until menu focus restoration finishes. Escape, artwork click and focus-out dismissal pass.
+Email/website/repository URI and native hyperlink wiring were verified; external sites and
+an email composer were not opened as part of testing.
+
+All 562 native/browser checks passed in each final run:
+
+- Source: `work/smoke-eb1669f3c00249e6af1968c4f052bf3c`.
+- Packaged: `work/smoke-915be40c337d477f9c52d09038328634`.
+
+New regression coverage verifies first-visit ribbon height reservation, first-render hidden
+and unwrapped preferences, resize/navigation toggles at 1000/1500/1100 widths, readable
+navigation menu fonts, physical-pointer overflow open/close, Region Capture image-layer
+insertion inside annotation and cancellation without scene loss. Existing 100-document
+lazy startup, document persistence, editor, annotation, clipboard and capture checks pass.
+All 40 JavaScript modules pass syntax checks. Offline .NET build/package: zero compiler
+warnings/errors. Architecture: 122 files and 16 fixture cases pass, with the existing
+MainWindow size review warning; no exceptions or limit changes. `git diff --check` passes.
+
+The old app was receiving user edits, so the input guard prevented closure. After the
+user saved/closed it, the offline package was replaced and tested, then the normal app
+was relaunched with its last document restored. Visually inspected native Help/About
+and its outside-click dismissal, and the readable three-item navigation menu. Only the
+updated normal app remains running. Bundled web resources retain cache disabling, so
+no browser refresh or user recompilation is required.
+
+Current-task source growth is measured from `work/splash-start-lines.json`, preserving
+all earlier uncommitted changes. PromptExplorer.xaml.cs has a same-size font change.
+
+| File | Before | After | Growth |
+| --- | ---: | ---: | ---: |
+| src/SinAIPrompt/App.xaml.cs | 149 | 156 | 7 |
+| src/SinAIPrompt/BrandingSelfTest.cs | 0 | 40 | 40 |
+| src/SinAIPrompt/BrandingWindow.cs | 0 | 73 | 73 |
+| src/SinAIPrompt/DocumentCommandSelfTest.cs | 230 | 254 | 24 |
+| src/SinAIPrompt/EditorChromeLayout.cs | 52 | 60 | 8 |
+| src/SinAIPrompt/HtmlEditorHost.cs | 326 | 331 | 5 |
+| src/SinAIPrompt/MainWindow.xaml | 65 | 66 | 1 |
+| src/SinAIPrompt/MainWindow.xaml.cs | 563 | 564 | 1 |
+| src/SinAIPrompt/NavigationSelfTest.cs | 69 | 89 | 20 |
+| src/SinAIPrompt/ScreenCaptureSelfTest.cs | 249 | 279 | 30 |
+| src/SinAIPrompt/SinAIPrompt.csproj | 23 | 27 | 4 |
+| src/SinAIPrompt/UiSelfTest.cs | 187 | 188 | 1 |
+| src/SinAIPrompt/Web/annotation-ui.js | 242 | 243 | 1 |
+| src/SinAIPrompt/Web/editor.js | 192 | 196 | 4 |
+| src/SinAIPrompt/Web/ribbon-overflow.js | 36 | 37 | 1 |
+| src/SinAIPrompt/Web/ribbon-self-test.js | 151 | 158 | 7 |
+
+Ownership and coupling review is recorded in ARCHITECTURE.md. MainWindow is 564 lines,
+exactly its unchanged ceiling; new branding presentation stays in its 73-line owner.
+No new third-party dependency or startup document scan. First visits still initialize
+WebView lazily; the fix reserves ribbon space during that work. Splash duration depends
+on actual startup work, with no artificial hold. No commit/push: the one-time user review
+hold remains in effect; HEAD remains a94a9d4.
+
+## Markdown Support and transient startup dialog (September 13)
+
+Read the September 12 23:49 Markdown Support HTML request and incorporated the later
+preview/drop, save-navigation and native startup-dialog bug reports. File > Open converts
+Markdown into an editable sibling `Name - Converted.html`, using numbered names without
+overwriting existing files. Explorer selection and Markdown drops instead show read-only
+Modern HTML and create no converted file. Local relative images load from the source folder;
+preview content cannot execute scripts or fetch external HTTP resources.
+
+Content View now has its own pane beside Document List or Prompt Explorer. Locked HTML
+retains its headings. Removed browser popups restore the native navigation cutout, and an
+Explorer refresh cannot reopen a previously selected Markdown preview after returning to
+an HTML document and saving. The native mouse regression uses the actual tunneled WPF
+preview event; the file-drop checks pass real file objects through the installed WebView2
+AdditionalObjects API. A preview's final drop response is intentionally not awaited after
+that drop disposes its browser; the test waits for the resulting editable document instead.
+
+The user's E_ABORT dialog exposed a missing test observation: native MessageBox windows
+were not included in browser exceptions or Application.Windows. Editor disposal now cancels
+initialization waiters, startup continuations stop after disposal, and canceled startup does
+not report a runtime failure. Active startup errors retain the source fallback and actual
+error message, without the misleading blanket instruction to install WebView2. A native
+Windows event observer records editor-startup dialogs in the isolated test process and
+fails the run if one occurs. Closing editors after 0, 2, 10 and 25 ms is covered.
+
+All 582 native/browser checks passed in both final runs:
+
+- Source: `work/smoke-eb42181bb0784205a102b491b27ce8ae`.
+- Packaged: `work/smoke-6867e8a60e8447de8bd1a5e74c3d36b0`.
+
+Both runs recorded zero unexpected native startup dialogs and zero browser exceptions.
+The removed-popover navigation regression failed before its fix and passed afterwards.
+The suite also covers Modern conversion, source preservation, collision naming, local
+preview images, read-only sandbox behavior, HTML/Markdown drops, clicking the already
+selected HTML row, saving that HTML without returning to Markdown, independent panes and
+locked-document headings. Existing 100-document lazy startup checks remain passing.
+
+PowerShell 7.6.6 built and packaged offline using installed Visual Studio 2026 components.
+Compilation: zero warnings/errors. JavaScript syntax: all 43 modules passed. Architecture:
+129 handwritten files and all 16 checker fixtures passed. The two existing MainWindow
+review warnings remain: above the 500-line review trigger and below its recorded ceiling.
+No architecture limits, exclusions or dependencies changed. `git diff --check` passed.
+
+Task-relative source growth (earlier uncommitted tasks are excluded from these deltas):
+
+| File | Before | After | Change |
+| --- | ---: | ---: | ---: |
+| MainWindow.xaml.cs | 564 | 545 | -19 |
+| MainWindow.xaml | 66 | 68 | +2 |
+| FileActions.cs | 236 | 279 | +43 |
+| HtmlEditorHost.cs | 331 | 339 | +8 |
+| ExplorerPreview.cs | 79 | 103 | +24 |
+| DocumentContents.cs | 56 | 79 | +23 |
+| EditorChromeLayout.cs | 60 | 63 | +3 |
+| PromptExplorer.xaml.cs | 267 | 263 | -4 |
+| MarkdownExport.cs | 26 | 35 | +9 |
+| MarkdownImport.cs | new | 33 | +33 |
+| Web/markdown.js | 138 | 143 | +5 |
+| Web/editor.js | 196 | 197 | +1 |
+| Web/document-outline.js | 9 | 9 | 0 |
+| Web/editor-chrome.js | new | 16 | +16 |
+| Web/file-drop.js | new | 13 | +13 |
+| Web/preview.html | new | 4 | +4 |
+| Web/preview.js | new | 9 | +9 |
+| MarkdownImportSelfTest.cs | new | 100 | +100 |
+| EditorStartupSelfTest.cs | new | 57 | +57 |
+| DocumentContentSelfTest.cs | 57 | 68 | +11 |
+| NavigationSelfTest.cs | 89 | 105 | +16 |
+| PromptExplorerSelfTest.cs | 209 | 212 | +3 |
+| UiSelfTest.cs | 188 | 192 | +4 |
+| Web/content-self-test.js | 31 | 32 | +1 |
+
+The new app was launched after verifying older versions were closed. Its normal profile
+restored `2026-09-13 0002 - Prompt 41.html`; the rendered document, ribbon and Document List
+were visually inspected with no startup dialog. Further optional live navigation was left
+to the user after the input guard reported activity. The new document's instructions were
+not executed because the user has not requested it. No user document was changed during
+this final inspection. The native/browser suite validates the new pane and preview flows;
+manual acceptance remains with the user. No rebuild or Ctrl+F5 is required: the package is
+already updated and local editor/preview browser caching is disabled.
+
+Ownership remains in existing file/preview/navigation/editor-lifecycle owners plus narrow
+Markdown publication and browser chrome/drop modules. The native dialog observer is test
+only. Existing host partial-class coupling remains debt; Content View still represents
+editable or locked HTML documents, not the transient Markdown preview. No external
+Markdown extensions or dependencies were added. Commit/push remains on the user's explicit
+one-time review hold; HEAD is `a94a9d4` and earlier uncommitted work is preserved.
+
+## Font Color icon correction (September 13)
+
+Used the user's attached Word comparison as the visual reference. Corrected conflicting
+17/20-pixel icon rules and independent bar positioning in the existing ribbon CSS. The
+Font Color button now uses a compact gray A within a 16-pixel box, centered over a
+16-by-4-pixel bar, with a separate 8-pixel chevron. Dark mode uses the existing light text
+color. The indicator starts red and retains the last palette choice across caret moves;
+Automatic remains black. The existing palette and text-formatting path are unchanged.
+
+Added three browser regression assertions covering actual rendered icon/bar/chevron
+geometry, initial red and chosen-color retention on differently colored text. Both source
+and packaged integration runs passed all 585 checks, including zero native startup dialogs
+and zero browser exceptions. A final gray/dark-theme CSS adjustment was included in the
+packaged build and its full suite; both runs' font-color screenshots were visually reviewed.
+
+- Source: `work/smoke-ea3840156b0a4edab7525c16c0aba925`.
+- Packaged: `work/smoke-c9a69598137c438b8aa9f129f614400e`.
+- Visual artifacts: `font-color-icon.png` in each run folder.
+
+Offline build/package passed with zero compiler warnings/errors. All 43 JavaScript syntax
+checks passed; architecture checked 129 source files and all 16 fixtures. Existing
+MainWindow review warnings remain unchanged. `git diff --check` passed. No dependencies,
+new files, extra mutable state, coupling changes or architecture exceptions were added.
+Task-relative growth: ribbon.js 151 to 150 (-1), ribbon.css 72 to 76 (+4),
+ribbon-self-test.js 158 to 166 (+8). MainWindow is unchanged at 545 lines.
+
+Gracefully closed the prior app and relaunched the rebuilt package. The unsaved
+`2026-09-13 0039 - Prompt 42` draft returned through session recovery. Live input was left
+to the user after relaunch; the packaged screenshot provides the visual acceptance check.
+No user recompilation or Ctrl+F5 is required. The existing cache-disabled WebView setup
+loads the installed CSS on restart. Last-picked font color is scoped to the editor's
+lifetime, as with the existing highlight indicator; it is not a new persisted preference.
+No commit/push: the explicit review hold remains in effect, with HEAD at a94a9d4.
+
+## Popup navigation visibility (September 13, 00:02 Bugs)
+
+Read the saved HTML report and all three separate PNG references. All three show the
+same defect while a popup is open: the browser's full native window paints over the WPF
+navigation pane. The previous removed-popup cleanup only restored navigation afterward.
+
+The browser now reports bounded rectangles for open dialogs/popovers, plus modal state.
+The native WebView region retains the navigation cutout and unions only those rectangles.
+Browser zoom and monitor DPI are included in coordinate conversion. Open popup resizing,
+window resize, scrolling and removed-popup cleanup refresh the coalesced geometry.
+The native pane remains visible and is disabled only for modal dialogs; ordinary overflow
+and Styles popups leave it enabled. The existing layout owner applies this to navigation,
+its splitter, Find and Content View without adding MainWindow state.
+
+The new native-region regression failed before the product fix:
+`work/smoke-7e0540a717914a2297f26d65c3df0c32` reported that Document List did not stay
+visible with moreRibbon open. Both final runs passed all 603 native/browser checks:
+
+- Source: `work/smoke-265af43d346f446b8da8ca6faca4d780`.
+- Packaged: `work/smoke-6485e3692e004d33b095ae5168e83596`.
+
+Coverage uses the actual toolbar overflow, List Numbering and More Styles controls in
+both Document List and Prompt Explorer modes. It checks the native browser region while
+the popup is open, modal input blocking, close/re-enable behavior, a popup deliberately
+crossing into navigation, and removal of that popup's region. No native startup dialogs
+or browser exceptions occurred. Existing annotation/fullscreen, preview, save, capture,
+lazy startup and ribbon behavior also passed the full suite.
+
+Full-desktop capture artifacts were inspected but are not accepted as full visual proof:
+other foreground windows obscured the source captures and the packaged desktop captures.
+The visible portion of the source sidebar remained rendered in all six cases. The new
+normal app was then relaunched and its restored document/ribbon/Document List were visually
+inspected directly. Further optional popup clicks were stopped by the live input guard;
+manual visual acceptance remains with the user. Automated native-region checks above
+validate the six popup cases independently of desktop occlusion. No user text was edited.
+
+Build/package completed offline with zero compiler warnings/errors. All 43 JavaScript
+syntax checks, architecture checks for 129 handwritten files, all 16 checker fixtures,
+and `git diff --check` passed. MainWindow remains 545 lines with the same two review
+warnings and unchanged 564-line ceiling. No files, dependencies or rule exceptions added.
+
+| Current-task file | Before | After | Change |
+| --- | ---: | ---: | ---: |
+| RibbonWebView.cs | 46 | 61 | +15 |
+| Web/editor-chrome.js | 16 | 24 | +8 |
+| HtmlEditorHost.cs | 339 | 340 | +1 |
+| EditorChromeLayout.cs | 63 | 65 | +2 |
+| NavigationSelfTest.cs | 105 | 148 | +43 |
+
+Ownership stays in the existing popup geometry reporter, native region owner and pane
+layout owner. The adapter passes rectangles and modal state instead of a broad overlay
+flag. No extra WebView, replacement controller, shared globals or per-keystroke layout
+work was introduced. Existing host partial-class coupling remains architectural debt.
+Popup content can intentionally cover its own portion of navigation; the rest remains
+visible. Native navigation is disabled rather than covered by the HTML modal backdrop.
+
+The older app was closed gracefully, preserving the unsaved Prompt 42 draft in recovery.
+The updated package was relaunched with the user's last Splash Screen document restored.
+The user needs no recompilation or Ctrl+F5; the bundled CSS/modules reload with the existing
+cache-disabled WebView configuration. The user explicitly lifted the review hold during
+this task and requested automatic commit/push for green work now and going forward. This
+commit includes the previously validated pending YouTube, document access/content, ribbon,
+splash, Markdown, startup-dialog and Font Color work along with this popup correction.

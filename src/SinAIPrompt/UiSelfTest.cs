@@ -12,6 +12,7 @@ internal static class UiSelfTest
     public static async Task Run(App app)
     {
         var results = new List<string>(); MainWindow? window = null;
+        using var startup = new EditorStartupSelfTest();
         string folder = app.Store.DirectoryPath;
         void Check(bool condition, string name) { if (!condition) throw new Exception(name); results.Add("PASS " + name); File.WriteAllLines(Path.Combine(folder, "ui-test-results.txt"), results); }
         try
@@ -46,13 +47,18 @@ internal static class UiSelfTest
                 if (view.Browser.CoreWebView2 != null && await view.Browser.ExecuteScriptAsync("!!window.editor && !!document.querySelector('#document').contentDocument?.body?.isContentEditable") == "true") { loaded = true; break; }
             }
             Check(loaded, "Native WebView2 HTML editor initializes from installed Visual Studio components");
+            await NavigationSelfTest.Run(window, Check);
+            await BrandingSelfTest.Run(window, Check);
             await ScreenCaptureSelfTest.Run(window, Check);
             await DocumentCommandSelfTest.NewPromptReady(window, Check);
+            await EditorStartupSelfTest.ClosingDuringStartup(window, Check);
             await DocumentCommandSelfTest.RenameDraft(window, Check);
             Check(await window.SaveDocument(first, destinationPath: Path.Combine(documents, "Prompt 1.html")), "First save changes the unsaved prompt's asset folder");
             await DocumentCommandSelfTest.SaveShortcut(window, Check);
             await DocumentCommandSelfTest.Appearance(window, Check);
             await ScreenCaptureSelfTest.RegionShortcut(window, Check);
+            await DocumentContentSelfTest.Run(window, Check);
+            await MarkdownImportSelfTest.Run(window, Check);
             await SearchSelfTest.Source(window, Check);
             var exceptionEvent = view.Browser.CoreWebView2!.GetDevToolsProtocolEventReceiver("Runtime.exceptionThrown");
             var browserErrors = new List<string>();
@@ -133,7 +139,7 @@ internal static class UiSelfTest
             File.SetAttributes(beforeFailedRename, File.GetAttributes(beforeFailedRename) | FileAttributes.ReadOnly);
             bool renameRolledBack = false;
             try { await window.RenameDocumentFile(first, "Cannot write.html"); }
-            catch (UnauthorizedAccessException) { renameRolledBack = true; }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { renameRolledBack = true; }
             finally { File.SetAttributes(beforeFailedRename, FileAttributes.Normal); }
             Check(renameRolledBack && File.Exists(beforeFailedRename) && Directory.Exists(renamedFolder) && !File.Exists(Path.Combine(movedFolder, "Cannot write.html")) && !Directory.Exists(Path.Combine(movedFolder, "Cannot write")), "Failed HTML rewrite rolls back both the file and image folder rename");
             await view.SetSourceAsync(true);
@@ -166,6 +172,7 @@ internal static class UiSelfTest
             bool blocked = false;try { app.UseStorageFolder(occupied); } catch (IOException) { blocked = true; }
             Check(blocked && !File.Exists(Path.Combine(occupied, "settings.json")), "Storage relocation preflights conflicts before copying any files");
             Check(browserErrors.Count == 0, "No browser runtime exceptions");
+            Check(startup.Errors.Count == 0, "No unexpected native editor-startup dialogs: " + string.Join(" | ", startup.Errors));
             using (var capture = File.Create(Path.Combine(folder, "editor.png"))) await view.Browser.CoreWebView2.CapturePreviewAsync(CoreWebView2CapturePreviewImageFormat.Png, capture);
             results.Add("ALL CHECKS PASSED");
             app.Shutdown(0);

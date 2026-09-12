@@ -403,3 +403,191 @@ requirements without sacrificing correctness, performance, or readability.
   validation performed, exceptions, and remaining risks.
 - Do not treat a passing build or reduced Program line count as proof that the
   architecture is healthy.
+
+## YouTube cards and compact navigation (19:21)
+
+`video-selection.js` owns one editor's selected video, temporary border/toolbar,
+resize gesture and edit dialog. It receives selection, command, image-clear and
+playback-stop callbacks; it never imports the editor orchestrator. `youtube.js`
+retains card markup, URL recognition, asynchronous metadata lookup and the runtime
+player. Paste inserts the card immediately and only enriches the same unchanged,
+still-open card when metadata returns. No startup work or global image/video cache
+was added. Stored HTML remains script-free card markup; playback stays outside the
+script-disabled document iframe.
+
+Chromium's native commands descend into populated noneditable figures and can merge
+adjacent floating figures. The bounded `editVideoAtoms` transaction temporarily makes
+existing cards empty inline atoms during synchronous replacement, cut or paste, then
+restores their original children/styles on the nodes retained by native Undo. There
+is no separate history stack or persistent transaction state. Browser checks capture
+resize/Undo, cut/Undo, replacement beside another wrapped card, unchanged neighboring
+markup, and editing alongside an active player. These operations remain sensitive to
+future changes in the installed WebView2 editing engine and should retain coverage.
+
+`NavigationLayout` now owns independent tab/sidebar visibility and persisted width.
+`TabStripLayout` owns tab widths, scroll buttons and wheel scrolling, with only the
+WPF controls passed to it. Nullable saved tab visibility preserves old layouts.
+`ribbon-overflow.js` moves existing group elements into a popup when wrapping is off;
+there are no cloned controls or duplicate handlers. Nested palette and Styles popups
+remain within that popup so they preserve their anchor and the editor selection.
+The normal wrapping preference remains the default.
+
+MainWindow delegates layout and wires menu/preferences; it shrank from 564 to 562
+lines. The reviewed maximum remains 564. No limits/exclusions were changed, no
+exception was granted, and no dependencies, cycles or reverse imports were added.
+Existing native partial-class and host/EditorView coupling remain recorded debt.
+
+## Document Content (20:54)
+
+The native ribbon/navigation layout stays in `EditorChromeLayout` and `RibbonWebView`.
+One existing WebView renders the full-width ribbon and inset document; a Windows
+window region leaves the native navigation/Find panes visible beneath the ribbon.
+The region is temporarily restored for browser dialogs/popovers and reset for
+fullscreen/reparenting. The installed composition-control alternative threw
+PlatformNotSupportedException during actual startup, so it is not used. No SDK,
+package, runtime target change, extra browser, or downloaded component was added.
+
+`DocumentContents` owns the active outline list and delayed refresh. Its browser
+adapter `document-outline.js` reads Title/Heading/Heading2 nodes and navigates by
+transient indexes without adding IDs to saved HTML. PromptExplorer retains the
+exclusive view-mode preference. Inactive documents are not opened or parsed.
+
+Core `DocumentAccess` owns Windows ReadOnly attributes; each Document caches the
+state for binding. `DocumentLock` coordinates saving and confirmation with a narrow
+save callback and synchronizes other open copies. EditorView and document-access.js
+reflect that state on source/visual controls. Native mutators, replacement, saves
+and autosave respect it; Save As can create an unlocked copy. Session recovery
+retains any pre-existing unsaved changes in another locked copy.
+
+Core `UnusedImages` scans only on request, with explicit folder/snapshot inputs.
+The native cleanup dialog owns progress, review, confirmation and a fresh reference
+check before recycling. Existing reference parsing and Windows recycle operations
+are reused. No startup scan or persistent image index was introduced.
+
+`RegionCaptureOptions` owns the native options form and returns an immutable value
+to the existing capture workflow. Image actions reuse the existing filename dialog
+and transactional reference rewrite. `video-presentation.js` owns static URL,
+Inline, Card and Embed markup; video-selection.js retains temporary selection UI
+and native editing/Undo. Cards show available title, author, provider and thumbnail;
+no fictional description or publication date is inserted.
+
+MainWindow is 563 lines, within its unchanged 564-line ceiling. New behavior is in
+focused owners, with one layout composition call and existing integration points.
+No limits, exclusions, baselines or dependencies changed. Existing partial-class
+host coupling remains debt; this iteration does not add a new partial family.
+
+## Ribbon Changes (22:04)
+
+`EditorSurface` owns the visited-editor visual children and selected content. It switches
+visibility instead of detaching and reattaching native browser windows on every document
+selection. The existing editor dictionary still owns creation and lifetime; disposal
+releases the visual child, and annotation explicitly transfers the active child. No
+unvisited document is initialized, and there is no additional browser or shared document
+state. `EditorChromeLayout` retains inactive navigation insets; `HtmlEditorHost` suppresses
+identical inset messages. `ribbon-overflow.js` preserves control identities and moves groups
+only when their destination changes, prioritizing the full Styles gallery over Tools.
+
+`annotation-pan.js` owns only a view translation and its pointer gesture. It never changes
+scene coordinates, selection or history, and leaves middle-button behavior intact.
+`CaptureRegionWindow` retains ownership of selection, including sticky click/click capture.
+`CapturePointerSpeed` owns temporary Windows pointer sensitivity and restores it on first
+click, cancellation, deactivation and closure without writing a Windows preference file.
+`CaptureMagnifier` owns pixel-grid rendering and the speed label; the existing capture
+dialog owns the larger translucent countdown. FileActions reuses save/lock operations
+before producing Copy for AI Use text; Dialogs preserves extensions for document/image
+rename, while unsaved draft names and folders remain whole names.
+
+Validation covers the existing document/annotation behaviors before the host change plus
+new rapid-switch, layout, pan, capture, rename and save/lock regressions. The MainWindow
+implementation remains 563 lines against its unchanged 564-line ceiling. No guardrail
+exception, dependency, startup scan, history replacement or new global state was added.
+First visits still pay the existing lazy WebView initialization cost; this change removes
+repeated teardown and layout churn for visited documents. Windows pointer sensitivity is
+a temporary system setting while initial-point capture is active, restored on normal exits.
+
+## Splash Screen (22:51)
+
+`BrandingWindow` owns shared splash/About presentation and dismissal, with one cached,
+frozen local bitmap. It owns the About links and compiler-generated build date. App
+startup only creates/shows/disposes it around session restoration and yields once to
+paint; there is no minimum display timer. MainWindow delegates Help/About in one line.
+All seven supplied images live permanently in `Assets/Splash Screens`; only the chosen
+2400-by-1440 artwork is embedded. The canonical PNG/ICO pair holds the V2 application icon.
+
+`EditorChromeLayout` retains the last measured ribbon height for an uninitialized editor
+and observes settled layout with a cached tuple, avoiding repeated browser/native writes.
+`HtmlEditorHost` remains the per-editor measurement owner and supplies initial visibility
+and wrapping preferences in the local editor URL. Browser bootstrap creates the ribbon
+before awaiting local fonts. No inactive editor initialization or shared document state
+was added. PromptExplorer explicitly chooses a text font for its navigation menu.
+`ribbon-overflow.js` uses native popover-invoker toggling to avoid dismiss/reopen races.
+Annotation reuses the existing region-capture request and image-layer insertion path.
+
+Regression coverage includes first-visit height reservation, hidden initial ribbon,
+navigation resize/toggle, physical-pointer overflow toggles, annotation region capture
+and cancellation, and About dismissal. MainWindow grew 563 to 564 lines, exactly its
+unchanged reviewed ceiling. No limits, exclusions, dependencies or exceptions changed.
+Existing host/partial-class coupling remains debt. First visits still initialize their
+WebView lazily; this task preserves space during that work rather than preloading files.
+
+## Markdown Support (23:49 request; September 13 implementation)
+
+`MarkdownImport` owns reading a source and publishing a new sibling HTML file, using an
+explicit conversion callback. Existing `MarkdownExport` provides the narrow per-editor
+Markdown conversion adapter; `Web/markdown.js` remains the only Markdown parser and uses
+the existing Modern CSS owner. Conversion uses a detached DOM, never the live document.
+Writes run on a worker and publish by a non-overwriting move, with numbered names on
+collision. The existing FileActions owner now contains OpenPaths coordination extracted
+from MainWindow, plus the small status-bar progress indicator and file-drop routing.
+
+Explorer selection and Markdown drops create read-only previews instead of converted
+files. `ExplorerPreview` retains the disposable preview lifetime and native request
+restrictions. Its local `preview.html`/`preview.js` shell runs only trusted application
+code; the rendered document lives in an iframe without script permission. Only mapped
+local resources are allowed. `file-drop.js` forwards real Windows file objects using the
+installed WebView2 AdditionalObjects API, verified by reflection and actual file drops.
+No arbitrary page can send a file-open command through the sandboxed document.
+
+`DocumentContents` owns its independent pane, close button, persisted visibility and
+current outline; PromptExplorer again owns only Document List/Explorer switching.
+EditorChromeLayout incorporates the additional pane in its existing inset calculation.
+The browser outline filter excludes nested noneditable objects, not the entire locked
+document body. `editor-chrome.js` owns ribbon measurements and popup lifecycle reporting;
+removed popups restore the native window cutout even when no toggle event bubbles.
+
+PromptExplorer records the row selected during a refresh so WPF's deferred selection
+event cannot reopen an old preview. Leaving Explorer cancels pending selection work.
+MainWindow delegates selected-document mouse navigation, including returning from a
+preview when the already-selected HTML row is clicked. The window shrank 564 to 545
+lines. Its existing 564-line ceiling remains unchanged; no exceptions, dependency
+additions or rule changes were made. Existing host partial-class coupling remains debt.
+
+EditorView's existing lifecycle owns startup cancellation: disposal cancels initialization
+waiters, and each asynchronous startup continuation checks disposal before using WebView2.
+An aborted startup after disposal is no longer reported as a missing runtime. Real active
+startup failures retain the source fallback and error dialog. `EditorStartupSelfTest`
+owns a test-process-only Windows dialog observer and close-during-startup checks; native
+dialogs are recorded separately from browser exceptions and fail the integration run.
+
+The September 13 Font Color correction stays in `ribbon.js` and `ribbon.css`: the
+existing button value owns its remembered ink, initially red, and the existing picker
+continues to own only its popup. Explicit glyph/bar/chevron geometry replaces conflicting
+size overrides. No additional state owner, file, dependency or startup work was introduced.
+The ribbon regression checks rendered geometry and ink retention across caret movements.
+
+## Popup navigation visibility (September 13, 00:02 Bugs)
+
+`editor-chrome.js` now reports each open dialog/popover rectangle and modal state,
+coalescing geometry changes on animation frames and observing open-popup resizing.
+`RibbonWebView` owns those transient rectangles and unions only their occupied areas
+with its existing ribbon/document region, scaling CSS coordinates by browser zoom and
+monitor DPI. It never removes the whole navigation cutout just because a popup opens.
+The previous boolean overlay behavior caused the three reported blank-sidebar cases.
+
+`HtmlEditorHost` remains a narrow message adapter. `EditorChromeLayout` keeps the native
+panes visible and disables them while a modal is active, without taking over popup state.
+No new MainWindow state, startup work, files, dependencies or reverse dependencies were
+introduced. Native regression checks cover all three actual controls in both navigation
+modes, modal input blocking, bounded overlap and removal cleanup. Full-window captures
+include the real WPF sidebar; browser-only screenshots cannot validate native navigation.
+Existing host partial-class coupling remains debt; architecture limits are unchanged.

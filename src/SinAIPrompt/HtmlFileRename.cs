@@ -6,7 +6,7 @@ namespace SinAIPrompt;
 
 public partial class MainWindow
 {
-    void RenameDocument(Document doc) => Dialogs.RenameFile(this, doc.Name, name => RenameDocumentFile(doc, name));
+    void RenameDocument(Document doc) => Dialogs.RenameFile(this, doc.Name, name => RenameDocumentFile(doc, name), keepExtension: doc.Path != null);
 
     internal async Task RenameExplorerImage(PromptEntry entry, string name)
     {
@@ -48,6 +48,7 @@ public partial class MainWindow
 
     internal async Task RenameDocumentFile(Document doc, string name)
     {
+        if (doc.IsReadOnly) throw new IOException("Unlock the document before renaming it.");
         if (!Documents.Contains(doc)) throw new IOException("The document is no longer open.");
         if (doc.Path == null)
         {

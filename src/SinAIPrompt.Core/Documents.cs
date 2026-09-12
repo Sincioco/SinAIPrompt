@@ -22,6 +22,9 @@ public sealed class Document : INotifyPropertyChanged
     public int UntitledNumber { get; set; } = 1;
     public bool AutoSave { get; set; }
     public bool Pinned { get; set; }
+    public bool IsReadOnly { get; set; }
+    public string ReadOnlySuffix => IsReadOnly ? " [Read-Only]" : "";
+    public string LockMarker => IsReadOnly ? "\uE72E" : "";
     public DateTime CreatedUtc { get; set; }
     public DateTime ModifiedUtc { get; set; }
     public int Caret { get; set; }
@@ -35,7 +38,7 @@ public sealed class Document : INotifyPropertyChanged
     public string Tooltip => (Path ?? Name) + (Dirty ? "\nUnsaved changes" : "");
     public string Marker => (Pinned ? "📌" : "") + (Dirty ? "•" : "");
     public event PropertyChangedEventHandler? PropertyChanged;
-    public void Notify() { foreach (var name in new[] { nameof(Name), nameof(Dirty), nameof(Marker), nameof(Tooltip), nameof(AccessibleName) }) PropertyChanged?.Invoke(this, new(name)); }
+    public void Notify() { foreach (var name in new[] { nameof(Name), nameof(Dirty), nameof(Marker), nameof(Tooltip), nameof(AccessibleName), nameof(IsReadOnly), nameof(LockMarker) }) PropertyChanged?.Invoke(this, new(name)); }
 }
 
 public static class TextFiles
@@ -81,7 +84,7 @@ public static class TextFiles
         catch (DecoderFallbackException) when (skip == 0) { name = "ANSI"; raw = EncodingFor(name).GetString(bytes); }
         if (raw.Contains('\0')) throw new InvalidDataException("This file contains binary data or an unsupported encoding. It has not been opened as text.");
         string nl = DetectNewLine(raw);
-        return new() { Path = path, Text = Normalize(raw), SavedText = Normalize(raw), NewLine = nl, SavedNewLine = nl, EncodingName = name, SavedEncoding = name, Fingerprint = Hash(bytes), CreatedUtc = File.GetCreationTimeUtc(path), ModifiedUtc = File.GetLastWriteTimeUtc(path) };
+        return new() { Path = path, IsReadOnly = DocumentAccess.IsReadOnly(path), Text = Normalize(raw), SavedText = Normalize(raw), NewLine = nl, SavedNewLine = nl, EncodingName = name, SavedEncoding = name, Fingerprint = Hash(bytes), CreatedUtc = File.GetCreationTimeUtc(path), ModifiedUtc = File.GetLastWriteTimeUtc(path) };
     }
     public static string DetectNewLine(string text)
     {
@@ -114,6 +117,11 @@ public static class TextFiles
     {
         path = System.IO.Path.GetFullPath(path);
         bool same = string.Equals(path, doc.Path, StringComparison.OrdinalIgnoreCase);
+        if (DocumentAccess.IsReadOnly(path))
+        {
+            if (same && !doc.Dirty) return;
+            throw new IOException("This file is read-only. Unlock it before saving changes.");
+        }
         if (same && !overwriteConflict && ChangedOnDisk(doc)) throw new IOException("The file changed outside Sin - AI Prompt.");
         // Preserve original bytes (including mixed endings) when an unchanged file is saved/copied.
         byte[] bytes;
@@ -123,7 +131,7 @@ public static class TextFiles
         doc.DraftName = null;
         if (doc.CreatedUtc == default) doc.CreatedUtc = File.GetCreationTimeUtc(path);
         doc.ModifiedUtc = File.GetLastWriteTimeUtc(path);
-        doc.Path = path; doc.SavedText = doc.Text; doc.SavedEncoding = doc.EncodingName; doc.SavedNewLine = doc.NewLine; doc.Fingerprint = Hash(bytes); doc.Notify();
+        doc.Path = path; doc.IsReadOnly = DocumentAccess.IsReadOnly(path); doc.SavedText = doc.Text; doc.SavedEncoding = doc.EncodingName; doc.SavedNewLine = doc.NewLine; doc.Fingerprint = Hash(bytes); doc.Notify();
     }
     public static void AtomicWrite(string path, byte[] bytes, bool backup = false)
     {
@@ -147,6 +155,8 @@ public sealed class Settings
     public bool WordWrap { get; set; } = true;
     public bool StatusBar { get; set; } = true;
     public bool ShowToolbar { get; set; } = true;
+    public bool WrapToolbar { get; set; } = true;
+    public bool? ShowTabs { get; set; }
     public string ImageStorage { get; set; } = "";
     public bool LineNumbers { get; set; } = true;
     public bool RestoreSession { get; set; } = true;
@@ -155,6 +165,7 @@ public sealed class Settings
     public bool RecentFiles { get; set; } = true;
     public bool DocumentList { get; set; }
     public bool ExplorerMode { get; set; } = true;
+    public bool ContentView { get; set; }
     public bool ExplorerShowFolders { get; set; } = true;
     public string ExplorerDirectory { get; set; } = "";
     public string DocumentSort { get; set; } = "newest";
@@ -164,6 +175,7 @@ public sealed class Settings
 }
 public sealed class WindowSession
 {
+    public bool? ShowTabs { get; set; }
     public List<Document> Documents { get; set; } = [];
     public int ActiveIndex { get; set; }
     public double Width { get; set; } = 1016;

@@ -47,7 +47,7 @@ internal static class SettingsDialog
         var reset = Button("Reset To 1", () => { resetSequence = true; next.Text = "Next Document: Prompt 1 (existing files will be skipped)"; });
         DockPanel.SetDock(reset, Dock.Right); sequenceRow.Children.Add(reset); sequenceRow.Children.Add(next); panel.Children.Add(sequenceRow);
         var documentPanel = panel;
-        Label("Pasted Images", "Leave both options off to choose storage each time. Region captures always use the document's image folder.");
+        Label("Pasted Images", "Leave both options off to choose storage each time. Region capture has its own storage options.");
         var inlineImages = new CheckBox { Content = "Always Embed Images In The HTML (Base64)", IsChecked = p.ImageStorage == "inline", Margin = new Thickness(0, 3, 0, 8) };
         var separateImages = new CheckBox { Content = "Always Store Images In The Document's Folder", IsChecked = p.ImageStorage == "separate", Margin = new Thickness(0, 3, 0, 8) };
         inlineImages.Checked += (_, _) => separateImages.IsChecked = false;
@@ -68,6 +68,8 @@ internal static class SettingsDialog
         var restore = new CheckBox { Content = "Restore Open Documents When The App Starts", IsChecked = p.RestoreSession, Margin = new Thickness(0, 3, 0, 8) }; panel.Children.Add(restore);
         var error = new TextBlock { Foreground = Brushes.IndianRed, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 10, 0, 10) };
         panel = Page("Storage & Files");
+        Label("Unused Images", "Scan a folder of documents and review images that are no longer referenced. Selected files go to the Windows Recycle Bin.");
+        panel.Children.Add(Button("Scan For Unused Images…", () => UnusedImageCleanup.Show(w)));
         Label("Application Storage", "Settings, session recovery, and object templates are JSON files. Choose a folder on D: or another persistent drive to keep them through a C: reformat.");
         var storage = new TextBox { Text = App.Current.Store.DirectoryPath, Margin = new Thickness(0, 4, 0, 6) };
         System.Windows.Automation.AutomationProperties.SetName(storage, "Application Storage Folder");

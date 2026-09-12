@@ -2,6 +2,8 @@ import {send,request,native,blobData,escapeHtml,ask,report} from './bridge.js';
 import {parseHtml,ensureStyle,editingStyles,serialize,toPng,portableHtml,pasteSafeHtml,renameImageFolder} from './document.js';
 import {renameImageFile} from './asset-references.js';
 import {createDocumentSearch} from './document-search.js';
+import {createDocumentOutline} from './document-outline.js';
+import {createDocumentAccess} from './document-access.js';
 import {attachListNumbering,toggleNumbering} from './list-numbering.js';
 import {createImageSelection} from './image-selection.js';
 import {createImageInsertion} from './image-insertion.js';
@@ -9,14 +11,15 @@ import {createImageActions} from './image-actions.js';
 import {pasteMarkdown,looksLikeMarkdown,htmlToMarkdown} from './markdown.js';
 import {editCodeBlock} from './code-blocks.js';
 import {insertLink} from './link-insertion.js';
-import {createYouTubePlayer} from './youtube.js';
+import {createYouTubePlayer,pasteYouTube,editVideoAtoms} from './youtube.js';
+import {createVideoSelection} from './video-selection.js';
 import {annotate} from './annotation-ui.js';
 import {id,outputBounds} from './annotation-model.js';
 import {createRibbon} from './ribbon.js';
 import {clipboardCommand} from './editor-clipboard.js';
+import {attachFileDrop} from './file-drop.js';
+import {observeEditorChrome} from './editor-chrome.js';
 
-const fontCss=native?await request('editor-fonts'):'';
-if(fontCss){const style=document.createElement('style');style.textContent=fontCss;document.head.append(style);}
 const frame=document.querySelector('#document'),$=s=>document.querySelector(s);
 let doc=null,selection=null,currentRaw='',base='https://sin-document.local/',loading=Promise.resolve(),loadingNow=false;
 let changeTimer,lastImageStatus="";
@@ -24,11 +27,20 @@ function imageStatus(source=""){if(source!==lastImageStatus){lastImageStatus=sou
 const exports=new Map();
 const search=createDocumentSearch(()=>doc,changed);
 const images=createImageSelection(frame,changed,image=>imageStatus(image?.src||''));
-const imageActions=createImageActions(frame,{edit:openAnnotation,resize:()=>images.resize()});
-const videos=createYouTubePlayer(frame);
+const imageActions=createImageActions(frame,{edit:openAnnotation,resize:()=>images.resize(),remove:target=>{const range=doc.createRange();range.selectNode(target);selection=range;command('delete');images.select(null);}});
+const videos=createYouTubePlayer(frame,target=>videoSelection.select(target));
+const videoSelection=createVideoSelection(frame,{changed,command,saveSelection,stopPlayback:videos.close,clearImage:()=>{images.select(null);imageActions.close();}});
 const ribbon=createRibbon($('#toolbar'),{getDocument:()=>doc,saveSelection,restoreSelection,command,changed});
+const initialChrome=new URLSearchParams(location.search);
+$('#toolbar').hidden=initialChrome.get('toolbar')==='false';
+ribbon.setWrap(initialChrome.get('wrap')!=='false');
+const access=createDocumentAccess($('#toolbar'),()=>doc);
 const imageInsertion=createImageInsertion({saveSelection,command,ready:()=>loading});
 const {insertImage,storageChoice,storeImage}=imageInsertion;
+observeEditorChrome($('#toolbar'));attachFileDrop(document);
+// Paint the ribbon before waiting for the native font catalog on a first visit.
+const fontCss=native?await request('editor-fonts'):'';
+if(fontCss){const style=document.createElement('style');style.textContent=fontCss;document.head.append(style);}
 function saveSelection(){if(!doc)return;const s=doc.getSelection();if(s.rangeCount && doc.body.contains(s.anchorNode))selection=s.getRangeAt(0).cloneRange();}
 function restoreSelection(){if(!doc)return;doc.body.focus();const s=doc.getSelection();if(selection&&doc.body.contains(selection.startContainer)){s.removeAllRanges();s.addRange(selection);}else {const range=doc.createRange();range.selectNodeContents(doc.body);range.collapse(false);s.removeAllRanges();s.addRange(range);}}
 async function focus(){
@@ -48,7 +60,7 @@ function html(flush=false){if(flush)clearTimeout(changeTimer);return loadingNow?
 async function load(raw,newBase=base){
   search.invalidate();
   clearTimeout(changeTimer);
-  videos.close();imageActions.close();images.select(null);imageStatus();currentRaw=raw||'';base=newBase;loadingNow=true;selection=null;
+  videos.close();videoSelection.select(null);imageActions.close();images.select(null);imageStatus();currentRaw=raw||'';base=newBase;loadingNow=true;selection=null;
   const input=parseHtml(raw);ensureStyle(input);
   const baseTag=input.createElement('base');baseTag.href=base;baseTag.dataset.sinRuntime='1';
   // An explicit document base wins. Otherwise resolve its relative assets against the HTML folder.
@@ -57,11 +69,13 @@ async function load(raw,newBase=base){
   loading=new Promise(resolve=>{frame.onload=()=>{
     doc=frame.contentDocument;doc.body.contentEditable='true';doc.body.spellcheck=true;loadingNow=false;
     ribbon.attach(doc);
+    attachFileDrop(doc);access.attach(doc);
     attachListNumbering(doc);
     images.attach(doc);
+    videoSelection.attach(doc);
     videos.attach(doc);
     doc.addEventListener('selectionchange',()=>{saveSelection();syncFormatting();});doc.addEventListener('input',changed);
-    doc.addEventListener('click',event=>{if(event.target.closest('a'))event.preventDefault();const image=event.target.closest('img');selectImage(image);imageActions.open(image);});
+    doc.addEventListener('click',event=>{if(event.target.closest('a'))event.preventDefault();const image=event.target.closest('img');selectImage(image);imageActions.open(image,event);});
     doc.addEventListener('dblclick',event=>{const image=event.target.closest('img'),code=event.target.closest('pre[data-sin-code]')||event.target.closest('details[data-sin-code-display]')?.querySelector('pre[data-sin-code]');if(image){selectImage(image);openAnnotation(image).catch(report);}else if(code)pasteCode(code).catch(report);});
     doc.addEventListener('pointerover',event=>imageStatus(event.target.closest('img')?.src||images.selected?.src||''));
     doc.addEventListener('pointerout',event=>{if(event.target.closest('img'))imageStatus(images.selected?.src||'');});
@@ -84,16 +98,20 @@ async function setBase(newBase){
   restoreSelection();doc.defaultView.scrollTo(scroll.x,scroll.y);
 }
 function command(name,value=null){
-  if(!doc)return;restoreSelection();
+  if(!doc||access.locked&&!['copy','selectAll'].includes(name))return;restoreSelection();
   if(['cut','copy','paste'].includes(name))return clipboardCommand(doc,name,{changed,insertImage}).catch(report);
   doc.execCommand('styleWithCSS',false,true);
-  if(name==='insertOrderedList')toggleNumbering(doc);else doc.execCommand(name,false,value);changed();syncFormatting();
+  if(name==='insertOrderedList')toggleNumbering(doc);
+  else if(['delete','insertHTML','insertText'].includes(name))editVideoAtoms(doc,()=>doc.execCommand(name,false,value));
+  else doc.execCommand(name,false,value);
+  changed();syncFormatting();
 }
 function syncFormatting(){ribbon.sync();}
 function selectImage(image){images.select(image);}
 async function paste(event){
   if(native&&event.isTrusted){event.preventDefault();await clipboardCommand(doc,'paste',{changed,insertImage}).catch(report);return;}
   const files=[...event.clipboardData.files],text=event.clipboardData.getData('text/plain');
+  if(pasteYouTube(doc,text,changed)){event.preventDefault();return;}
   if(files.some(file=>/\.(md|markdown)$/i.test(file.name))){event.preventDefault();await clipboardCommand(doc,'paste',{changed,insertImage}).catch(report);return;}
   if(!doc.body.textContent.trim()&&!doc.body.querySelector('img,pre,table')&&looksLikeMarkdown(text)){
     event.preventDefault();try{await pasteMarkdown(doc,text,changed);ribbon.attach(doc);}catch(error){report(error);}return;
@@ -105,6 +123,7 @@ async function paste(event){
 }
 function pasteCode(existing=null){return editCodeBlock(existing,{getDocument:()=>doc,saveSelection,restoreSelection,command});}
 async function openAnnotation(image=null,capturedSource=null){
+  if(access.locked)return;
   imageActions.close();
   saveSelection();let mode=image?.dataset.sinStorage||(image?(/^data:/.test(image.getAttribute('src'))?'inline':'separate'):null);
   let state;
@@ -145,15 +164,17 @@ $('#toolbar').addEventListener('click',event=>{
 });
 $('#regionCapture').onclick=async()=>{
   saveSelection();$('#regionCapture').disabled=true;
-  try{const source=await request('region-capture');if(source)await insertImage(source,'separate');}
+  try{const capture=await request('region-capture');if(capture)await insertImage(capture.source,capture.storage);}
   catch(error){report(error);}
   finally{$('#regionCapture').disabled=false;}
 };
-$('#source').onclick=async()=>{if(native){send('source');return;}const answer=await ask('HTML Source',`<textarea name="source" aria-label="HTML Source" spellcheck="false">${escapeHtml(html())}</textarea>`);if(answer.choice==='ok'){await load(answer.values.source);changed();}};
 $('#link').onclick=()=>insertLink({getDocument:()=>doc,saveSelection,command}).catch(report);
 $('#notice').onclick=()=>$('#notice').hidden=true;
 window.editor={load,html,setBase,focus,command,insertImage,openAnnotation,pasteCode,renameImageFolder,setImageStorage:imageInsertion.setStorage,ready:()=>loading,
-  stopMedia:videos.close,
+  stopMedia:videos.close,setToolbarWrap:ribbon.setWrap,
+  setReadOnly:value=>{access.set(value);images.select(null);imageActions.close();videoSelection.select(null);},
+  outline:createDocumentOutline(()=>doc),
+  setNavigationInset:width=>{frame.style.marginLeft=width+'px';frame.style.width=`calc(100% - ${width}px)`;},
   renameImageFile,
   async renameOpenImageFile(documentUrl,oldUrl,newUrl){await loading;const updated=renameImageFile(html(true),documentUrl,oldUrl,newUrl);await load(updated);return updated;},
   search:options=>search.run(options),

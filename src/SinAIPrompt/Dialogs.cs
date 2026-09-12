@@ -55,12 +55,12 @@ public static class Dialogs
         buttons.Children.Add(Button("Cancel", () => w.Close(), cancel: true)); panel.Children.Add(buttons);
         w.Content = panel; w.Loaded += (_, _) => { input.Focus(); input.SelectAll(); }; w.ShowDialog(); return result;
     }
-    public static void RenameFile(Window owner, string currentName, Func<string, Task> rename)
+    public static void RenameFile(Window owner, string currentName, Func<string, Task> rename, bool keepExtension = true)
     {
         var w = Create(owner, "Rename File - Sin - AI Prompt", 500);
         var panel = new StackPanel { Margin = new Thickness(24) };
-        panel.Children.Add(new TextBlock { Text = "File Name (Including Extension)", Margin = new Thickness(0, 0, 0, 8) });
-        var input = new TextBox { Text = currentName };
+        panel.Children.Add(new TextBlock { Text = keepExtension ? "File Name (Without Extension)" : "Name", Margin = new Thickness(0, 0, 0, 8) });
+        var input = new TextBox { Text = keepExtension ? Path.GetFileNameWithoutExtension(currentName) : currentName };
         System.Windows.Automation.AutomationProperties.SetName(input, "File Name"); panel.Children.Add(input);
         var error = new TextBlock { Foreground = Brushes.IndianRed, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 8, 0, 16) }; panel.Children.Add(error);
         var buttons = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right };
@@ -69,7 +69,7 @@ public static class Dialogs
         buttons.Children.Add(Button("Rename", async () =>
         {
             renaming = true; buttons.IsEnabled = false; input.IsEnabled = false; progress.Visibility = Visibility.Visible; error.Text = "";
-            try { await rename(input.Text); renaming = false; w.Close(); }
+            try { await rename(input.Text + (keepExtension ? Path.GetExtension(currentName) : "")); renaming = false; w.Close(); }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
             { error.Text = ex.Message; }
             finally { renaming = false; buttons.IsEnabled = true; input.IsEnabled = true; progress.Visibility = Visibility.Collapsed; if (error.Text.Length > 0) input.Focus(); }
@@ -80,7 +80,7 @@ public static class Dialogs
         w.Loaded += (_, _) =>
         {
             input.Focus();
-            int dot = currentName.LastIndexOf('.'), end = dot > 0 ? dot : currentName.Length;
+            int end = input.Text.Length;
             var prefix = System.Text.RegularExpressions.Regex.Match(currentName, @"^\d{4}-\d{2}-\d{2}(?:[ -]\d{4})?\s*-\s*");
             int start = prefix.Success && prefix.Length < end ? prefix.Length : 0;
             input.Select(start, end - start);

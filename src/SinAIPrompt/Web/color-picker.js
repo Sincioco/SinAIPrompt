@@ -43,7 +43,7 @@ export function createColorPicker(button,{getValue=()=>button.value,onChange,emp
       <div class="palette-grid theme-shades">${[0,1,2,3,4].map(row=>theme.map(([name,,shades])=>swatch(shades[row],name+' Shade '+(row+1))).join('')).join('')}</div>
       <h4>Standard Colors</h4><div class="palette-grid standard-colors">${standard.map(value=>swatch(value,'Standard')).join('')}</div>
       <details class="custom-color"><summary>More Colors…</summary><label>Hex Color <input aria-label="Custom Hex Color" placeholder="#RRGGBB" maxlength="7" spellcheck="false"></label><button type="button" data-custom>Apply Color</button><p role="alert" hidden>Enter a hex color such as #156082.</p></details>`;
-    (button.closest('dialog')||document.body).append(popup);
+    (button.closest('dialog,[popover]')||document.body).append(popup);
     popup.addEventListener('mousedown',event=>{if(event.target.closest('button'))event.preventDefault();});
     popup.addEventListener('click',event=>{
       const color=event.target.closest('[data-color]')?.dataset.color;

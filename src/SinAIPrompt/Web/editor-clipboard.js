@@ -2,6 +2,7 @@ import {native,request} from './bridge.js';
 import {pasteSafeHtml,portableHtml,parseHtml} from './document.js';
 import {captureFormat} from './text-formatting.js';
 import {pasteMarkdown} from './markdown.js';
+import {pasteYouTube,editVideoAtoms} from './youtube.js';
 
 export async function clipboardCommand(doc,name,{changed,insertImage}) {
   const selection=doc.getSelection();if(!selection?.rangeCount)return;
@@ -14,21 +15,24 @@ export async function clipboardCommand(doc,name,{changed,insertImage}) {
     Object.assign(wrapper.style,captureFormat(doc));
     const text=range.toString();
     const hasImages=!!wrapper.querySelector('img');
-    const html=hasImages?parseHtml(await portableHtml(wrapper.outerHTML,doc.baseURI,true)).body.innerHTML:wrapper.outerHTML;
-    await request('editor-copy',{html,text,internalHtml:hasImages?wrapper.outerHTML:null});
+    const video=wrapper.childNodes.length===1&&wrapper.firstElementChild?.matches('figure[data-sin-youtube]');
+    const fragment=video?wrapper.firstElementChild.outerHTML+'<p><br></p>':wrapper.outerHTML;
+    const html=hasImages?parseHtml(await portableHtml(fragment,doc.baseURI,true)).body.innerHTML:fragment;
+    await request('editor-copy',{html,text,internalHtml:hasImages?fragment:null});
     if(name==='copy')return;
     // Cut only after Windows accepted the copy, using the original selection.
   }else{
     const data=await request('editor-paste');if(!data)return;
     if(!range.startContainer.isConnected)return;
     doc.body.focus();selection.removeAllRanges();selection.addRange(range);
+    if(!data.image&&pasteYouTube(doc,data.text,changed))return;
     if(await pasteMarkdown(doc,data.markdown??data.text??'',changed,data.base??'',data.markdown!=null))return;
-    if(data.html)doc.execCommand('insertHTML',false,pasteSafeHtml(data.html));
+    if(data.html)editVideoAtoms(doc,()=>doc.execCommand('insertHTML',false,pasteSafeHtml(data.html)));
     else if(data.image){await insertImage(data.image);return;}
-    else if(data.text)doc.execCommand('insertText',false,data.text);
+    else if(data.text)editVideoAtoms(doc,()=>doc.execCommand('insertText',false,data.text));
     changed();return;
   }
   if(!range.startContainer.isConnected)return;
   doc.body.focus();selection.removeAllRanges();selection.addRange(range);
-  doc.execCommand('delete');changed();
+  editVideoAtoms(doc,()=>doc.execCommand('delete'));changed();
 }

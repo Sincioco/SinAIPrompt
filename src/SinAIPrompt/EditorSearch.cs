@@ -22,6 +22,7 @@ public sealed partial class EditorView
     internal async Task<SearchResult> SearchAsync(SearchRequest request)
     {
         if (disposed) return new();
+        if (Document.IsReadOnly && request.Action.StartsWith("replace", StringComparison.Ordinal)) return new(Message: "This document is read-only.");
         if (IsVisual)
         {
             await initialized.Task;

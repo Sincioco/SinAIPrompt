@@ -38,7 +38,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                 EditorHost.Content = GetEditor(value);
                 ExternalNotice.Visibility = Visibility.Collapsed;
                 UpdateStatus(); UpdateSearchStatus();
-                Title = "Sin - AI Prompt - " + value.Name + (value.Dirty ? " *" : "");
+                Title = "Sin - AI Prompt - " + value.Name + value.ReadOnlySuffix + (value.Dirty ? " *" : "");
                 Dispatcher.BeginInvoke(() => { if (!IsLoaded) return; Tabs.ScrollIntoView(value); DocumentList.ScrollIntoView(value); }, DispatcherPriority.Loaded);
             }
             PropertyChanged?.Invoke(this, new(nameof(ActiveDocument)));
@@ -50,6 +50,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     public TextBox? Editor => CurrentView?.Editor;
     public bool IsDocumentList => navigation.Visible;
     readonly NavigationLayout navigation;
+    readonly TabStripLayout tabStrip;
     Point dragOrigin;
     Document? dragDocument;
     bool dragging;
@@ -63,7 +64,9 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     public MainWindow(WindowSession? session = null)
     {
         InitializeComponent(); DataContext = this; SearchPanel.GetEditor = () => CurrentView;
-        navigation = new(Workspace, DocumentPane, DocumentSplitter, HorizontalNavigation, TabRow, ListColumn, SplitterColumn, Preferences, App.Current.MarkChanged);
+        navigation = new(Workspace, DocumentPane, DocumentSplitter, HorizontalNavigation, TabRow, ListColumn, SplitterColumn, TabBarMenu, Preferences, App.Current.MarkChanged);
+        tabStrip = new(Tabs, HorizontalNavigation, ScrollTabsLeft, ScrollTabsRight);
+        _ = new EditorChromeLayout(Workspace, EditorHost, DocumentPane, DocumentSplitter, SearchPanel, ContentsView);
         documentOrder = new(Documents, Preferences, Dispatcher, App.Current.MarkChanged, () => PropertyChanged?.Invoke(this, new(nameof(ActiveDocument))));
         if (session != null)
         {
@@ -83,8 +86,11 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         }
         else navigation.SavedWidth = Math.Clamp(Preferences.ListWidth, 150, 650);
         if (Documents.Count == 0) NewDocument();
-        SetDocumentList(Preferences.ExplorerMode || (session?.DocumentList ?? Preferences.DocumentList), false);
+        SetDocumentList(session?.DocumentList ?? (Preferences.ExplorerMode || Preferences.DocumentList), false);
+        navigation.InitializeTabs(session?.ShowTabs);
+        WrapToolbarMenu.Click += (_, _) => { Preferences.WrapToolbar = WrapToolbarMenu.IsChecked; ApplyPreferences(); };
         Explorer.Initialize(Preferences, DocumentList, ActiveDocument?.Path == null ? Preferences.AutoSaveDirectory : Path.GetDirectoryName(ActiveDocument.Path), OpenExplorerFile, RenameExplorerFile, entry => DeleteExplorerEntry(entry), () => NewDocument(), ShowExplorerPath, App.Current.MarkChanged);
+        ContentsView.Initialize(ContentViewMenu, Preferences, App.Current.MarkChanged);
         Explorer.OpenDocuments = () => Documents.Where(d => d.Path != null).Select(d => (d.Path!, d.Text)).ToArray();
         SourceInitialized += (_, _) => ApplyTheme();
         StateChanged += (_, _) => App.Current.MarkChanged();
@@ -109,7 +115,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     void AddDocument(Document doc, bool activate = true)
     {
         Documents.Add(doc);
-        doc.PropertyChanged += (_, _) => { if (doc == ActiveDocument) { Title = "Sin - AI Prompt - " + doc.Name + (doc.Dirty ? " *" : ""); UpdateStatus(); } };
+        doc.PropertyChanged += (_, _) => { if (doc == ActiveDocument) { Title = "Sin - AI Prompt - " + doc.Name + doc.ReadOnlySuffix + (doc.Dirty ? " *" : ""); UpdateStatus(); } };
         if (activate) { ActiveDocument = doc; UpdateTabWidths(); }
         App.Current.MarkChanged();
         if (doc.AutoSave && doc.Dirty) pendingAutoSaves[doc.Id] = DateTime.UtcNow;
@@ -141,33 +147,12 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             if (!force && DateTime.UtcNow - pending.Value < TimeSpan.FromMilliseconds(800)) continue;
             var doc = Documents.FirstOrDefault(d => d.Id == pending.Key);
             pendingAutoSaves.Remove(pending.Key);
-            if (doc == null || !doc.AutoSave || !doc.Dirty || doc.Path == null) continue;
+            if (doc == null || doc.IsReadOnly || !doc.AutoSave || !doc.Dirty || doc.Path == null) continue;
             try { TextFiles.Save(doc, doc.Path); autoSaveErrors.Remove(doc.Id); App.Current.MarkChanged(); }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Text.EncoderFallbackException)
             { success = false; autoSaveErrors[doc.Id] = ex.Message; }
         }
         UpdateStatus(); return success;
-    }
-    public void OpenPaths(IEnumerable<string> paths)
-    {
-        foreach (string rawPath in paths)
-        {
-            try
-            {
-                if (rawPath.StartsWith("--", StringComparison.Ordinal)) continue;
-                var path = Path.GetFullPath(rawPath);
-                var existing = Documents.FirstOrDefault(d => string.Equals(d.Path, path, StringComparison.OrdinalIgnoreCase));
-                if (existing != null) { ActiveDocument = existing; continue; }
-                var doc = TextFiles.Open(path);
-                var empty = Documents.Count == 1 && Documents[0].Path == null && !Documents[0].Dirty && Documents[0].Text.Length == 0 ? Documents[0] : null;
-                AddDocument(doc);
-                if (empty != null) { Documents.Remove(empty); editors.GetValueOrDefault(empty.Id)?.Dispose(); editors.Remove(empty.Id); restoredDocuments.Remove(empty.Id); }
-                AddRecent(path);
-            }
-            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
-            { MessageBox.Show(this, $"Could not open {Path.GetFileName(rawPath)}.\n\n{ex.Message}", "Sin - AI Prompt", MessageBoxButton.OK, MessageBoxImage.Error); }
-        }
-        UpdateTabWidths(); FocusEditor();
     }
     void AddRecent(string path)
     {
@@ -236,7 +221,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         FlushAutoSaves(true);
         if (Preferences.AutoSaveAllOnClose)
             foreach (var doc in Documents.ToArray())
-                if (doc.Dirty && doc.Path != null && !await SaveDocument(doc)) return false;
+                if (!doc.IsReadOnly && doc.Dirty && doc.Path != null && !await SaveDocument(doc)) return false;
         if (!Preferences.RestoreSession) foreach (var doc in Documents.ToArray()) if (!await ConfirmSave(doc)) return false;
         return true;
     }
@@ -260,7 +245,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     public WindowSession Snapshot()
     {
         var bounds = WindowState == WindowState.Normal ? new Rect(Left, Top, Width, Height) : RestoreBounds;
-        return new() { Documents = Documents.ToList(), ActiveIndex = Math.Max(0, Documents.IndexOf(ActiveDocument!)), Width = bounds.Width, Height = bounds.Height, Maximized = WindowState == WindowState.Maximized, DocumentList = IsDocumentList, ListWidth = navigation.Width };
+        return new() { Documents = Documents.ToList(), ActiveIndex = Math.Max(0, Documents.IndexOf(ActiveDocument!)), Width = bounds.Width, Height = bounds.Height, Maximized = WindowState == WindowState.Maximized, DocumentList = IsDocumentList, ShowTabs = navigation.TabsVisible, ListWidth = navigation.Width };
     }
     public void SetDocumentList(bool visible, bool persist = true)
     {
@@ -268,14 +253,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     }
     public void ResizeDocumentList(double width) => navigation.Resize(width);
     void SplitterDragCompleted(object sender, DragCompletedEventArgs e) => ResizeDocumentList(ListColumn.ActualWidth);
-    void UpdateTabWidths()
-    {
-        if (Tabs == null || Documents.Count == 0) return;
-        double available = Math.Max(160, ActualWidth - 68);
-        Tabs.MaxWidth = available;
-        double width = Math.Clamp((available - 2 * Documents.Count) / Documents.Count, 88, 240);
-        var style = new Style(typeof(ListBoxItem), (Style)FindResource("TabItemStyle")); style.Setters.Add(new Setter(WidthProperty, width)); Tabs.ItemContainerStyle = style;
-    }
+    void UpdateTabWidths() => tabStrip?.Update();
     void NavigationSelectionChanged(object sender, SelectionChangedEventArgs e)
     {
         if (sender is ListBox list && list.SelectedItem is Document doc) { ActiveDocument = doc; if (list.IsMouseOver) FocusEditor(); }
@@ -283,6 +261,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     void NavigationMouseDown(object sender, MouseButtonEventArgs e)
     {
         dragOrigin = e.GetPosition(this); dragDocument = FindDocument(e.OriginalSource as DependencyObject);
+        if (dragDocument != null && EditorHost.Content is ExplorerPreview) ActiveDocument = dragDocument;
     }
     void NavigationMouseMove(object sender, MouseEventArgs e)
     {
@@ -317,7 +296,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     }
     void NavigationKeyDown(object sender, KeyEventArgs e) { if (e.Key == Key.Enter) { FocusEditor(); e.Handled = true; } }
     void WindowDragOver(object sender, DragEventArgs e) { if (IsAnnotating) return; if (e.Data.GetDataPresent(DataFormats.FileDrop)) { e.Effects = DragDropEffects.Copy; e.Handled = true; } }
-    void WindowDrop(object sender, DragEventArgs e) { if (IsAnnotating) return; if (e.Data.GetData(DataFormats.FileDrop) is string[] paths) { OpenPaths(paths); e.Handled = true; } }
+    async void WindowDrop(object sender, DragEventArgs e) { if (IsAnnotating) return; if (e.Data.GetData(DataFormats.FileDrop) is string[] paths) { e.Handled = true; await OpenDroppedPathsAsync(paths); } }
     void FocusEditor() { if (IsLoaded) Dispatcher.BeginInvoke(() => CurrentView?.FocusEditing(), DispatcherPriority.Input); }
     public void ChangeZoom(int delta, bool absolute = false)
     {
@@ -349,6 +328,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     }
     public void ApplyPreferences()
     {
+        WrapToolbarMenu.IsChecked = Preferences.WrapToolbar;
         foreach (var view in editors.Values) view.ApplyPreferences();
         StatusBar.Visibility = Preferences.StatusBar ? Visibility.Visible : Visibility.Collapsed;
         ApplyTheme(); UpdateStatus(); App.Current.MarkChanged();
@@ -378,7 +358,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         if (!initialized || externalChecking || App.Current.TestMode || ActiveDocument is not { Path: not null } doc) return;
         externalChecking = true;
         try
-        {
+        { DocumentAccess.Refresh(doc);
             string? hash = await Task.Run(() => File.Exists(doc.Path) ? TextFiles.Hash(File.ReadAllBytes(doc.Path)) : null);
             if (doc != ActiveDocument) return;
             if (hash != doc.Fingerprint && (!noticedVersions.TryGetValue(doc.Id, out var seen) || seen != hash))
@@ -457,7 +437,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     }
     void InsertAtCaret(string text)
     {
-        if (Editor == null) return;
+        if (Editor == null || ActiveDocument?.IsReadOnly == true) return;
         if (CurrentView?.IsVisual == true) { CurrentView.Command("insertText", text); return; }
         int start = Editor.SelectionStart;
         Editor.SelectedText = text;
@@ -467,7 +447,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     internal void InsertDate(int? choice = null, DateTime? now = null, bool rememberChoice = true)
     {
         int format = DateTimeFormats.NormalizeChoice(choice ?? Preferences.DateTimeFormat);
-        if (Editor == null) return;
+        if (Editor == null || ActiveDocument?.IsReadOnly == true) return;
         InsertAtCaret(DateTimeFormats.Format(now ?? DateTime.Now, format));
         if (rememberChoice) { Preferences.DateTimeFormat = format; App.Current.MarkChanged(); }
     }
@@ -502,7 +482,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     void NewWindowClick(object sender, RoutedEventArgs e) { new MainWindow().Show(); }
     void OpenClick(object sender, RoutedEventArgs e)
     {
-        var dialog = new OpenFileDialog { Title = "Open", Multiselect = true, Filter = "HTML Documents (*.html;*.htm)|*.html;*.htm|All files (*.*)|*.*", CheckFileExists = true };
+        var dialog = new OpenFileDialog { Title = "Open", Multiselect = true, Filter = "HTML and Markdown (*.html;*.htm;*.md)|*.html;*.htm;*.md|HTML Documents|*.html;*.htm|Markdown Documents|*.md|All files (*.*)|*.*", CheckFileExists = true };
         if (dialog.ShowDialog(this) == true)
         { if (Preferences.OpenInNewWindow) { var window = new MainWindow(); window.Show(); window.OpenPaths(dialog.FileNames); } else OpenPaths(dialog.FileNames); }
     }
@@ -512,12 +492,12 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     async void CloseTabClick(object sender, RoutedEventArgs e) { if (!CloseExplorerPreview() && ActiveDocument != null) await CloseDocument(ActiveDocument); }
     void WindowCloseClick(object sender, RoutedEventArgs e) => Close();
     void ExitClick(object sender, RoutedEventArgs e) => App.Current.ExitAll();
-    void UndoClick(object sender, RoutedEventArgs e) { if (CurrentView?.IsVisual == true) CurrentView.Command("undo"); else Editor?.Undo(); FocusEditor(); }
-    void RedoClick(object sender, RoutedEventArgs e) { if (CurrentView?.IsVisual == true) CurrentView.Command("redo"); else Editor?.Redo(); FocusEditor(); }
-    void CutClick(object sender, RoutedEventArgs e) { if (CurrentView?.IsVisual == true) CurrentView.Command("cut"); else Editor?.Cut(); FocusEditor(); }
+    void UndoClick(object sender, RoutedEventArgs e) { if (ActiveDocument?.IsReadOnly == true) return; if (CurrentView?.IsVisual == true) CurrentView.Command("undo"); else Editor?.Undo(); FocusEditor(); }
+    void RedoClick(object sender, RoutedEventArgs e) { if (ActiveDocument?.IsReadOnly == true) return; if (CurrentView?.IsVisual == true) CurrentView.Command("redo"); else Editor?.Redo(); FocusEditor(); }
+    void CutClick(object sender, RoutedEventArgs e) { if (ActiveDocument?.IsReadOnly == true) return; if (CurrentView?.IsVisual == true) CurrentView.Command("cut"); else Editor?.Cut(); FocusEditor(); }
     void CopyClick(object sender, RoutedEventArgs e) { if (CurrentView?.IsVisual == true) CurrentView.Command("copy"); else Editor?.Copy(); FocusEditor(); }
-    void PasteClick(object sender, RoutedEventArgs e) { if (CurrentView?.IsVisual == true) CurrentView.Command("paste"); else Editor?.Paste(); FocusEditor(); }
-    void DeleteClick(object sender, RoutedEventArgs e) { if (CurrentView?.IsVisual == true) CurrentView.Command("delete"); else if (Editor != null) Editor.SelectedText = ""; FocusEditor(); }
+    void PasteClick(object sender, RoutedEventArgs e) { if (ActiveDocument?.IsReadOnly == true) return; if (CurrentView?.IsVisual == true) CurrentView.Command("paste"); else Editor?.Paste(); FocusEditor(); }
+    void DeleteClick(object sender, RoutedEventArgs e) { if (ActiveDocument?.IsReadOnly == true) return; if (CurrentView?.IsVisual == true) CurrentView.Command("delete"); else if (Editor != null) Editor.SelectedText = ""; FocusEditor(); }
     void SelectAllClick(object sender, RoutedEventArgs e) { if (CurrentView?.IsVisual == true) CurrentView.Command("selectAll"); else Editor?.SelectAll(); FocusEditor(); }
     void FindClick(object sender, RoutedEventArgs e) => ShowFind();
     void ReplaceClick(object sender, RoutedEventArgs e) => ShowFind(true);
@@ -547,7 +527,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     }
     void NewlineClick(object sender, RoutedEventArgs e)
     {
-        if (ActiveDocument == null) return;
+        if (ActiveDocument == null || ActiveDocument.IsReadOnly) return;
         var menu = new ContextMenu();
         foreach (var (name, value) in new[] { ("Windows (CRLF)", "\r\n"), ("Unix (LF)", "\n"), ("Macintosh (CR)", "\r") })
         { var item = new MenuItem { Header = name, IsCheckable = true, IsChecked = ActiveDocument.NewLine == value }; item.Click += (_, _) => { ActiveDocument.NewLine = value; ActiveDocument.Notify(); UpdateStatus(); App.Current.MarkChanged(); }; menu.Items.Add(item); }
@@ -555,10 +535,11 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     }
     void EncodingClick(object sender, RoutedEventArgs e)
     {
-        if (ActiveDocument == null) return;
+        if (ActiveDocument == null || ActiveDocument.IsReadOnly) return;
         var menu = new ContextMenu();
         foreach (var name in new[] { "UTF-8", "UTF-8 with BOM", "UTF-16 LE", "UTF-16 BE", "ANSI" })
         { var item = new MenuItem { Header = name, IsCheckable = true, IsChecked = ActiveDocument.EncodingName == name }; item.Click += (_, _) => { ActiveDocument.EncodingName = name; ActiveDocument.Notify(); UpdateStatus(); App.Current.MarkChanged(); }; menu.Items.Add(item); }
         menu.PlacementTarget = EncodingStatus; menu.IsOpen = true;
     }
+    void AboutClick(object sender, RoutedEventArgs e) => BrandingWindow.ShowAbout(this);
 }

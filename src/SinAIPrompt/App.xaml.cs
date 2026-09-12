@@ -42,6 +42,13 @@ public partial class App : Application
             catch (Exception ex) { MessageBox.Show("Could not contact the running editor. Please try again.\n\n" + ex.Message, "Sin - AI Prompt"); }
             Shutdown(); return;
         }
+        using var splash = TestMode ? null : new BrandingWindow();
+        if (splash != null)
+        {
+            ShutdownMode = ShutdownMode.OnExplicitShutdown;
+            splash.Show();
+            await Dispatcher.Yield(DispatcherPriority.Background); // Paint before restoring documents; no minimum display time.
+        }
         Preferences = Store.Read<Settings>("settings.json");
         Preferences.NextDocumentNumber = Math.Max(1, Preferences.NextDocumentNumber);
         if (Preferences.Recent.Count > Settings.RecentFileLimit) Preferences.Recent.RemoveRange(Settings.RecentFileLimit, Preferences.Recent.Count - Settings.RecentFileLimit);
@@ -57,7 +64,7 @@ public partial class App : Application
         var session = Preferences.RestoreSession ? Store.Read<Session>("session.json") : new Session();
         foreach (var saved in session.Windows.Where(w => w.Documents.Count > 0)) { var window = new MainWindow(saved); window.Show(); }
         if (Windows.OfType<MainWindow>().FirstOrDefault() is not { } main) { main = new MainWindow(); main.Show(); }
-        MainWindow = main;
+        MainWindow = main; ShutdownMode = ShutdownMode.OnLastWindowClose;
         _ = Task.Run(() =>
         {
             try { FileAssociations.Register(); }

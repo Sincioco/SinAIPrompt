@@ -77,6 +77,8 @@ public sealed partial class EditorView : Grid, IDisposable
         };
         Editor.ClearUndo();
         InitializeHtmlEditor();
+        DocumentAccess.Refresh(doc); Editor.IsReadOnly = doc.IsReadOnly;
+        doc.PropertyChanged += (_, args) => { if (args.PropertyName == nameof(Document.IsReadOnly)) ApplyReadOnly(); };
     }
     public void ApplyPreferences()
     {

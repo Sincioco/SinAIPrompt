@@ -21,7 +21,39 @@ export async function runRibbonTests(check) {
     toolbar.style.width='1800px';await delay();const styleWidth=styles.getBoundingClientRect().width;
     toolbar.style.width='2200px';await delay();
     check(Math.abs(styles.getBoundingClientRect().width-styleWidth)<1&&styleWidth<650,'Styles stops growing after the five named presets');
+    const fontColor=document.querySelector('#fontColor'),glyph=fontColor.querySelector('.color-glyph svg').getBoundingClientRect(),bar=fontColor.querySelector('.color-sample').getBoundingClientRect(),arrow=fontColor.querySelector('.color-arrow').getBoundingClientRect();
+    check(glyph.width===16&&glyph.height===16&&bar.width===16&&bar.height===4&&Math.abs(glyph.x-bar.x)<.5&&arrow.left>bar.right&&arrow.height===8,
+      'Font Color has a compact A centered over its color bar with a separate aligned chevron');
+    check(getComputedStyle(fontColor.querySelector('.color-sample')).backgroundColor==='rgb(255, 0, 0)','Font Color starts with the Word red indicator');
+    await request('test-capture',{name:'font-color-icon'});
+    window.editor.setToolbarWrap(false);toolbar.style.width='1500px';await delay();await delay();
+    const strip=document.querySelector('.style-strip');
+    check(strip.scrollWidth<=strip.clientWidth+1&&styles.parentElement.classList.contains('ribbon-groups')&&document.querySelector('.ribbon-overflow #link'),'Styles shows all five presets and sends Tools to overflow first');
+    toolbar.style.width='1900px';await delay();await delay();
+    check(document.querySelector('.ribbon-groups #link')&&strip.scrollWidth<=strip.clientWidth+1&&document.querySelector('#moreRibbon').hidden,'A wide single-row ribbon uses its space instead of capping Styles at 190 pixels');
+    window.editor.setToolbarWrap(true);
     toolbar.style.width=originalWidth;
+    check(!document.querySelector('.ribbon-actions,#source')&&document.querySelector('.numbering-split [data-cmd=insertOrderedList]')&&document.querySelector('.numbering-split #listNumbering svg'),'Numbering and its options share one split button; the View Source bar is removed');
+    check(document.querySelector('#link').closest('.tools-group')&&document.querySelector('#pasteCode svg'),'Link and Paste Code have large icons in the Tools section');
+    toolbar.style.width='480px';window.editor.setToolbarWrap(false);await delay();await delay();
+    const more=document.querySelector('#moreRibbon');
+    check(!more.hidden&&document.querySelector('.ribbon-overflow #link')&&document.querySelector('.ribbon-main').getBoundingClientRect().height<115,'Disabling wrapping keeps one compact ribbon row and moves remaining groups into overflow');
+    async function tapOverflow(){
+      const rect=more.getBoundingClientRect();
+      for(const type of ['mousePressed','mouseReleased'])await request('test-mouse',{parameters:{type,x:rect.x+rect.width/2,y:rect.y+rect.height/2,button:'left',clickCount:1}});
+      await delay();
+    }
+    await tapOverflow();check(document.querySelector('.ribbon-overflow:popover-open'),'A real mouse click opens ribbon overflow');
+    await tapOverflow();check(!document.querySelector('.ribbon-overflow:popover-open'),'A second real mouse click dismisses overflow without immediately reopening it');
+    await load();select('#sample');click('#moreRibbon');click('#fontColor');await delay();
+    check(document.querySelector('.ribbon-overflow:popover-open .color-palette:popover-open'),'Color palette stays anchored inside the ribbon overflow');
+    click('.color-palette [data-color="#e97132"]');
+    check(doc().querySelector('#sample').innerHTML.includes('233, 113, 50'),'Overflow font controls retain the editor selection');
+    click('#moreStyles');await delay();check(document.querySelector('.ribbon-overflow:popover-open .styles-popup:popover-open'),'Styles popup works inside ribbon overflow');
+    click('.styles-popup [data-style=heading]');
+    check(doc().querySelector('#sample').dataset.sinStyle==='heading','An overflow style applies to the current paragraph');
+    window.editor.setToolbarWrap(true);toolbar.style.width=originalWidth;await delay();await delay();
+    check(more.hidden&&document.querySelector('.ribbon-groups #link')&&!document.querySelector('.ribbon-overflow:popover-open'),'Re-enabling wrapping restores the original controls and dismisses overflow');
     await load();
     const beforeLink=window.editor.html();
     for(const address of ['', 'invalid address']){
@@ -59,7 +91,7 @@ export async function runRibbonTests(check) {
     check(document.querySelector('#backColor svg path')&&!document.querySelector('#backColor').textContent.includes('▰'),'Highlight uses a recognizable marker icon instead of the block glyph');
     const modern=window.editor.html();await window.editor.load(modern);
     check(doc().documentElement.dataset.sinStyleMode==='modern'&&!document.querySelector('#documentStyle')&&doc().body.textContent===content&&doc().defaultView.getComputedStyle(doc().querySelector('p')).fontWeight==='600','Modern styling and toolbar choice survive HTML save and reload');
-    check([...document.querySelectorAll('.file-group [data-native-command]')].map(button=>button.textContent).join(',')==='Save,New,Save As,Close'&&document.querySelector('#insertImage').getAttribute('aria-label')==='Image Editor','File ribbon contains New, Save, Save As, Close and a picture-edit icon');
+    check([...document.querySelectorAll('.file-group [data-native-command]')].map(button=>button.dataset.nativeCommand).join(',')==='save,new,saveAs,close,saveAll,lock,unlock,rename'&&document.querySelector('.file-group [data-cmd=undo] svg')&&document.querySelector('.file-group [data-cmd=redo] svg'),'File ribbon contains file actions, Undo/Redo, Save All and Lock/Unlock/Rename icon stacks');
     check(document.querySelector('.tools-group').contains(document.querySelector('#screenCapture')),'Screen Capture follows Image Editor on the main ribbon');
     await load();
     check(!document.querySelector('input[type=color]')&&document.querySelectorAll('.style-strip [data-style]').length===5,'Ribbon exposes five Modern paragraph styles and replaces native color inputs');
@@ -102,6 +134,9 @@ export async function runRibbonTests(check) {
     click('#fontColor');check(document.querySelectorAll('.color-palette .swatch').length===70,'Office palette offers ten theme columns with shades and ten standard colors');
     click('.color-palette [data-color="#e97132"]');
     check(doc().querySelector('#sample').innerHTML.includes('233, 113, 50')&&!document.querySelector('.color-palette'),'Choosing a palette color formats the saved editor selection and closes the palette');
+    select('#after',2);await delay();
+    check(getComputedStyle(doc().querySelector('#after')).color!=='rgb(233, 113, 50)'&&getComputedStyle(fontColor.querySelector('.color-sample')).backgroundColor==='rgb(233, 113, 50)',
+      'Font Color retains the chosen indicator when the caret moves to differently colored text');
     select('#sample');click('#backColor');click('.color-palette [data-color="#ffff00"]');
     check(doc().querySelector('#sample').innerHTML.includes('255, 255, 0'),'Highlight palette applies the selected color');
     const marker=[...doc().querySelectorAll('#sample span')].find(span=>span.style.backgroundColor==='rgb(255, 255, 0)');

@@ -8,9 +8,9 @@
    <Button Grid.Column="3" x:Name="ModeButton" Content="&#xE8FD;" FontFamily="Segoe Fluent Icons" Style="{StaticResource FlatButton}" Padding="4" Click="ModeClick" ToolTip="Switch To Document List" AutomationProperties.Name="Switch Navigation Mode"/>
   </Grid>
   <StackPanel x:Name="ExplorerTools" DockPanel.Dock="Top" Margin="8,0,6,6">
-   <DockPanel><Button DockPanel.Dock="Right" Content="&#xE72C;" FontFamily="Segoe Fluent Icons" Style="{StaticResource FlatButton}" Click="RefreshClick" ToolTip="Refresh (F5)" AutomationProperties.Name="Refresh Prompt Explorer"/><CheckBox x:Name="Folders" Content="Show folders" VerticalAlignment="Center" Click="FoldersClick"/></DockPanel>
+   <DockPanel><Button DockPanel.Dock="Right" Style="{StaticResource FlatButton}" Click="RefreshClick" ToolTip="Refresh (F5)" AutomationProperties.Name="Refresh Prompt Explorer"><Viewbox Width="16" Height="16"><Path Width="24" Height="24" Data="M20,10 A8,8 0 1 0 20,16 M20,4 L20,10 L14,10" Stroke="{DynamicResource TextBrush}" StrokeThickness="1.5" StrokeStartLineCap="Round" StrokeEndLineCap="Round"/></Viewbox></Button><CheckBox x:Name="Folders" VerticalAlignment="Center" VerticalContentAlignment="Center" Click="FoldersClick"><TextBlock Text="Show Folders" VerticalAlignment="Center"/></CheckBox></DockPanel>
    <TextBlock x:Name="RootLabel" Text="Choose a working folder" ToolTip="{Binding RelativeSource={RelativeSource Self},Path=Text}" Foreground="{DynamicResource MutedBrush}" TextTrimming="CharacterEllipsis" Margin="2,4,2,0"/>
-   <ProgressBar x:Name="Progress" Height="3" IsIndeterminate="True" Visibility="Collapsed" Margin="0,5,0,0"/>
+   <ProgressBar x:Name="Progress" Height="3" IsIndeterminate="True" Visibility="Hidden" Margin="0,5,0,0"/>
    <TextBlock x:Name="Notice" TextWrapping="Wrap" Foreground="{DynamicResource MutedBrush}"/>
   </StackPanel>
   <Grid>

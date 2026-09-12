@@ -8,6 +8,7 @@ import {runDocumentToolsTests} from './document-tools-self-test.js';
 import {runNumberingTests} from './numbering-self-test.js';
 import {runCodeBlockTests} from './code-block-self-test.js';
 import {runMediaTests} from './media-self-test.js';
+import {runContentTests} from './content-self-test.js';
 
 export async function run(){
   const results=[];const check=(value,name)=>{if(!value)throw Error(name);results.push(name);};
@@ -23,6 +24,7 @@ export async function run(){
   await runNumberingTests(check);
   await runCodeBlockTests(check);
   await runMediaTests(check);
+  await runContentTests(check);
   check(doc().body.isContentEditable,'Visual HTML is editable');
   const renamed=parseHtml(renameImageFolder('<p>Old folder/photo.png</p><img src="./Old%20folder/photo.png?size=1#preview"><img src="https://example.invalid/Old%20folder/photo.png"><img src="Other/photo.png">','Old folder','New # folder'));
   check(renamed.images[0].getAttribute('src')==='New%20%23%20folder/photo.png?size=1#preview'&&renamed.images[1].getAttribute('src').startsWith('https://example.invalid/')&&renamed.images[2].getAttribute('src')==='Other/photo.png'&&renamed.querySelector('p').textContent==='Old folder/photo.png','Folder rename updates encoded local image references without replacing other text or URLs');
@@ -106,6 +108,10 @@ export async function run(){
     click('[data-action=undo]');
   }
   const geometry=()=>{const image=document.querySelector('#canvas image');return Object.fromEntries(['x','y','width','height'].map(key=>[key,Number(image.getAttribute(key))]));};
+  click('[data-tool=pan]');const beforePan=geometry(),panStart=canvasPoint(180,100);
+  await drag(panStart,{x:panStart.x+55,y:panStart.y+35});const panEnd=canvasPoint(180,100);
+  check(Math.abs(panEnd.x-panStart.x-55)<1&&Math.abs(panEnd.y-panStart.y-35)<1&&JSON.stringify(geometry())===JSON.stringify(beforePan),'Pan moves the canvas view without moving or resizing its objects');
+  await drag(panEnd,panStart);click('[data-tool=select]');
   async function dragHandle(key,dx,dy){const r=document.querySelector('[data-handle='+key+']').getBoundingClientRect();const start={x:r.x+r.width/2,y:r.y+r.height/2};await drag(start,{x:start.x+dx,y:start.y+dy});}
   for(const key of ['nw','ne','se','sw']){
     const before=geometry();await dragHandle(key,key.includes('w')?-40:40,key.includes('n')?-10:10);const after=geometry();
@@ -165,7 +171,9 @@ export async function run(){
     const pasted=[...document.querySelectorAll('.layer.selected')].map(el=>el.dataset.layer);
     check(document.querySelectorAll('[data-layer]').length===10&&pasted.length===5&&pasted.every(key=>!selectedIds.includes(key)),'Paste after '+format.toUpperCase()+' copy inserts five independently editable objects with new IDs');
     click('[data-action=undo]');check(document.querySelectorAll('[data-layer]').length===5,'Pasting '+format.toUpperCase()+' objects is one undo step');
-    await drag(canvasPoint(-40,-40),canvasPoint(500,250));
+    // Marquee geometry is covered above. Restore this clipboard fixture through
+    // Select All so its second format does not depend on post-Undo canvas fitting.
+    await shortcut('a');check(document.querySelectorAll('.layer.selected').length===5,'Select All restores the five-object clipboard fixture after Undo');
   }
   const copiedBeforeCancel=await request('annotation-paste');
   click('[data-action=copy]');await waitFor('dialog.form-dialog button[value=cancel]');click('dialog.form-dialog button[value=cancel]');
@@ -187,7 +195,7 @@ export async function run(){
   const templateData=(await request('templates-load'))[0];const imported=await parseTemplate(templateJson(templateData));check(imported.objects[0].type==='embedded-image','PMT image template JSON round-trips');
   click('[data-action=apply]');await dialogRun;
   const restoredLayout=await request('test-annotation-layout');
-  check(!restoredLayout.expanded&&restoredLayout.backgroundEnabled&&restoredLayout.width<fullLayout.width&&restoredLayout.height<fullLayout.height,'Apply restores the editor beside the document list and below the menu');
+  check(!restoredLayout.expanded&&restoredLayout.backgroundEnabled&&Math.abs(restoredLayout.width-fullLayout.width)<3&&restoredLayout.height<fullLayout.height&&document.querySelector('#document').getBoundingClientRect().left>100,'Apply restores the full-width ribbon with its document inset beside navigation');
   const annotated=doc().querySelector('img[data-sin-annotation]');check(annotated,'Annotation apply retains layer metadata');
   const state=JSON.parse(annotated.dataset.sinAnnotation);check(state.objects[0].imageClip.x===20&&state.objects[0].cropCornerRadii.topLeft===16,'Numeric crop and per-corner radius retained non-destructively');
   state.objects.push({id:id(),type:'arrow',x1:60,y1:160,x2:410,y2:80,stroke:'#d53139',strokeWidth:5,arrowSize:22,opacity:1,visible:true});

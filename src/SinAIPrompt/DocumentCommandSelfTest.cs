@@ -12,11 +12,14 @@ internal static class DocumentCommandSelfTest
     public static async Task NewPromptReady(MainWindow window, Action<bool, string> check)
     {
         var previous = window.ActiveDocument!;
+        double previousRibbon = window.DocumentPane.Margin.Top;
         var watch = System.Diagnostics.Stopwatch.StartNew();
         var draft = window.NewDocument();
         check(System.Text.RegularExpressions.Regex.IsMatch(draft.Name, @"^\d{4}-\d{2}-\d{2} \d{4} - Prompt \d+$") &&
             draft.Name.EndsWith($" - Prompt {draft.UntitledNumber}"), "New prompt name includes its creation date, minute and sequence number");
         var view = window.CurrentView!;
+        check(previousRibbon > 0 && window.DocumentPane.Margin.Top == previousRibbon && view.RibbonHeight == previousRibbon,
+            "First visit reserves the current ribbon height before the new WebView has initialized");
         try
         {
             bool loaded = false;
@@ -33,8 +36,41 @@ internal static class DocumentCommandSelfTest
                 "A new prompt accepts typing immediately without clicking the document");
             check(await view.Browser.ExecuteScriptAsync("document.querySelectorAll('.style-strip [data-style]').length === 5 && [...document.fonts].every(face => face.display === 'swap')") == "true",
                 "All five Styles labels render without waiting for local Office fonts");
+            int unloaded = 0; view.Unloaded += (_, _) => unloaded++;
+            nint browserHandle = view.Browser.Handle;
+            await view.Browser.ExecuteScriptAsync("window.ribbonMoves=0;window.ribbonObserver=new MutationObserver(records=>window.ribbonMoves+=records.length);window.ribbonObserver.observe(document.querySelector('.ribbon-groups'),{childList:true})");
+            for (int i = 0; i < 8; i++)
+            {
+                window.ActiveDocument = previous; await Task.Delay(16);
+                window.ActiveDocument = draft; await Task.Delay(16);
+            }
+            check(unloaded == 0 && view.Browser.Handle == browserHandle && view.Parent == window.EditorHost && window.EditorHost.Children.Count == 2,
+                "Rapid document switching retains loaded browser windows without visual-tree teardown");
+            check(await view.Browser.ExecuteScriptAsync("window.ribbonObserver.disconnect();window.ribbonMoves===0") == "true",
+                "Rapid document switching preserves ribbon groups without rebuilding their layout");
         }
         finally { window.ActiveDocument = previous; window.RemoveDocument(draft); }
+        bool show = App.Current.Preferences.ShowToolbar, wrap = App.Current.Preferences.WrapToolbar;
+        App.Current.Preferences.ShowToolbar = false; App.Current.Preferences.WrapToolbar = false;
+        var hiddenDraft = window.NewDocument(); var hiddenView = window.CurrentView!;
+        bool stayedHidden = hiddenView.RibbonHeight == 0 && window.DocumentPane.Margin.Top == 0;
+        hiddenView.ChromeChanged += (_, _) => stayedHidden &= hiddenView.RibbonHeight == 0;
+        try
+        {
+            bool loaded = false;
+            for (int i = 0; i < 200 && !loaded; i++)
+            {
+                await Task.Delay(20);
+                loaded = hiddenView.Browser.CoreWebView2 != null && await hiddenView.Browser.ExecuteScriptAsync("!!window.editor") == "true";
+            }
+            check(loaded && stayedHidden && await hiddenView.Browser.ExecuteScriptAsync("document.querySelector('#toolbar').hidden && document.querySelector('#toolbar').classList.contains('ribbon-nowrap')") == "true",
+                "A first-visit editor honors hidden and unwrapped ribbon preferences without briefly expanding");
+        }
+        finally
+        {
+            App.Current.Preferences.ShowToolbar = show; App.Current.Preferences.WrapToolbar = wrap;
+            window.ActiveDocument = previous; window.RemoveDocument(hiddenDraft);
+        }
     }
 
     public static async Task RenameDraft(MainWindow window, Action<bool, string> check)
@@ -94,7 +130,7 @@ internal static class DocumentCommandSelfTest
         check(!bold.Handled, "Browser formatting shortcuts still pass through the native window");
         var menu = window.CreateDocumentMenu(doc).Items.OfType<MenuItem>().ToArray();
         int pathItem = Array.FindIndex(menu, item => item.Header.ToString() == "Copy Full _Path");
-        check(pathItem >= 0 && menu[pathItem + 1].Header.ToString() == "Copy For _AI Use" && menu[pathItem + 1].IsEnabled,
+        check(pathItem >= 0 && menu[pathItem + 1].Header.ToString() == "Copy for _AI Use" && menu[pathItem + 1].IsEnabled,
             "Copy For AI Use appears directly below Copy Full Path for a saved document");
         check(MainWindow.FullPathText(@"D:\My Prompts\Test.html") == "\"D:\\My Prompts\\Test.html\"" &&
             MainWindow.FullPathText(@"D:\Prompts\Test.html") == @"D:\Prompts\Test.html",
@@ -104,6 +140,15 @@ internal static class DocumentCommandSelfTest
         await window.CurrentView!.Browser.ExecuteScriptAsync("window.editor.command('insertText','Toolbar save regression'); document.querySelector('[data-native-command=save]').click()");
         for (int i = 0; i < 100 && !File.ReadAllText(doc.Path!).Contains("Toolbar save regression"); i++) await Task.Delay(20);
         check(File.ReadAllText(doc.Path!).Contains("Toolbar save regression"), "Toolbar Save includes an edit made immediately before the click");
+        await window.CurrentView.Browser.ExecuteScriptAsync("window.editor.command('insertText','AI handoff current edit')");
+        string? copied = null;
+        try
+        {
+            await window.CopyForAiUse(doc, text => copied = text);
+            check(copied == MainWindow.AiInstructionText(doc.Path!) && File.ReadAllText(doc.Path!).Contains("AI handoff current edit") && DocumentAccess.IsReadOnly(doc.Path),
+                "Copy for AI Use saves pending visual edits, locks the file, then copies its instructions");
+        }
+        finally { DocumentAccess.Set(doc, false); }
     }
 
     public static async Task Appearance(MainWindow window, Action<bool, string> check)

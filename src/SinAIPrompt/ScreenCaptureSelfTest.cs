@@ -2,6 +2,7 @@ using System.IO;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Interop;
+using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 
@@ -99,8 +100,12 @@ internal static class ScreenCaptureSelfTest
                 if (overlay?.IsLoaded != true) return;
                 regionShown = overlay.IsVisible && overlay.Opacity == 1;
                 closeRegion.Stop();
+                using var speed = new CapturePointerSpeed(); int originalSpeed = speed.Current;
+                overlay.RaiseEvent(new MouseWheelEventArgs(Mouse.PrimaryDevice, Environment.TickCount, originalSpeed == 20 ? -120 : 120) { RoutedEvent = Mouse.MouseWheelEvent });
                 var instruction = (StackPanel)((Grid)overlay.Content).Children.OfType<Border>().Single().Child;
                 instruction.Children.OfType<Button>().Single().RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                using var restored = new CapturePointerSpeed();
+                check(restored.Current == originalSpeed, "Canceling before the first capture point restores temporary pointer speed");
             };
             try
             {
@@ -137,11 +142,41 @@ internal static class ScreenCaptureSelfTest
                 picker = await Picker(Task.FromResult<string?>(null)); picker.Close();
                 await WaitFor("!document.querySelector('dialog.annotation [data-action=screenCapture]').disabled");
                 check(await view.Browser.ExecuteScriptAsync("document.querySelectorAll('#canvas image').length===1") == "true", "Canceling a capture from Image Editor preserves its existing layers");
+                await RegionInAnnotation(main, WaitFor, check);
                 await view.Browser.ExecuteScriptAsync("document.querySelector('dialog.annotation [data-action=cancel]').click()");
                 for (int i = 0; i < 100 && main.IsAnnotating; i++) await Task.Delay(20);
             }
         }
         finally { fixture.Close(); }
+    }
+
+    static async Task RegionInAnnotation(MainWindow owner, Func<string, Task> wait, Action<bool, string> check)
+    {
+        var view = owner.CurrentView!;
+        await view.Browser.ExecuteScriptAsync("document.querySelector('dialog.annotation [data-action=regionCapture]').click()");
+        for (int i = 0; i < 100 && !Application.Current.Windows.Cast<Window>().Any(window => window.Title == "Region Capture"); i++) await Task.Delay(20);
+        var options = Application.Current.Windows.Cast<Window>().Single(window => window.Title == "Region Capture");
+        Controls(options).OfType<ComboBox>().Single().SelectedItem = 0;
+        var select = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromMilliseconds(30) };
+        select.Tick += (_, _) =>
+        {
+            var region = Application.Current.Windows.OfType<CaptureRegionWindow>().SingleOrDefault();
+            if (region?.IsLoaded != true) return;
+            select.Stop(); region.CompleteSelection(new(25, 25), new(125, 85));
+        };
+        try
+        {
+            select.Start(); options.DialogResult = true;
+            await wait("document.querySelectorAll('#canvas image').length===2 && !document.querySelector('dialog.annotation [data-action=regionCapture]').disabled");
+            check(owner.IsAnnotating && !owner.Shell.IsEnabled && owner.IsEnabled && await view.Browser.ExecuteScriptAsync("[...document.querySelectorAll('#canvas image')].some(image=>image.getAttribute('width')==='100'&&image.getAttribute('height')==='60')") == "true",
+                "Region Capture inside Image Editor adds a lossless cropped layer while retaining existing artwork and annotation mode");
+        }
+        finally { select.Stop(); }
+        await view.Browser.ExecuteScriptAsync("document.querySelector('dialog.annotation [data-action=regionCapture]').click()");
+        for (int i = 0; i < 100 && !Application.Current.Windows.Cast<Window>().Any(window => window.Title == "Region Capture"); i++) await Task.Delay(20);
+        Application.Current.Windows.Cast<Window>().Single(window => window.Title == "Region Capture").Close();
+        await wait("!document.querySelector('dialog.annotation [data-action=regionCapture]').disabled");
+        check(await view.Browser.ExecuteScriptAsync("document.querySelectorAll('#canvas image').length===2") == "true", "Canceling annotation Region Capture preserves both layers");
     }
 
     internal static async Task RegionShortcut(MainWindow owner, Action<bool, string> check)
@@ -162,15 +197,40 @@ internal static class ScreenCaptureSelfTest
                     canvas.Children.OfType<Border>().Single().Name == "CaptureMagnifier", "Region shortcut shows its magnifier without darkening the frozen screen");
                 var image = ((Grid)overlay.Content).Children.OfType<Image>().Single();
                 check(((BitmapSource)image.Source).PixelWidth == ScreenCapture.DesktopBounds.Width, "Region shortcut covers the entire virtual desktop");
-                inspected = true; overlay.CompleteSelection(new(25, 25), new(125, 85));
+                var magnifier = canvas.Children.OfType<Border>().Single();
+                check(magnifier.Width >= 300 && Controls(magnifier).OfType<Border>().Count(b => b.Opacity == .8) == 2,
+                    "Region capture provides a large pixel-grid magnifier with 80-percent-opacity crosshairs");
+                SavePreview(magnifier, "region-magnifier.png");
+                using var speed = new CapturePointerSpeed(); int normal = speed.Current;
+                int direction = normal == 20 ? -120 : 120;
+                overlay.RaiseEvent(new MouseWheelEventArgs(Mouse.PrimaryDevice, Environment.TickCount, direction) { RoutedEvent = Mouse.MouseWheelEvent });
+                using var adjusted = new CapturePointerSpeed();
+                check(adjusted.Current == normal + Math.Sign(direction), "Mousewheel temporarily adjusts Windows pointer speed before the first capture point");
+                overlay.BeginSelection(new(25, 25));
+                using var restored = new CapturePointerSpeed();
+                check(restored.Current == normal, "The first capture click restores the original Windows pointer speed");
+                overlay.EndSelection(new(27, 27));
+                check(overlay.IsVisible && overlay.IsSticky, "Releasing near the first point leaves a sticky selection open");
+                inspected = true; overlay.BeginSelection(new(125, 85));
+                check(!overlay.IsVisible, "A second click completes the sticky region selection");
             }
             catch (Exception ex) { failure = ex; overlay.Close(); }
         };
         try
         {
             await view.Browser.ExecuteScriptAsync("window.editor.setImageStorage('inline');window.regionShortcut=document.querySelector('#regionCapture').onclick().then(()=>true)");
+            for (int i = 0; i < 100 && !Application.Current.Windows.Cast<Window>().Any(w => w.Title == "Region Capture"); i++) await Task.Delay(20);
+            var options = Application.Current.Windows.Cast<Window>().Single(w => w.Title == "Region Capture");
+            var optionsPanel = (StackPanel)options.Content;
+            check(optionsPanel.Children.OfType<RadioButton>().First().IsChecked == true && (int)optionsPanel.Children.OfType<ComboBox>().Single().SelectedItem == 3,
+                "Region Capture native dialog defaults to the document folder and a three-second delay");
+            options.DialogResult = true;
             for (int i = 0; i < 100 && !Application.Current.Windows.Cast<Window>().Any(w => w.Title == "Capture Countdown"); i++) await Task.Delay(20);
-            check(Application.Current.Windows.Cast<Window>().Any(w => w.Title == "Capture Countdown"), "Region toolbar button starts the countdown directly");
+            check(Application.Current.Windows.Cast<Window>().Any(w => w.Title == "Capture Countdown"), "Region Capture options start the existing cancellable countdown");
+            var countdown = Application.Current.Windows.Cast<Window>().Single(w => w.Title == "Capture Countdown");
+            check(countdown.AllowsTransparency && ((SolidColorBrush)countdown.Background).Color.A == 204 && Controls(countdown).OfType<TextBlock>().Any(text => text.FontSize >= 150),
+                "Region countdown shows a large number over an 80-percent-opacity background");
+            SavePreview((FrameworkElement)countdown.Content, "region-countdown.png");
             select.Start();
             for (int i = 0; i < 500; i++)
             {
@@ -188,6 +248,14 @@ internal static class ScreenCaptureSelfTest
             await view.Browser.ExecuteScriptAsync("window.editor.setImageStorage('');window.editor.load(" + System.Text.Json.JsonSerializer.Serialize(original) + ")");
             view.AcceptHtml(original);
         }
+    }
+
+    static void SavePreview(FrameworkElement element, string name)
+    {
+        element.UpdateLayout();
+        var bitmap = new RenderTargetBitmap((int)Math.Ceiling(element.ActualWidth), (int)Math.Ceiling(element.ActualHeight), 96, 96, PixelFormats.Pbgra32);
+        bitmap.Render(element);
+        File.WriteAllBytes(Path.Combine(App.Current.Store.DirectoryPath, name), Convert.FromBase64String(ScreenCapture.Png(bitmap).Split(',')[1]));
     }
 
     static async Task<ScreenCaptureDialog> Picker(Task<string?> pending)

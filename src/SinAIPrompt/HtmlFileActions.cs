@@ -26,7 +26,7 @@ public partial class MainWindow
     async Task SaveAllDocuments()
     {
         foreach (var doc in Documents.ToArray())
-            if ((doc.Dirty || doc.Path == null) && !await SaveDocument(doc)) break;
+            if (!doc.IsReadOnly && (doc.Dirty || doc.Path == null) && !await SaveDocument(doc)) break;
     }
     async void ExportHtmlClick(object sender, RoutedEventArgs e)
     {
@@ -41,6 +41,8 @@ public partial class MainWindow
     {
         switch (command)
         {
+            case "lock": case "unlock":
+                if (ActiveDocument != null) await DocumentLock.ChangeAsync(this, ActiveDocument, command == "lock", () => SaveDocument(ActiveDocument)); break;
             case "save": if (ActiveDocument != null) await SaveDocument(ActiveDocument); break;
             case "saveAs": if (ActiveDocument != null) await SaveDocument(ActiveDocument, true); break;
             case "saveAll": await SaveAllDocuments(); break;

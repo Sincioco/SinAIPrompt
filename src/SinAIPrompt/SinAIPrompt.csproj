@@ -12,6 +12,10 @@
   <ItemGroup><ProjectReference Include="../SinAIPrompt.Core/SinAIPrompt.Core.csproj" /></ItemGroup>
   <ItemGroup><Resource Include="Assets\SinAIPrompt.ico" /></ItemGroup>
   <ItemGroup>
+    <Resource Include="Assets\Splash Screens\Sin-AI-Prompt-Splash-2400x1440.png" />
+    <AssemblyMetadata Include="BuildDate" Value="$([System.DateTime]::Now.ToString('yyyy-MM-dd HH:mm:ss zzz'))" />
+  </ItemGroup>
+  <ItemGroup>
     <Reference Include="Microsoft.Web.WebView2.Core"><HintPath>$(VisualStudioWebViewPath)\Microsoft.Web.WebView2.Core.dll</HintPath><Private>true</Private></Reference>
     <Reference Include="Microsoft.Web.WebView2.Wpf"><HintPath>$(VisualStudioWebViewPath)\Microsoft.Web.WebView2.Wpf.dll</HintPath><Private>true</Private></Reference>
     <Content Include="$(VisualStudioWebViewPath)\WebView2Loader.dll" Link="WebView2Loader.dll" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />

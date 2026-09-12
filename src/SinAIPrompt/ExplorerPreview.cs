@@ -6,6 +6,7 @@ using System.Windows.Media.Imaging;
 using Microsoft.Web.WebView2.Core;
 using Microsoft.Web.WebView2.Wpf;
 using SinAIPrompt.Core;
+using System.Text.Json;
 
 namespace SinAIPrompt;
 
@@ -18,6 +19,7 @@ public sealed class ExplorerPreview : DockPanel, IDisposable
     readonly string profileFolder;
     WebView2? browser;
     bool disposed;
+    internal Func<IEnumerable<string>, Task>? OpenDroppedFiles { get; set; }
     public ExplorerPreview(string path, string profileFolder, Action returnToDocument)
     {
         FilePath = path; PathStatus.Text = path; this.profileFolder = profileFolder;
@@ -28,7 +30,7 @@ public sealed class ExplorerPreview : DockPanel, IDisposable
         content.Content = new ProgressBar { IsIndeterminate = true, Height = 4, VerticalAlignment = VerticalAlignment.Top };
         Children.Add(content);
     }
-    internal async Task LoadAsync(CancellationToken token)
+    internal async Task LoadAsync(CancellationToken token, Func<string, Task<string>>? convertMarkdown = null)
     {
         string path = FilePath;
         if (PromptDirectory.IsImage(path))
@@ -42,7 +44,7 @@ public sealed class ExplorerPreview : DockPanel, IDisposable
             if (disposed || token.IsCancellationRequested) return;
             content.Content = new Image { Source = bitmap, Stretch = Stretch.Uniform, Margin = new Thickness(12) };
         }
-        else if (!Path.GetExtension(path).Equals(".pdf", StringComparison.OrdinalIgnoreCase))
+        else if (convertMarkdown == null && !Path.GetExtension(path).Equals(".pdf", StringComparison.OrdinalIgnoreCase))
         {
             string text = await File.ReadAllTextAsync(path, token);
             if (disposed || token.IsCancellationRequested) return;
@@ -52,6 +54,8 @@ public sealed class ExplorerPreview : DockPanel, IDisposable
         }
         else
         {
+            string? html = convertMarkdown == null ? null : await convertMarkdown((await Task.Run(() => TextFiles.Open(path), token)).Text);
+            if (disposed || token.IsCancellationRequested) return;
             browser = new WebView2(); content.Content = browser;
             string cache = Path.Combine(Path.GetTempPath(), "Sin-AI-Prompt-PDF", Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(profileFolder)))[..16]);
             var environment = await CoreWebView2Environment.CreateAsync(null, cache, new CoreWebView2EnvironmentOptions("--disable-background-networking --disable-component-update --disable-sync --no-first-run"));
@@ -59,8 +63,27 @@ public sealed class ExplorerPreview : DockPanel, IDisposable
             await browser.EnsureCoreWebView2Async(environment);
             if (disposed || token.IsCancellationRequested) return;
             var core = browser.CoreWebView2;
-            core.Settings.IsScriptEnabled = false; core.Settings.AreDevToolsEnabled = false; core.Settings.IsStatusBarEnabled = false;
-            string address = new Uri(path).AbsoluteUri;
+            core.Settings.IsScriptEnabled = html != null; core.Settings.AreDevToolsEnabled = false; core.Settings.IsStatusBarEnabled = false;
+            string address = html == null ? new Uri(path).AbsoluteUri : "https://sin-editor.local/preview.html";
+            if (html != null)
+            {
+                core.SetVirtualHostNameToFolderMapping("sin-editor.local", Path.Combine(AppContext.BaseDirectory, "Web"), CoreWebView2HostResourceAccessKind.DenyCors);
+                core.SetVirtualHostNameToFolderMapping("sin-preview.local", Path.GetDirectoryName(path)!, CoreWebView2HostResourceAccessKind.Allow);
+                await core.CallDevToolsProtocolMethodAsync("Network.setCacheDisabled", "{\"cacheDisabled\":true}");
+                core.WebMessageReceived += async (_, e) =>
+                {
+                    if (disposed || e.Source != address) return;
+                    using var message = JsonDocument.Parse(e.WebMessageAsJson);
+                    if (message.RootElement.GetProperty("type").GetString() == "preview-ready")
+                        core.PostWebMessageAsJson(JsonSerializer.Serialize(new { html = html.Replace("<head>", "<head><base href=\"https://sin-preview.local/\">") }));
+                    else if (OpenDroppedFiles != null && message.RootElement.GetProperty("type").GetString() == "open-files")
+                    {
+                        var files = e.AdditionalObjects.OfType<CoreWebView2File>().Select(file => file.Path).ToArray();
+                        await System.Windows.Threading.Dispatcher.Yield(System.Windows.Threading.DispatcherPriority.Normal);
+                        await OpenDroppedFiles(files);
+                    }
+                };
+            }
             core.NavigationStarting += (_, e) => e.Cancel = !e.Uri.Split('#')[0].Equals(address, StringComparison.OrdinalIgnoreCase);
             core.NewWindowRequested += (_, e) => e.Handled = true;
             core.DownloadStarting += (_, e) => e.Cancel = true;
@@ -68,7 +91,8 @@ public sealed class ExplorerPreview : DockPanel, IDisposable
             core.AddWebResourceRequestedFilter("*", CoreWebView2WebResourceContext.All, CoreWebView2WebResourceRequestSourceKinds.All);
             core.WebResourceRequested += (_, e) =>
             {
-                if (e.Request.Uri.StartsWith("http", StringComparison.OrdinalIgnoreCase))
+                if (e.Request.Uri.StartsWith("http", StringComparison.OrdinalIgnoreCase) &&
+                    (html == null || new Uri(e.Request.Uri).Host is not ("sin-editor.local" or "sin-preview.local")))
                     e.Response = environment.CreateWebResourceResponse(Stream.Null, 403, "Offline preview", "");
             };
             core.Navigate(address);

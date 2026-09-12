@@ -7,6 +7,15 @@ namespace SinAIPrompt;
 
 public sealed partial class EditorView
 {
+    internal async Task<string> ConvertMarkdownAsync(string text)
+    {
+        await initialized.Task;
+        string response = await Browser.CoreWebView2.CallDevToolsProtocolMethodAsync("Runtime.evaluate", Json(new {
+            expression = $"import('./markdown.js').then(module=>module.markdownDocument({Json(text)}))", awaitPromise = true, returnByValue = true }));
+        using var result = JsonDocument.Parse(response);
+        if (!result.RootElement.GetProperty("result").TryGetProperty("value", out var value)) throw new IOException("Could not convert the Markdown document.");
+        return value.GetString() ?? throw new IOException("Markdown conversion returned no HTML.");
+    }
     internal async Task SaveMarkdownAsync(string path, bool absoluteImages = false)
     {
         if (string.Equals(Path.GetFullPath(path), Document.Path, StringComparison.OrdinalIgnoreCase))

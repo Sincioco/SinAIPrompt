@@ -16,6 +16,8 @@ internal sealed class CaptureRegionWindow : Window
     readonly Path shade = new() { Fill = new SolidColorBrush(Color.FromArgb(125, 0, 0, 0)), IsHitTestVisible = false };
     readonly Rectangle outline = new() { Stroke = Brushes.White, StrokeThickness = 2, IsHitTestVisible = false };
     Point? start;
+    bool sticky;
+    readonly CapturePointerSpeed pointerSpeed = new();
     BitmapSource? result;
 
     CaptureRegionWindow(BitmapSource image, Int32Rect bounds, bool magnify)
@@ -34,28 +36,51 @@ internal sealed class CaptureRegionWindow : Window
         var cancel = new Button { Content = "Cancel", Padding = new Thickness(12, 4, 12, 4), Margin = new Thickness(14, 0, 0, 0) };
         cancel.Click += (_, _) => Close();
         var instruction = new StackPanel { Orientation = Orientation.Horizontal };
-        instruction.Children.Add(new TextBlock { Text = "Drag To Select A Region · Esc Cancels", VerticalAlignment = VerticalAlignment.Center, Foreground = Brushes.White });
+        instruction.Children.Add(new TextBlock { Text = "Drag Or Click Twice To Select · Wheel / + / − Adjusts Initial Mouse Speed · Esc Cancels", VerticalAlignment = VerticalAlignment.Center, Foreground = Brushes.White });
         instruction.Children.Add(cancel);
         root.Children.Add(new Border { Child = instruction, Background = new SolidColorBrush(Color.FromRgb(30, 35, 42)),
             Padding = new Thickness(16, 10, 16, 10), Margin = new Thickness(12), CornerRadius = new CornerRadius(5),
             HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Top });
         Content = root;
-        Loaded += (_, _) => { ScreenCapture.Place(this, bounds); Opacity = 1; Activate(); magnifier?.Update(Mouse.GetPosition(surface)); };
+        void UpdateMagnifier() => magnifier?.Update(Clamp(Mouse.GetPosition(surface)), pointerSpeed.Current, start != null);
+        Loaded += (_, _) => { ScreenCapture.Place(this, bounds); Opacity = 1; Activate(); UpdateMagnifier(); };
+        Closed += (_, _) => pointerSpeed.Dispose();
+        Deactivated += (_, _) => { pointerSpeed.Restore(); UpdateMagnifier(); };
         surface.SizeChanged += (_, _) => Draw(Rect.Empty);
-        surface.MouseLeftButtonDown += (_, e) => { start = e.GetPosition(surface); surface.CaptureMouse(); e.Handled = true; };
+        surface.MouseLeftButtonDown += (_, e) => { BeginSelection(Clamp(e.GetPosition(surface))); UpdateMagnifier(); e.Handled = true; };
         surface.MouseMove += (_, e) =>
         {
             var point = Clamp(e.GetPosition(surface));
-            magnifier?.Update(point);
+            magnifier?.Update(point, pointerSpeed.Current, start != null);
             if (start is Point first) Draw(new Rect(first, point));
         };
         surface.MouseLeftButtonUp += (_, e) =>
         {
-            if (start is not Point first) return;
-            surface.ReleaseMouseCapture(); start = null;
-            CompleteSelection(first, Clamp(e.GetPosition(surface)));
+            EndSelection(Clamp(e.GetPosition(surface))); e.Handled = true;
         };
-        KeyDown += (_, e) => { if (e.Key == Key.Escape) { e.Handled = true; Close(); } };
+        MouseWheel += (_, e) => { if (start == null) { pointerSpeed.Adjust(Math.Sign(e.Delta)); UpdateMagnifier(); } e.Handled = true; };
+        KeyDown += (_, e) =>
+        {
+            if (e.Key == Key.Escape) { e.Handled = true; Close(); }
+            else if (start == null && e.Key is Key.Add or Key.OemPlus or Key.Subtract or Key.OemMinus)
+            { pointerSpeed.Adjust(e.Key is Key.Add or Key.OemPlus ? 1 : -1); UpdateMagnifier(); e.Handled = true; }
+        };
+    }
+
+    internal bool IsSticky => sticky;
+    internal void BeginSelection(Point point)
+    {
+        pointerSpeed.Restore();
+        if (sticky && start is Point first) { CompleteSelection(first, point); return; }
+        start = point; surface.CaptureMouse(); Draw(new Rect(point, point));
+    }
+    internal void EndSelection(Point point)
+    {
+        surface.ReleaseMouseCapture();
+        if (sticky || start is not Point first) return;
+        if (Math.Abs(point.X - first.X) <= 6 && Math.Abs(point.Y - first.Y) <= 6) { sticky = true; return; }
+        CompleteSelection(first, point);
+        if (result == null) sticky = true;
     }
 
     Point Clamp(Point point) => new(Math.Clamp(point.X, 0, surface.ActualWidth), Math.Clamp(point.Y, 0, surface.ActualHeight));

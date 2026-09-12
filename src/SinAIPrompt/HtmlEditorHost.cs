@@ -10,7 +10,31 @@ namespace SinAIPrompt;
 
 public sealed partial class EditorView
 {
-    public WebView2 Browser { get; private set; } = null!;
+    public RibbonWebView Browser { get; private set; } = null!;
+    internal event EventHandler? ChromeChanged;
+    internal double RibbonHeight { get; private set; }
+    bool ribbonMeasured;
+    internal void ReserveRibbonHeight(double height)
+    {
+        if (!ribbonMeasured) RibbonHeight = App.Current.Preferences.ShowToolbar ? height : 0;
+    }
+    double navigationInset;
+    double? appliedInset;
+    bool? readOnlyApplied;
+    void ApplyReadOnly()
+    {
+        Editor.IsReadOnly = Document.IsReadOnly;
+        if (ready && !disposed && readOnlyApplied != Document.IsReadOnly)
+        { readOnlyApplied = Document.IsReadOnly; _ = Browser.ExecuteScriptAsync($"window.editor.setReadOnly({Json(Document.IsReadOnly)})"); }
+    }
+    internal void SetNavigationInset(double width)
+    {
+        navigationInset = width;
+        Browser.SetChrome(width, RibbonHeight);
+        double pixels = width / Browser.ZoomFactor;
+        if (ready && !disposed && appliedInset != pixels)
+        { appliedInset = pixels; _ = Browser.ExecuteScriptAsync($"window.editor.setNavigationInset({Json(pixels)})"); }
+    }
     public bool IsVisual { get; private set; } = true;
     public event EventHandler? HtmlChanged;
     public EditorPathStatus PathStatus { get; private set; } = null!;
@@ -18,6 +42,7 @@ public sealed partial class EditorView
     string? saveAsPath;
     string? mappedFolder;
     readonly TaskCompletionSource initialized = new();
+    internal Task Initialization => initialized.Task;
     Button sourceBack = null!;
     static string Json(object? value) => JsonSerializer.Serialize(value);
     internal MainWindow? HostWindow { get; set; }
@@ -31,7 +56,7 @@ public sealed partial class EditorView
         SetRow(Editor, 1); SetRow(Gutter, 1);
         sourceBack = new Button { Content = "← Visual editor    ·    HTML source", HorizontalAlignment = HorizontalAlignment.Left, Margin = new Thickness(8), Visibility = Visibility.Collapsed };
         sourceBack.Click += (_, _) => ToggleSource(); SetColumnSpan(sourceBack, 2); Children.Add(sourceBack);
-        Browser = new WebView2(); SetColumnSpan(Browser, 2); SetRowSpan(Browser, 2); Children.Add(Browser);
+        Browser = new RibbonWebView(); SetColumnSpan(Browser, 2); SetRowSpan(Browser, 2); Children.Add(Browser);
         Browser.IsVisibleChanged += async (_, _) =>
         {
             // Fullscreen temporarily reparents the host. Check the settled layout
@@ -54,10 +79,13 @@ public sealed partial class EditorView
             var environment = await CoreWebView2Environment.CreateAsync(null, cache, new CoreWebView2EnvironmentOptions("--disable-background-networking --disable-component-update --disable-sync --no-first-run"));
             if (disposed) return;
             await Browser.EnsureCoreWebView2Async(environment);
+            if (disposed) return;
             // Bundled CSS/modules must reflect the installed build on every launch.
             await Browser.CoreWebView2.CallDevToolsProtocolMethodAsync("Network.setCacheDisabled", "{\"cacheDisabled\":true}");
+            if (disposed) return;
             Browser.CoreWebView2.SetVirtualHostNameToFolderMapping("sin-editor.local", Path.Combine(AppContext.BaseDirectory, "Web"), CoreWebView2HostResourceAccessKind.DenyCors);
             await RefreshBase();
+            if (disposed) return;
             Browser.CoreWebView2.Settings.AreDefaultContextMenusEnabled = true;
             Browser.CoreWebView2.Settings.AreDevToolsEnabled = App.Current.TestMode;
             Browser.CoreWebView2.Settings.IsStatusBarEnabled = false;
@@ -66,12 +94,15 @@ public sealed partial class EditorView
             Browser.CoreWebView2.PermissionRequested += (_, args) => args.State = args.PermissionKind == CoreWebView2PermissionKind.ClipboardRead ? CoreWebView2PermissionState.Allow : CoreWebView2PermissionState.Deny;
             Browser.CoreWebView2.WebMessageReceived += ReceiveMessage;
             _ = new EditorFullscreen(Browser.CoreWebView2, () => Owner, open => Owner.SetAnnotationMode(this, open));
-            Browser.Source = new Uri("https://sin-editor.local/index.html?v=1.0.0");
+            Browser.Source = new Uri($"https://sin-editor.local/index.html?v=1.0.0&toolbar={Json(App.Current.Preferences.ShowToolbar)}&wrap={Json(App.Current.Preferences.WrapToolbar)}");
         }
         catch (Exception ex)
         {
+            // Closing an editor aborts its pending WebView creation. Disposal has
+            // already canceled waiters; it is not a missing-runtime/startup failure.
+            if (disposed) return;
             initialized.TrySetException(ex); await SetSourceAsync(true);
-            MessageBox.Show("The visual editor could not start. HTML source remains available. Install Microsoft Edge WebView2 Runtime and restart.\n\n" + ex.Message, "Sin - AI Prompt");
+            MessageBox.Show("The visual editor could not start. HTML source remains available.\n\n" + ex.Message, "Sin - AI Prompt");
         }
     }
 
@@ -91,6 +122,7 @@ public sealed partial class EditorView
     void LoadHtml() => _ = Browser.ExecuteScriptAsync($"window.editor.load({Json(Document.Text)},'https://sin-document.local/')");
     public void AcceptHtml(string html)
     {
+        if (Document.IsReadOnly) return;
         if (IsVisual)
         {
             string normalized = TextFiles.Normalize(html);
@@ -120,8 +152,13 @@ public sealed partial class EditorView
             switch (type)
             {
                 case "image-status": PathStatus.SetImage(message.GetProperty("source").GetString() ?? ""); break;
+                case "ribbon-height": ribbonMeasured = true; RibbonHeight = message.GetProperty("height").GetDouble() * Browser.ZoomFactor; ChromeChanged?.Invoke(this, EventArgs.Empty); break;
+                case "chrome-overlay":
+                    Browser.SetPopups(message.GetProperty("rects").EnumerateArray().Select(rect => new Rect(rect.GetProperty("x").GetDouble(), rect.GetProperty("y").GetDouble(), rect.GetProperty("width").GetDouble(), rect.GetProperty("height").GetDouble())).ToArray(), message.GetProperty("modal").GetBoolean());
+                    ChromeChanged?.Invoke(this, EventArgs.Empty); break;
+                case "open-files": await Owner.OpenDroppedPathsAsync(e.AdditionalObjects.OfType<CoreWebView2File>().Select(file => file.Path).ToArray()); break;
                 case "test-path-status" when App.Current.TestMode: result = PathStatus.Text; break;
-                case "ready": ready = true; LoadHtml(); ApplyHtmlPreferences(); initialized.TrySetResult(); break;
+                case "ready": ready = true; LoadHtml(); ApplyHtmlPreferences(); ApplyReadOnly(); initialized.TrySetResult(); break;
                 case "change": AcceptHtml(message.GetProperty("html").GetString()!); break;
                 case "source": await SetSourceAsync(true); break;
                 case "annotation-mode": Owner.SetAnnotationMode(this, message.GetProperty("open").GetBoolean()); break;
@@ -140,12 +177,18 @@ public sealed partial class EditorView
                     if (message.TryGetProperty("html", out var html)) AcceptHtml(html.GetString()!);
                     await Owner.HandleHtmlCommand(message.GetProperty("command").GetString()!); break;
                 case "save-image":
+                    if (Document.IsReadOnly) throw new IOException("Unlock the document before adding images.");
                     if (Document.Path == null && !await Owner.SaveDocument(Document)) throw new OperationCanceledException("Save the HTML file before storing a separate image.");
                     result = await HtmlAssets.SavePngAsync(Document.Path!, message.GetProperty("data").GetString()!); break;
                 case "save-image-as" when saveAsPath != null:
                     result = await HtmlAssets.SavePngAsync(saveAsPath, message.GetProperty("data").GetString()!); break;
                 case "read-image": result = await HtmlAssets.ReadImageAsync(Document.Path, message.GetProperty("source").GetString()!); break;
                 case "open-image": await ImageExternalViewer.OpenAsync(App.Current.Store.DirectoryPath, message.GetProperty("data").GetString()!); break;
+                case "rename-image":
+                    if (Document.Path == null) throw new IOException("Save the document before renaming a linked image.");
+                    var paths = ImageReferences.LocalPaths("<img src=\"" + System.Net.WebUtility.HtmlEncode(message.GetProperty("source").GetString()) + "\">", Document.Path);
+                    string path = paths.SingleOrDefault() ?? throw new IOException("Only local image files can be renamed.");
+                    Dialogs.RenameFile(Owner, Path.GetFileName(path), name => Owner.RenameExplorerImage(new(path, false, Document.Path), name), keepExtension: true); break;
                 case "reuse-image": result = await HtmlAssets.ReusePngAsync(Document.Path, message.GetProperty("data").GetString()!); break;
                 case "templates-load": result = App.Current.Store.Read<List<JsonElement>>("templates.json"); break;
                 case "templates-save": App.Current.Store.Write("templates.json", message.GetProperty("templates")); break;
@@ -202,6 +245,7 @@ public sealed partial class EditorView
         sourceBack.Visibility = IsVisual ? Visibility.Collapsed : Visibility.Visible;
         Editor.Visibility = IsVisual ? Visibility.Collapsed : Visibility.Visible;
         Gutter.Visibility = !IsVisual && App.Current.Preferences.LineNumbers ? Visibility.Visible : Visibility.Collapsed;
+        ChromeChanged?.Invoke(this, EventArgs.Empty);
     }
     public async void FocusEditing()
     {
@@ -222,7 +266,8 @@ public sealed partial class EditorView
     {
         if (Browser == null) return;
         UpdateMode(); Browser.ZoomFactor = Document.Zoom / 100.0;
-        if (ready) _ = Browser.ExecuteScriptAsync($"document.documentElement.dataset.theme={Json(App.Current.Preferences.Theme.ToLowerInvariant())};document.querySelector('#toolbar').hidden={Json(!App.Current.Preferences.ShowToolbar)};window.editor.setImageStorage({Json(App.Current.Preferences.ImageStorage)})");
+        SetNavigationInset(navigationInset);
+        if (ready) _ = Browser.ExecuteScriptAsync($"document.documentElement.dataset.theme={Json(App.Current.Preferences.Theme.ToLowerInvariant())};document.querySelector('#toolbar').hidden={Json(!App.Current.Preferences.ShowToolbar)};window.editor.setImageStorage({Json(App.Current.Preferences.ImageStorage)});window.editor.setToolbarWrap({Json(App.Current.Preferences.WrapToolbar)})");
     }
     public async Task<string?> PrepareSaveAsAsync(string path)
     {
@@ -291,5 +336,5 @@ public sealed partial class EditorView
         }
         throw new IOException("Export timed out. Check that all referenced images are available.");
     }
-    public void Dispose() { disposed = true; Browser.Dispose(); }
+    public void Dispose() { disposed = true; initialized.TrySetCanceled(); (Parent as EditorSurface)?.Release(this); Browser.Dispose(); }
 }

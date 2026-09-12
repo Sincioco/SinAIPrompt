@@ -4,12 +4,13 @@ import {clone,id,isLine,clamp,bounds,union,outputBounds,imageClip,move,resize,ob
 import {captureTemplate,parseTemplate,templateJson,instantiate} from './templates.js';
 import {copyObjects} from './annotation-clipboard.js';
 import {connectAnnotationColors} from './annotation-colors.js';
+import {connectCanvasPan} from './annotation-pan.js';
 import {cropControls,resetCrop,setCropInsets,setCornerRadii,applyCrop} from './annotation-crop.js';
 
 export async function annotate(initial,{crop=false}={}) {
   const dialog=document.createElement('dialog'); dialog.className='annotation'; dialog.setAttribute('aria-label','Image Annotation');
   dialog.innerHTML=`<div class="annotation-layout"><header><div><h2>Image Annotation <small>Shapes, images &amp; reusable objects</small></h2></div><div><button data-action="undo" title="Undo (Ctrl+Z)">↶ Undo</button> <button data-action="redo" title="Redo (Ctrl+Y)">↷ Redo</button> <button data-action="resetAllCrops">Reset All Crops</button> <select id="canvasZoom" aria-label="Canvas Zoom"><option value="fit">Fit</option>${[25,50,75,100,150,200].map(n=>`<option value="${n}">${n}%</option>`).join('')}</select></div></header>
-  <div class="annotation-body"><aside class="left"><h3>Draw</h3><div class="tools">${[['select','↖ Select'],['arrow','↗ Arrow'],['line','╱ Line'],['rectangle','▭ Rectangle'],['circle','◯ Circle'],['text','T Text']].map(([tool,label])=>`<button data-tool="${tool}">${label}</button>`).join('')}</div><button data-action="addImage" class="wide">＋ Add Image…</button><button data-action="screenCapture" class="wide">Screen Capture…</button><p class="hint">Paste images with Ctrl+V.<br>Drag empty canvas to select touching objects.<br>Shift adds to the selection.</p><hr><h3>Layers</h3><div id="layers"></div><div class="small-actions"><button data-action="front">To Front</button><button data-action="back">To Back</button><button data-action="copy" title="Copy Selected Objects (Ctrl+C)">Copy…</button><button data-action="paste" title="Paste Objects Or An Image (Ctrl+V)">Paste</button><button data-action="duplicate">Duplicate</button><button data-action="delete">Delete</button></div><hr><h3>Object Templates</h3><button data-action="saveTemplate" class="wide">Save Selected As Template</button><button data-action="importTemplate" class="wide">Import PMT Template…</button><div id="templates"></div></aside>
+  <div class="annotation-body"><aside class="left"><h3>Draw</h3><div class="tools">${[['select','↖ Select'],['pan','✋ Pan'],['arrow','↗ Arrow'],['line','╱ Line'],['rectangle','▭ Rectangle'],['circle','◯ Circle'],['text','T Text']].map(([tool,label])=>`<button data-tool="${tool}">${label}</button>`).join('')}</div><button data-action="addImage" class="wide">＋ Add Image…</button><button data-action="screenCapture" class="wide">Screen Capture…</button><button data-action="regionCapture" class="wide">Region Capture…</button><p class="hint">Paste images with Ctrl+V.<br>Drag empty canvas to select touching objects.<br>Shift adds to the selection.</p><hr><h3>Layers</h3><div id="layers"></div><div class="small-actions"><button data-action="front">To Front</button><button data-action="back">To Back</button><button data-action="copy" title="Copy Selected Objects (Ctrl+C)">Copy…</button><button data-action="paste" title="Paste Objects Or An Image (Ctrl+V)">Paste</button><button data-action="duplicate">Duplicate</button><button data-action="delete">Delete</button></div><hr><h3>Object Templates</h3><button data-action="saveTemplate" class="wide">Save Selected As Template</button><button data-action="importTemplate" class="wide">Import PMT Template…</button><div id="templates"></div></aside>
   <main class="canvas-viewport"><div class="canvas-stage"><svg id="canvas" tabindex="0" xmlns="http://www.w3.org/2000/svg" aria-label="Annotation Canvas"></svg></div></main>
   <aside class="right"><h3>Appearance</h3><label class="field">Outline <button id="stroke" type="button" aria-label="Outline Color" value="#dc3939"></button></label><label class="field"><span>Transparent Outline</span><input id="noStroke" type="checkbox"></label><label class="field">Fill <button id="fill" type="button" aria-label="Fill Color" value="#fff2a6"></button></label><label class="field"><span>Transparent Fill</span><input id="noFill" type="checkbox" checked></label><label class="field">Thickness <input id="strokeWidth" type="number" min="1" max="80" value="4"></label><label class="field">Arrow Head <input id="arrowSize" type="number" min="4" max="160" value="20"></label><label class="field">Opacity % <input id="opacity" type="number" min="0" max="100" value="100"></label>
   <div id="geometry"><hr><h3>Position &amp; Size (px)</h3><div class="pair">${['x','y','width','height'].map(k=>`<label>${k[0].toUpperCase()+k.slice(1)}<input data-geometry="${k}" type="number" step="1"></label>`).join('')}</div></div>
@@ -25,6 +26,7 @@ export async function annotate(initial,{crop=false}={}) {
   const colors=connectAnnotationColors(dialog);
   const svg=$('#canvas'),viewport=$('.canvas-viewport');
   let state=clone(initial),selected=[],tool='select',cropMode=crop,gesture=null,zoom=1,viewBox,templates=[];
+  connectCanvasPan(viewport,svg,()=>tool==='pan');
   const initialImage=state.objects.find(o=>o.type==='embedded-image'&&o.visible!==false);
   if(initialImage)selected=[initialImage.id];
   let history=[clone(state)],historyIndex=0,finished=false;
@@ -40,6 +42,7 @@ export async function annotate(initial,{crop=false}={}) {
     return {x:b.x-padding,y:b.y-padding,width:b.width+padding*2,height:b.height+padding*2};
   }
   function render(keepInspector=false,fit=false) {
+    viewport.dataset.tool=tool;
     const previous=viewBox;
     if(!gesture){
       // Fit on opening, a window resize, or an explicit zoom choice. Moving artwork
@@ -143,8 +146,8 @@ export async function annotate(initial,{crop=false}={}) {
   viewport.addEventListener('pointercancel',()=>{if(gesture?.kind==='marquee')selected=gesture.previous;else state=clone(history[historyIndex]);gesture=null;render();});
   svg.addEventListener('dblclick',event=>{const o=state.objects.find(o=>o.id===event.target.closest('[data-object]')?.dataset.object);if(o?.type==='textbox'){$('#shapeText').focus();$('#shapeText').select();}});
   async function addImage(file){const png=await toPng(await blobData(file));const b=outputBounds(state);change(()=>{const o={id:id(),type:'embedded-image',name:file.name||'Pasted Image',source:png.data,x:state.objects.length?b.x+b.width+24:0,y:0,width:png.width,height:png.height,visible:true};state.objects.push(o);selected=[o.id];});}
-  async function captureImage(){
-    const source=await request('screen-capture');if(!source)return;
+  async function captureImage(region=false){
+    const result=await request(region?'region-capture':'screen-capture'),source=region?result?.source:result;if(!source)return;
     await addImage(new File([await (await fetch(source)).blob()],'Screen Capture'));
     cropMode=true;tool='select';
     const b=bounds(one()),percent=clamp(Math.round(Math.min((viewport.clientWidth-148)/b.width,(viewport.clientHeight-148)/b.height)*100),5,400);
@@ -197,6 +200,7 @@ export async function annotate(initial,{crop=false}={}) {
         }
         case 'addImage':chooseFile('image/*',addImage);break;
         case 'screenCapture':target.disabled=true;try{await captureImage();}finally{target.disabled=false;}break;
+        case 'regionCapture':target.disabled=true;try{await captureImage(true);}finally{target.disabled=false;}break;
         case 'saveTemplate':if(!selected.length){error('Select one or more objects first.');break;}{const answer=await ask('Save Object Template','<label>Name <input name="name" value="My Object" required maxlength="120"></label>');if(answer.choice==='ok'){templates.push(captureTemplate(selectedObjects(),answer.values.name));await persistTemplates();}}break;
         case 'importTemplate':chooseFile('.json',async file=>{templates.push(await parseTemplate(await file.text()));await persistTemplates();});break;
         case 'cancel':dialog.close('cancel');break;

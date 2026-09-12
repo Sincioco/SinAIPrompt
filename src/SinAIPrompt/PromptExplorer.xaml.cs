@@ -25,6 +25,7 @@ public partial class PromptExplorer : UserControl, IDisposable
     FileSystemWatcher? watcher;
     IReadOnlyDictionary<int, ImageSource>? icons;
     CancellationTokenSource selection = new();
+    TreeViewItem? restoredSelection;
     int revision, busy;
     bool refreshing, disposed, changingFolder;
     string root = "";
@@ -51,13 +52,24 @@ public partial class PromptExplorer : UserControl, IDisposable
     async void Start(object sender, RoutedEventArgs e) { Loaded -= Start; if (root.Length > 0) await SetFolderAsync(root); }
     internal void SetMode(bool explorer)
     {
+        if (!explorer) selection.Cancel();
         settings.ExplorerMode = explorer;
         Heading.Text = explorer ? "Prompt Explorer" : "Document List";
         Tree.Visibility = ExplorerTools.Visibility = ChooseFolder.Visibility = explorer ? Visibility.Visible : Visibility.Collapsed;
         documentList.Visibility = explorer ? Visibility.Collapsed : Visibility.Visible;
-        ModeButton.ToolTip = explorer ? "Switch To Document List" : "Switch To Prompt Explorer";
+        ModeButton.ToolTip = "Choose Navigation View";
     }
-    void ModeClick(object sender, RoutedEventArgs e) { SetMode(!ExplorerMode); changed(); }
+    void ModeClick(object sender, RoutedEventArgs e)
+    {
+        var menu = new ContextMenu { PlacementTarget = ModeButton, FontFamily = new FontFamily("Segoe UI"), FontSize = 12 };
+        foreach (string mode in new[] { "Document List", "Prompt Explorer" })
+        {
+            var item = new MenuItem { Header = mode, IsCheckable = true, IsChecked = mode == Heading.Text };
+            item.Click += (_, _) => { SetMode(mode == "Prompt Explorer"); changed(); };
+            menu.Items.Add(item);
+        }
+        menu.IsOpen = true;
+    }
     void NewClick(object sender, RoutedEventArgs e) => create();
     async void FolderClick(object sender, RoutedEventArgs e)
     {
@@ -137,7 +149,8 @@ public partial class PromptExplorer : UserControl, IDisposable
     }
     async void Selected(object sender, RoutedPropertyChangedEventArgs<object> e)
     {
-        if (refreshing || e.NewValue is not TreeViewItem { Tag: PromptEntry entry }) return;
+        if (refreshing || e.NewValue == restoredSelection || !ExplorerMode || !Tree.IsVisible || e.NewValue is not TreeViewItem { Tag: PromptEntry entry }) return;
+        restoredSelection = null;
         selection.Cancel(); selection.Dispose(); selection = new();
         status(entry.Path);
         if (entry.IsFolder) return;
@@ -147,7 +160,7 @@ public partial class PromptExplorer : UserControl, IDisposable
         catch (Exception ex) { Notice.Text = ex.Message; }
         finally { SetBusy(false); }
     }
-    void Rename(PromptEntry entry) => Dialogs.RenameFile(Window.GetWindow(this), entry.Name, async name => { await rename(entry, name); await RefreshAsync(); });
+    void Rename(PromptEntry entry) => Dialogs.RenameFile(Window.GetWindow(this), entry.Name, async name => { await rename(entry, name); await RefreshAsync(); }, keepExtension: !entry.IsFolder);
     internal ContextMenu CreateFileMenu(PromptEntry entry)
     {
         var menu = new ContextMenu();
@@ -232,7 +245,10 @@ public partial class PromptExplorer : UserControl, IDisposable
                     else if (snapshot.TryGetValue(item.Path, out var children)) foreach (var child in children) row.Items.Add(Restore(child));
                     row.IsExpanded = true;
                 }
-                row.IsSelected = string.Equals(item.Path, selected, StringComparison.OrdinalIgnoreCase); return row;
+                // WPF can raise SelectedItemChanged after this row is attached and
+                // refreshing is false. Restoring a highlight is not an open request.
+                if (string.Equals(item.Path, selected, StringComparison.OrdinalIgnoreCase)) { restoredSelection = row; row.IsSelected = true; }
+                return row;
             }
             refreshing = true;
             try { roots.Clear(); foreach (var item in snapshot[root]) roots.Add(Restore(item)); }
@@ -242,6 +258,6 @@ public partial class PromptExplorer : UserControl, IDisposable
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { Notice.Text = ex.Message; }
         finally { SetBusy(false); }
     }
-    void SetBusy(bool value) { busy += value ? 1 : -1; Progress.Visibility = busy > 0 ? Visibility.Visible : Visibility.Collapsed; }
+    void SetBusy(bool value) { busy += value ? 1 : -1; Progress.Visibility = busy > 0 ? Visibility.Visible : Visibility.Hidden; }
     public void Dispose() { disposed = true; revision++; watcher?.Dispose(); refreshTimer.Stop(); selection.Cancel(); selection.Dispose(); }
 }

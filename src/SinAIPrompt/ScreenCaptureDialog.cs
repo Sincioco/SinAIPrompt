@@ -98,20 +98,22 @@ internal sealed class ScreenCaptureDialog : Window
         finally { Owner.WindowState = originalState; }
     }
 
-    internal static async Task<string?> CaptureRegionAsync(Window owner)
+    internal static async Task<object?> CaptureRegionAsync(Window owner)
     {
+        var options = RegionCaptureOptions.Choose(owner);
+        if (options == null) return null;
         var originalState = owner.WindowState;
         bool wasEnabled = owner.IsEnabled;
         try
         {
             // Keep the countdown nonmodal so the user can arrange any window,
             // including this editor, before freezing the desktop.
-            await CountdownAsync(3, CancellationToken.None);
+            await CountdownAsync(options.Delay, CancellationToken.None);
             owner.IsEnabled = false;
             var bounds = ScreenCapture.DesktopBounds;
-            var image = await Task.Run(() => ScreenCapture.Capture(bounds, includeCursor: false));
+            var image = await Task.Run(() => ScreenCapture.Capture(bounds, options.IncludeCursor));
             image = CaptureRegionWindow.Select(image, bounds, magnify: true);
-            return image == null ? null : await Task.Run(() => ScreenCapture.Png(image));
+            return image == null ? null : new { source = await Task.Run(() => ScreenCapture.Png(image)), storage = options.Storage };
         }
         catch (OperationCanceledException) { return null; }
         finally
@@ -125,15 +127,16 @@ internal sealed class ScreenCaptureDialog : Window
     {
         if (seconds == 0) { await Task.Delay(200, cancellation); return; }
         using var stop = CancellationTokenSource.CreateLinkedTokenSource(cancellation);
-        var status = new TextBlock { FontSize = 18, Foreground = Brushes.White, Margin = new Thickness(0, 0, 0, 8) };
+        var status = new TextBlock { FontSize = 150, FontWeight = FontWeights.SemiBold, TextAlignment = TextAlignment.Center, Foreground = Brushes.White, Margin = new Thickness(0, 0, 0, 8) };
         var progress = new ProgressBar { Minimum = 0, Maximum = seconds, Height = 5, Margin = new Thickness(0, 0, 0, 12) };
         var cancel = new Button { Content = "Cancel Capture", Padding = new Thickness(10, 4, 10, 4) };
         var panel = new StackPanel { Margin = new Thickness(18) };
+        panel.Children.Add(new TextBlock { Text = "Capture starts in", FontSize = 20, Foreground = Brushes.White, TextAlignment = TextAlignment.Center });
         panel.Children.Add(status); panel.Children.Add(progress); panel.Children.Add(cancel);
-        var countdown = new Window { Title = "Capture Countdown", Content = panel, Width = 270,
+        var countdown = new Window { Title = "Capture Countdown", Content = panel, Width = 320,
             SizeToContent = SizeToContent.Height, WindowStyle = WindowStyle.None, ResizeMode = ResizeMode.NoResize,
-            ShowInTaskbar = false, ShowActivated = false, Topmost = true, Background = new SolidColorBrush(Color.FromRgb(30, 35, 42)),
-            Left = SystemParameters.WorkArea.Right - 290, Top = SystemParameters.WorkArea.Top + 20 };
+            ShowInTaskbar = false, ShowActivated = false, Topmost = true, AllowsTransparency = true, Background = new SolidColorBrush(Color.FromArgb(204, 30, 35, 42)),
+            Left = SystemParameters.WorkArea.Left + (SystemParameters.WorkArea.Width - 320) / 2, Top = SystemParameters.WorkArea.Top + (SystemParameters.WorkArea.Height - 330) / 2 };
         cancel.Click += (_, _) => stop.Cancel();
         countdown.Closed += (_, _) => stop.Cancel();
         try
@@ -141,7 +144,7 @@ internal sealed class ScreenCaptureDialog : Window
             countdown.Show();
             for (int remaining = seconds; remaining > 0; remaining--)
             {
-                status.Text = $"Capturing In {remaining}…"; progress.Value = seconds - remaining;
+                status.Text = remaining.ToString(); progress.Value = seconds - remaining;
                 await Task.Delay(1000, stop.Token);
             }
             countdown.Hide();

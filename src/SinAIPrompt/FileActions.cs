@@ -10,6 +10,54 @@ namespace SinAIPrompt;
 public partial class MainWindow
 {
     int fileOperationDepth;
+    int markdownImports;
+    public void OpenPaths(IEnumerable<string> paths) => _ = OpenPathsAsync(paths);
+    internal async Task OpenPathsAsync(IEnumerable<string> paths)
+    {
+        foreach (string rawPath in paths)
+        {
+            try
+            {
+                if (rawPath.StartsWith("--", StringComparison.Ordinal)) continue;
+                var path = Path.GetFullPath(rawPath);
+                if (MarkdownImport.IsMarkdown(path))
+                {
+                    markdownImports++; OpenProgress.Visibility = Visibility.Visible;
+                    try { path = await MarkdownImport.ConvertAsync(path, GetEditor(activeDocument!).ConvertMarkdownAsync); }
+                    finally { if (--markdownImports == 0) OpenProgress.Visibility = Visibility.Collapsed; }
+                }
+                var existing = Documents.FirstOrDefault(d => string.Equals(d.Path, path, StringComparison.OrdinalIgnoreCase));
+                if (existing != null) { ActiveDocument = existing; continue; }
+                var doc = TextFiles.Open(path);
+                var empty = Documents.Count == 1 && Documents[0].Path == null && !Documents[0].Dirty && Documents[0].Text.Length == 0 ? Documents[0] : null;
+                AddDocument(doc);
+                if (empty != null) RemoveDocument(empty);
+                AddRecent(path);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or InvalidOperationException or NotSupportedException)
+            { MessageBox.Show(this, $"Could not open {Path.GetFileName(rawPath)}.\n\n{ex.Message}", "Sin - AI Prompt", MessageBoxButton.OK, MessageBoxImage.Error); }
+        }
+        UpdateTabWidths(); FocusEditor();
+    }
+    internal async Task OpenDroppedPathsAsync(IEnumerable<string> paths)
+    {
+        if (IsAnnotating) return;
+        foreach (string path in paths)
+        {
+            try
+            {
+                if (MarkdownImport.IsMarkdown(path)) await OpenExplorerFile(Path.GetFullPath(path), CancellationToken.None);
+                else await OpenPathsAsync([path]);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or InvalidOperationException)
+            { MessageBox.Show(this, ex.Message, "Open dropped file", MessageBoxButton.OK, MessageBoxImage.Error); }
+        }
+    }
+    internal async Task<IReadOnlyList<(string Path, string Html)>> CurrentHtmlSnapshots()
+    {
+        foreach (var view in editors.Values) await view.FlushAsync();
+        return Documents.Select(d => (d.Path ?? Path.Combine(App.Current.Store.DirectoryPath, d.Id + ".html"), d.Text)).ToArray();
+    }
     void SortDocumentsClick(object sender, RoutedEventArgs e) { documentOrder.SetMode((string)((MenuItem)sender).Tag); Explorer.QueueRefresh(); }
 
     internal async Task OpenExplorerFile(string path, CancellationToken token)
@@ -30,11 +78,11 @@ public partial class MainWindow
         else
         {
             (EditorHost.Content as ExplorerPreview)?.Dispose();
-            var preview = new ExplorerPreview(path, App.Current.Store.DirectoryPath, () => ActiveDocument = activeDocument);
+            var preview = new ExplorerPreview(path, App.Current.Store.DirectoryPath, () => ActiveDocument = activeDocument) { OpenDroppedFiles = OpenDroppedPathsAsync };
             EditorHost.Content = preview; ExternalNotice.Visibility = Visibility.Collapsed;
             Title = "Sin - AI Prompt - " + Path.GetFileName(path);
             PositionStatus.Text = "Preview"; CountStatus.Text = "Read-only";
-            try { await preview.LoadAsync(token); }
+            try { await preview.LoadAsync(token, MarkdownImport.IsMarkdown(path) ? GetEditor(activeDocument!).ConvertMarkdownAsync : null); }
             catch (OperationCanceledException) { preview.ShowError("Select a file to preview."); }
             catch (Exception ex) { preview.ShowError(ex.Message); throw; }
         }
@@ -138,13 +186,20 @@ public partial class MainWindow
         Add("_Delete…", () => DeleteDocumentFile(doc, (path, dirty) => Dialogs.DeleteFile(this, path, dirty)), true);
         menu.Items.Add(new Separator());
         Add("Copy Full _Path", () => Clipboard.SetText(FullPathText(doc.Path!)), false);
-        Add("Copy For _AI Use", () => Clipboard.SetText(AiInstructionText(doc.Path!)), false);
+        Add("Copy for _AI Use", () => _ = RunDocumentAction("Saving And Locking Document…", () => CopyForAiUse(doc)), false, needsPath: false);
         Add("Open Containing _Folder", () => OpenContainingFolder(doc.Path!), false);
         menu.Items.Add(new Separator());
         Add("_Revert To Last Saved…", () => _ = RunDocumentAction("Reverting Document…", async () => await RevertDocument(doc)), true);
         Add("_Close", async () => await CloseDocument(doc), false, needsPath: false);
         ((MenuItem)menu.Items[^1]).InputGestureText = "Ctrl+W";
         return menu;
+    }
+
+    internal async Task CopyForAiUse(Document doc, Action<string>? copy = null)
+    {
+        await DocumentLock.ChangeAsync(this, doc, true, () => SaveDocument(doc));
+        if (doc.IsReadOnly && doc.Dirty) throw new IOException("Unlock and save the changed document before copying it for AI use.");
+        if (doc.IsReadOnly && doc.Path != null) (copy ?? Clipboard.SetText)(AiInstructionText(doc.Path));
     }
 
     async Task RunDocumentAction(string title, Func<Task> action)

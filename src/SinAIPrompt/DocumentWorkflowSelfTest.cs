@@ -14,17 +14,20 @@ internal static class DocumentWorkflowSelfTest
     {
         foreach (string name in new[] { "2026-09-12 1520 - Topic.html", "2026-09-12 - Topic.html", "2026-09-12-1520 - Topic.html", "Topic.html" })
         {
-            string? selection = null;
+            string? selection = null, inputName = null, renameResult = null;
             var choose = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(25) };
             choose.Tick += (_, _) =>
             {
                 var dialog = Application.Current.Windows.Cast<Window>().SingleOrDefault(w => w.Title == "Rename File - Sin - AI Prompt");
                 if (dialog?.IsLoaded != true) return;
-                choose.Stop(); selection = ScreenCaptureSelfTest.Controls(dialog).OfType<TextBox>().Single().SelectedText; dialog.Close();
+                choose.Stop(); var input = ScreenCaptureSelfTest.Controls(dialog).OfType<TextBox>().Single();
+                selection = input.SelectedText; inputName = input.Text; input.Text = "Changed title";
+                ScreenCaptureSelfTest.Controls(dialog).OfType<Button>().Single(button => button.Content.ToString() == "Rename").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             };
-            try { choose.Start(); Dialogs.RenameFile(window, name, _ => Task.CompletedTask); }
+            try { choose.Start(); Dialogs.RenameFile(window, name, value => { renameResult = value; return Task.CompletedTask; }); }
             finally { choose.Stop(); }
             check(selection == "Topic", "Rename selects the title without its date/time or extension: " + name);
+            check(inputName == Path.GetFileNameWithoutExtension(name) && renameResult == "Changed title.html", "Rename hides and preserves the original extension: " + name);
         }
         foreach (string label in new[] { "Relative Paths", "Absolute Paths", "Cancel" })
         {
@@ -71,7 +74,7 @@ internal static class DocumentWorkflowSelfTest
             if (dialog?.IsLoaded != true) return;
             timer.Stop();
             var controls = ScreenCaptureSelfTest.Controls(dialog).ToArray();
-            controls.OfType<TextBox>().Single().Text = "After # rename.html";
+            controls.OfType<TextBox>().Single().Text = "After # rename";
             dialog.Closed += (_, _) => completed.TrySetResult();
             controls.OfType<Button>().Single(b => b.Content.ToString() == "Rename").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
         };
