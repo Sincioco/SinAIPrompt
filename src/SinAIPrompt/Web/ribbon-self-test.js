@@ -137,13 +137,19 @@ export async function runRibbonTests(check) {
     select('#after',2);await delay();
     check(getComputedStyle(doc().querySelector('#after')).color!=='rgb(233, 113, 50)'&&getComputedStyle(fontColor.querySelector('.color-sample')).backgroundColor==='rgb(233, 113, 50)',
       'Font Color retains the chosen indicator when the caret moves to differently colored text');
-    select('#sample');click('#backColor');click('.color-palette [data-color="#ffff00"]');
-    check(doc().querySelector('#sample').innerHTML.includes('255, 255, 0'),'Highlight palette applies the selected color');
+    select('#sample');click('#backColor');
+    check(doc().querySelector('#sample').innerHTML.includes('255, 255, 0')&&!document.querySelector('.color-palette'),'The left highlighter button applies the last color immediately without opening a palette');
     const marker=[...doc().querySelectorAll('#sample span')].find(span=>span.style.backgroundColor==='rgb(255, 255, 0)');
-    check(marker&&doc().defaultView.getComputedStyle(marker,'::selection').backgroundColor==='rgba(0, 0, 0, 0)'&&!doc().getSelection().isCollapsed,'Applied yellow remains visible through the active text selection');
+    check(marker&&doc().getSelection().isCollapsed&&doc().querySelector('#sample').contains(doc().getSelection().anchorNode),'Applying highlight deselects the text and leaves the caret in the highlighted paragraph');
     await request('test-capture',{name:'selected-highlight'});
-    select('#sample');click('#backColor');click('.color-palette [data-color=transparent]');
-    check(!doc().querySelector('#sample').innerHTML.includes('255, 255, 0'),'No Color removes text highlighting');
+    select('#sample');click('#highlightOptions');click('.color-palette [data-color="#92d050"]');
+    check(doc().querySelector('#sample').innerHTML.includes('146, 208, 80')&&doc().getSelection().isCollapsed&&document.querySelector('#backColor').value==='#92d050','The right highlighter arrow applies and remembers a different palette color, then deselects');
+    select('#after');click('#backColor');
+    check(doc().querySelector('#after').innerHTML.includes('146, 208, 80')&&!document.querySelector('.color-palette'),'The next left-button highlight reuses the chosen color');
+    window.editor.command('insertText',' caret');
+    check(doc().querySelector('#after').textContent==='Other paragraph caret','Typing after highlighting inserts at the collapsed caret instead of replacing the old selection');
+    select('#sample');click('#highlightOptions');click('.color-palette [data-color=transparent]');
+    check(!doc().querySelector('#sample').innerHTML.includes('146, 208, 80')&&doc().getSelection().isCollapsed,'No Color removes text highlighting and deselects');
     await load();select('#sample');
     document.querySelector('#fontSize').value='18';document.querySelector('#fontSize').dispatchEvent(new Event('change'));
     await delay();click('#growFont');await delay();

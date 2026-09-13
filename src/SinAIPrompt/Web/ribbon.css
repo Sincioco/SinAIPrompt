@@ -67,10 +67,11 @@
 .ribbon-overflow{position:fixed;inset:auto;margin:0;padding:8px;max-width:calc(100vw - 16px);max-height:calc(100vh - 160px);overflow:auto;display:flex;flex-wrap:wrap;gap:8px;background:var(--surface);color:var(--text);border:1px solid var(--line);border-radius:5px;box-shadow:0 6px 20px #0003}
 .ribbon-overflow:not(:popover-open){display:none}
 .ribbon-overflow .ribbon-group{flex-shrink:0;border-right:1px solid var(--line)}
-.numbering-split{display:flex;border:1px solid transparent;border-radius:3px}
-.numbering-split:hover,.numbering-split:focus-within{background:#e5edf5;border-color:#c7d7e6}
-#toolbar .numbering-split button{border:0;border-radius:0;background:transparent}
-#toolbar .numbering-split #listNumbering{min-width:16px;width:16px;padding:3px}
-.numbering-split:hover #listNumbering{box-shadow:inset 1px 0 #c7d7e6}
-#toolbar #listNumbering svg{width:9px;height:9px;stroke-width:1.7}
-:root[data-theme=dark] .numbering-split:hover,:root[data-theme=dark] .numbering-split:focus-within{background:#394d60;border-color:#63798d}
+:is(.numbering-split,.highlight-split){display:flex;border:1px solid transparent;border-radius:3px}
+:is(.numbering-split,.highlight-split):is(:hover,:focus-within){background:#e5edf5;border-color:#c7d7e6}
+#toolbar :is(.numbering-split,.highlight-split) button{border:0;border-radius:0;background:transparent}
+#toolbar :is(#listNumbering,#highlightOptions){min-width:16px;width:16px;padding:3px}
+:is(.numbering-split,.highlight-split):hover :is(#listNumbering,#highlightOptions){box-shadow:inset 1px 0 #c7d7e6}
+#toolbar :is(#listNumbering,#highlightOptions) svg{width:9px;height:9px;stroke-width:1.7}
+#toolbar #backColor{width:29px;min-width:29px;padding:2px 5px;height:26px}
+:root[data-theme=dark] :is(.numbering-split,.highlight-split):is(:hover,:focus-within){background:#394d60;border-color:#63798d}

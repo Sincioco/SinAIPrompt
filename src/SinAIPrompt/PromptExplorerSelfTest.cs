@@ -48,8 +48,11 @@ internal static class PromptExplorerSelfTest
                 "Explorer honors the existing manual document order ahead of other files");
             check(PromptDirectory.Read(assets, true, "newest").Single().ParentHtml == parent, "Opening an image folder directly retains its parent HTML ownership");
             check(new Settings().ExplorerMode, "Prompt Explorer is the default navigation mode");
-            window.SetDocumentList(true); explorer.SetMode(true); settings.ExplorerShowFolders = true;
+            window.SetDocumentList(true); explorer.SetMode(false); settings.ExplorerShowFolders = true;
             await explorer.SetFolderAsync(folder);
+            check(explorer.ChooseFolder.IsVisible && window.DocumentList.IsVisible && settings.ExplorerDirectory == folder && window.ActiveDocument == original,
+                "Document List exposes the shared folder chooser and changes working folder without replacing the active document");
+            explorer.SetMode(true);
             int editors = window.CreatedEditorCount, documents = window.Documents.Count;
             check(explorer.Entries.Count == 8 && window.CreatedEditorCount == editors && window.Documents.Count == documents,
                 "Listing a working folder creates no documents or editors");

@@ -55,10 +55,14 @@ internal static class DocumentContentSelfTest
             check(top > 50 && Math.Abs(view.ActualWidth - window.Workspace.ActualWidth) < 2 && await view.Browser.ExecuteScriptAsync("document.querySelector('#document').getBoundingClientRect().left>100") == "true",
                 "The ribbon spans the workspace while native navigation starts beneath it");
             await window.SaveDocument(doc);
-            await DocumentLock.ChangeAsync(window, doc, true, () => window.SaveDocument(doc));
+            var lockMenu = window.CreateDocumentMenu(doc).Items.OfType<MenuItem>().Single(item => item.Header.ToString() == "_Lock Document");
+            lockMenu.RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
+            for (int i = 0; i < 100 && !doc.IsReadOnly; i++) await Task.Delay(20);
             await Task.Delay(80);
             check(DocumentAccess.IsReadOnly(doc.Path) && TextFiles.Open(doc.Path!).IsReadOnly && window.Title.Contains("[Read-Only]"),
-                "Lock persists the Windows read-only attribute and title indicator, and reopening reads it");
+                "The shared document/tab context menu locks the file, updates the title, and preserves the read-only attribute on reopen");
+            check(window.CreateDocumentMenu(doc).Items.OfType<MenuItem>().Single(item => item.Header.ToString() == "_Unlock Document").IsEnabled,
+                "A locked document or tab offers Unlock in its shared context menu");
             string locked = doc.Text;
             await window.ContentsView.UpdateAsync();
             check(window.ContentsView.Items.Count == 2 && window.ContentsView.Items.Cast<ListBoxItem>().All(item => item.IsEnabled),

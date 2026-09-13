@@ -55,20 +55,13 @@ public partial class PromptExplorer : UserControl, IDisposable
         if (!explorer) selection.Cancel();
         settings.ExplorerMode = explorer;
         Heading.Text = explorer ? "Prompt Explorer" : "Document List";
-        Tree.Visibility = ExplorerTools.Visibility = ChooseFolder.Visibility = explorer ? Visibility.Visible : Visibility.Collapsed;
+        Tree.Visibility = ExplorerTools.Visibility = explorer ? Visibility.Visible : Visibility.Collapsed;
         documentList.Visibility = explorer ? Visibility.Collapsed : Visibility.Visible;
-        ModeButton.ToolTip = "Choose Navigation View";
+        ModeButton.ToolTip = explorer ? "Switch To Document List" : "Switch To Prompt Explorer";
     }
     void ModeClick(object sender, RoutedEventArgs e)
     {
-        var menu = new ContextMenu { PlacementTarget = ModeButton, FontFamily = new FontFamily("Segoe UI"), FontSize = 12 };
-        foreach (string mode in new[] { "Document List", "Prompt Explorer" })
-        {
-            var item = new MenuItem { Header = mode, IsCheckable = true, IsChecked = mode == Heading.Text };
-            item.Click += (_, _) => { SetMode(mode == "Prompt Explorer"); changed(); };
-            menu.Items.Add(item);
-        }
-        menu.IsOpen = true;
+        SetMode(!ExplorerMode); changed();
     }
     void NewClick(object sender, RoutedEventArgs e) => create();
     async void FolderClick(object sender, RoutedEventArgs e)

@@ -646,3 +646,23 @@ test data rather than changing the user's Windows clipboard.
 Explicit outline refreshes cancel their pending debounce timer. Screen-capture test
 cleanup now awaits the editor-load promise before the next outline scenario begins,
 preventing overlapping fixture restoration from replacing the next test document.
+
+## Prompt 57 navigation and ribbon actions (September 14)
+
+`PromptExplorer` keeps its shared folder chooser visible in both navigation modes
+and owns direct mode toggling. Changing folders retains the open-document list and
+active editor. `FileActions.CreateDocumentMenu` wires both tabs and document rows
+to the existing `DocumentLock` save/confirmation/read-only operation.
+
+`ribbon.js` owns the remembered highlight color, its apply action and collapsed
+caret. The existing color picker accepts a separate trigger button while retaining
+its own popup lifetime; font and annotation palettes keep their existing defaults.
+The two split controls share CSS rules. HTML modal backdrops are transparent while
+modal input blocking remains intact. The native host already disables bundled
+WebView resource caching on each launch.
+
+Newest modification remains the default order in `Settings`/`DocumentOrder`, with
+explicit pins and manual dragging preserved. Existing default-order coverage now
+also checks timestamp updates. Native/browser regressions cover shared navigation,
+menu locking, palette/application behavior, collapsed-caret typing and backdrops.
+No new modules, dependencies, MainWindow state or guardrail exceptions were added.

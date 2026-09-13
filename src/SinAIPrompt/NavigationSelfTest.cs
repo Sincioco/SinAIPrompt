@@ -69,11 +69,13 @@ internal static class NavigationSelfTest
                         "Hiding navigation removes both native and browser space after resizing to " + width);
                 }
                 window.SetDocumentList(true);
+                bool previousMode = window.Explorer.ExplorerMode;
                 window.Explorer.ModeButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); await Task.Delay(40);
-                var popup = PresentationSource.CurrentSources.OfType<HwndSource>().Where(source => source.RootVisual != null).SelectMany(source => Descendants(source.RootVisual)).OfType<ContextMenu>().Single();
-                check(popup.Items.OfType<MenuItem>().All(item => item.FontFamily.Source == "Segoe UI") && popup.Items.Count == 2,
-                    "Navigation mode labels use the text font instead of inheriting the icon button font");
-                popup.IsOpen = false;
+                check(window.Explorer.ExplorerMode != previousMode && window.DocumentList.IsVisible == previousMode && window.Explorer.ModeButton.ContextMenu == null,
+                    "Navigation mode changes with one click without opening a menu");
+                window.Explorer.ModeButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                check(window.Explorer.ExplorerMode == previousMode && window.Explorer.ChooseFolder.IsVisible,
+                    "A second navigation click restores the previous mode and keeps the folder chooser visible");
                 await PopupNavigation(window, check);
             }
             finally { window.Width = originalWidth; }
@@ -99,6 +101,8 @@ internal static class NavigationSelfTest
                     check(await browser.ExecuteScriptAsync("!!document.querySelector('dialog[open],:popover-open')") == "true" && NavigationClipped(browser),
                         $"{(tree ? "Prompt Explorer" : "Document List")} stays visible while {button} is open");
                     check(pane.IsEnabled == (button != "listNumbering"), "Only a modal dialog disables native navigation: " + button);
+                    if (button == "listNumbering") check(await browser.ExecuteScriptAsync("getComputedStyle(document.querySelector('dialog[open]'),'::backdrop').backgroundColor==='rgba(0, 0, 0, 0)'") == "true",
+                        "HTML dialogs retain modal input protection without dimming the application background");
                     var target = new ScreenCapture.Target("Navigation popup test", new WindowInteropHelper(window).Handle, default);
                     var bounds = ScreenCapture.Bounds(target);
                     var bitmap = await Task.Run(() => ScreenCapture.Capture(bounds));

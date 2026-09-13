@@ -39,7 +39,7 @@ label{display:flex;align-items:center;gap:6px}
 #notice{padding:10px 16px;background:#fff1d6;color:#774500;border-bottom:1px solid #e6c98d}
 [hidden]{display:none!important}
 dialog{color:var(--text);background:var(--surface);border:1px solid var(--line);border-radius:9px;padding:0;box-shadow:0 15px 60px #0004}
-dialog::backdrop{background:#13223688}
+dialog::backdrop{background:transparent}
 .form-dialog{width:min(780px,94vw);max-height:94vh}
 .form-dialog form{display:flex;flex-direction:column}
 .form-dialog header,.annotation header{padding:16px 20px;border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between}

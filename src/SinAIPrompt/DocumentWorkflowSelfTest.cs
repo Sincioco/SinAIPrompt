@@ -57,6 +57,8 @@ internal static class DocumentWorkflowSelfTest
             var restored = JsonSerializer.Deserialize<Document>(JsonSerializer.Serialize(old))!;
             check(restored.Pinned && restored.CreatedUtc == old.CreatedUtc, "Pins and cached sort dates survive session serialization");
             order.TogglePin(old); check(documents[0] == recent, "Unpin restores the selected document date order");
+            order.SetMode("newest"); recent.ModifiedUtc = now.AddMinutes(1); recent.Notify(); await Task.Delay(80);
+            check(settings.DocumentSort == "newest" && documents[0] == recent, "The default Last Modified order follows updated file timestamps without opening editors");
         }
         string folder = Path.Combine(App.Current.Store.DirectoryPath, "rename-from-ribbon"); Directory.CreateDirectory(folder);
         string source = Path.Combine(folder, "Before.html"), images = Path.Combine(folder, "Before"); Directory.CreateDirectory(images);
