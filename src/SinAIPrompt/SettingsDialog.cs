@@ -47,12 +47,12 @@ internal static class SettingsDialog
         var reset = Button("Reset To 1", () => { resetSequence = true; next.Text = "Next Document: Prompt 1 (existing files will be skipped)"; });
         DockPanel.SetDock(reset, Dock.Right); sequenceRow.Children.Add(reset); sequenceRow.Children.Add(next); panel.Children.Add(sequenceRow);
         var documentPanel = panel;
-        Label("Pasted Images", "Leave both options off to choose storage each time. Region capture has its own storage options.");
+        Label("Pasted Images", "Leave these options off to choose storage each time. Original references ask for absolute or relative paths. Region capture has its own storage options.");
         var inlineImages = new CheckBox { Content = "Always Embed Images In The HTML (Base64)", IsChecked = p.ImageStorage == "inline", Margin = new Thickness(0, 3, 0, 8) };
         var separateImages = new CheckBox { Content = "Always Store Images In The Document's Folder", IsChecked = p.ImageStorage == "separate", Margin = new Thickness(0, 3, 0, 8) };
-        inlineImages.Checked += (_, _) => separateImages.IsChecked = false;
-        separateImages.Checked += (_, _) => inlineImages.IsChecked = false;
-        panel.Children.Add(inlineImages); panel.Children.Add(separateImages);
+        var referenceImages = new CheckBox { Content = "Always Reference The Original Image", IsChecked = p.ImageStorage == "reference", Margin = new Thickness(0, 3, 0, 8) };
+        var imageOptions = new[] { inlineImages, separateImages, referenceImages };
+        foreach (var option in imageOptions) { option.Checked += (_, _) => { foreach (var other in imageOptions) if (other != option) other.IsChecked = false; }; panel.Children.Add(option); }
         panel = Page("Appearance");
         Label("Theme");
         var themes = new ComboBox { ItemsSource = new[] { "System", "Light", "Dark" }, SelectedItem = p.Theme, HorizontalAlignment = HorizontalAlignment.Left, MinWidth = 200 };
@@ -102,7 +102,7 @@ internal static class SettingsDialog
                     using (var file = new FileStream(probe, FileMode.CreateNew, FileAccess.Write, FileShare.None, 1, FileOptions.DeleteOnClose)) { file.WriteByte(0); }
                 }
                 p.AutoSaveDirectory = path; if (resetSequence) p.NextDocumentNumber = 1; p.Theme = themes.SelectedItem as string ?? "System"; p.WordWrap = wrap.IsChecked == true; p.ShowToolbar = toolbar.IsChecked == true; p.AutoSaveAllOnClose = saveAllOnClose.IsChecked == true; p.RestoreSession = restore.IsChecked == true;
-                p.ImageStorage = inlineImages.IsChecked == true ? "inline" : separateImages.IsChecked == true ? "separate" : "";
+                p.ImageStorage = inlineImages.IsChecked == true ? "inline" : separateImages.IsChecked == true ? "separate" : referenceImages.IsChecked == true ? "reference" : "";
                 if (!Path.IsPathFullyQualified(storage.Text.Trim())) { error.Text = "Enter a full application storage folder path."; return; }
                 App.Current.UseStorageFolder(storage.Text.Trim());
                 App.Current.MarkChanged();

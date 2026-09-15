@@ -14,6 +14,7 @@ Keep the entire `app` folder together. Its .NET runtime is included; it uses the
 - **View Source** opens the native HTML source editor. Return using **Visual editor**, or **View → Visual editor / View source**. `Ctrl+Shift+U` switches views.
 - **Paste Code** supports C#, HTML, JavaScript, CSS, SQL/T-SQL, TypeScript, JSON, and Java. Choose full code (default), a first-lines preview, or a collapsed block with a required caption. Click a disclosure to expand it; double-click to edit. Colors follow Visual Studio 2026 Light, with IntelliJ Default for Java. Coloring is lexical, without project/compiler symbol resolution.
 - The ribbon uses Modern paragraph styles, a large Save button with New / Save As / Close, and a Tools group for Editor / Capture / Region Capture. The text marker starts yellow and remembers the chosen color; highlighting stays visible while the text remains selected.
+- Font Color and Highlight are split buttons: the left applies the remembered color; the arrow opens its palette. Click outside to dismiss. All palettes share the ten most recently chosen colors, including annotation palettes, and retain them after restart. Tools buttons fill available ribbon space individually before wrapping or entering overflow.
 - **Link** provides a full-width address, optional name and **URL only, no thumbnail**. YouTube links default to a card with thumbnail, title/channel, inline playback, fullscreen and **Open In Browser**. **Save the YouTube thumbnail locally** optionally embeds a PNG; otherwise the thumbnail loads from YouTube. Other available page thumbnails are embedded, with text-link fallback when unavailable.
 - Modified documents show ` *` after their name in the title bar; saving clears it.
 - Find and replace (`Ctrl+F` / `Ctrl+H`) open the source view, where you can search the complete HTML.
@@ -21,10 +22,12 @@ Keep the entire `app` folder together. Its .NET runtime is included; it uses the
 
 ## Images and annotation
 
-Pasting an image asks whether to embed a Base64 PNG or store a separate PNG. For `D:\Prompts\Example.html`, separate images go in `D:\Prompts\Example\` and use relative references. An unsaved document must be saved before creating a separate image.
+Pasting an image offers Base64 PNG, a separate PNG, or **Reference Original Image**. For `D:\Prompts\Example.html`, separate images go in `D:\Prompts\Example\` and use relative references. An unsaved document must be saved before creating a separate image or a relative original reference.
+
+Original references leave the existing file in place, with a choice of relative or absolute path. Copying an image file in Explorer or dropping it into the editor supplies its path; a clipboard bitmap without a path asks you to choose the original file. Relative paths require the same drive; otherwise the app offers an absolute reference. Referenced files must remain accessible. Save As rebases references without copying the images; moving to another drive requires an absolute path. Annotation edits produce a new stored image and leave the original untouched.
 
 **Settings → Documents → Pasted Images** offers mutually exclusive defaults to always
-embed images or always store them in the document folder. Both start off; leave both
+embed images, store them in the document folder, or reference the original file. All start off; leave all
 off to keep the per-paste choice. Existing same-document clipboard images retain their storage.
 
 **Region Capture** starts a three-second countdown while you arrange your windows,
@@ -56,7 +59,7 @@ The annotation window fills the application's client area, covering its menu, do
 
 Dragging keeps the current canvas scale while the scrollable workspace expands. Roll the mouse wheel over the canvas to zoom in or out (5–400%), or choose a zoom percentage or Fit. Resizing the annotation window recalculates Fit. The side panels keep their normal scrolling behavior.
 
-The displayed image is a lossless PNG. Editable original image sources and objects are retained in the HTML image's `data-sin-annotation` metadata, so copying the HTML also preserves its editing state. Cropping does not discard original pixels. Large annotated files can contain both source images and the rendered PNG.
+An annotated image is displayed as a lossless PNG. Editable original image sources and objects are retained in the HTML image's `data-sin-annotation` metadata, so copying the HTML also preserves its editing state. Cropping does not discard original pixels. Large annotated files can contain both source images and the rendered PNG.
 
 ## Object templates
 

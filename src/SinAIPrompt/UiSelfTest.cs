@@ -56,6 +56,7 @@ internal static class UiSelfTest
             Check(await window.SaveDocument(first, destinationPath: Path.Combine(documents, "Prompt 1.html")), "First save changes the unsaved prompt's asset folder");
             await DocumentCommandSelfTest.SaveShortcut(window, Check);
             await HtmlAssetsSelfTest.Paste(window, Check);
+            await HtmlAssetsSelfTest.References(window, Check);
             await DocumentCommandSelfTest.Appearance(window, Check);
             await ScreenCaptureSelfTest.RegionShortcut(window, Check);
             await DocumentContentSelfTest.Run(window, Check);
@@ -78,6 +79,8 @@ internal static class UiSelfTest
             Check(result.ValueKind == JsonValueKind.Object, "Browser integration checks finish");
             if (result.TryGetProperty("error", out var error)) throw new Exception(error.GetString());
             foreach (var item in result.GetProperty("results").EnumerateArray()) results.Add("PASS " + item.GetString());
+            var restoredColors = JsonSerializer.Deserialize<Settings>(JsonSerializer.Serialize(app.Preferences))!;
+            Check(restoredColors.RecentColors.Count == 10 && restoredColors.RecentColors.SequenceEqual(app.Preferences.RecentColors), "The ten shared recent colors survive settings serialization");
             Check(hiddenSourceUpdates == 0, "Visual editing does not rebuild the hidden WPF source editor");
             await view.FlushAsync();
             Check(first.Text.Contains("data-sin-annotation") && first.Text.Contains("data-sin-code"), "Native document receives annotation and code metadata");

@@ -2,7 +2,7 @@
 .ribbon-groups{display:flex;flex-wrap:wrap;gap:0;align-items:stretch}
 .file-group{width:178px}.clipboard-group{width:152px}.font-group{width:278px}.paragraph-group{width:166px}.styles-group{flex:0 0 550px;max-width:100%;min-width:150px}.tools-group{width:360px}
 .tools-controls{display:flex;align-items:stretch;min-height:66px;gap:3px}
-#toolbar .tools-controls button,#toolbar #screenCapture{display:flex;flex-direction:column;justify-content:center;align-items:center;gap:4px;font-size:11px;flex:1}
+#toolbar .tools-controls button,#toolbar #screenCapture{display:flex;flex-direction:column;justify-content:center;align-items:center;gap:4px;font-size:11px;flex:0 0 72px;min-width:0;padding-left:2px;padding-right:2px}
 #toolbar .save-large svg,#toolbar .tools-controls svg{width:27px;height:29px}
 .ribbon-group{min-width:0;padding:3px 8px 0;border-right:1px solid var(--line);display:flex;flex-direction:column}
 .ribbon-group:last-child{border-right:0;padding-right:0}
@@ -41,14 +41,12 @@
 .styles-popup:not(:popover-open){display:none}
 .styles-popup .style-tile:hover{border-color:#abc4d9;background:#e5edf5}
 .ribbon-hint{position:absolute;right:12px;top:100%;z-index:3;background:var(--surface);border:1px solid var(--line);padding:6px;font-size:11px;color:var(--text)}
-#toolbar #insertImage{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;flex:1;padding:3px 0;font-size:12px}
+#toolbar #insertImage{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;flex:0 0 72px;padding:3px 0;font-size:12px}
 #toolbar .text-color .color-arrow{font-size:9px;color:var(--text)}
-#toolbar #fontColor{height:26px}
+#toolbar #fontColor{height:26px;width:25px;min-width:25px;padding:2px 4px}
 #toolbar #fontColor .color-glyph{position:absolute;left:4px;top:3px;margin:0;color:#444}
 #toolbar #fontColor .color-glyph svg{display:block;width:16px;height:16px}
 #toolbar #fontColor .color-sample{left:4px;bottom:4px;width:16px;height:4px}
-#toolbar #fontColor .color-arrow{right:4px;top:9px;line-height:0}
-#toolbar #fontColor .color-arrow svg{display:block;width:8px;height:8px;stroke-width:1}
 :root[data-theme=dark] #toolbar #fontColor .color-glyph{color:var(--text)}
 #toolbar #insertImage svg{color:#185abd;width:27px;height:27px;stroke-width:1.7}
 :is(.style-heading,.style-heading2,.style-title) span{font-weight:600}
@@ -67,11 +65,11 @@
 .ribbon-overflow{position:fixed;inset:auto;margin:0;padding:8px;max-width:calc(100vw - 16px);max-height:calc(100vh - 160px);overflow:auto;display:flex;flex-wrap:wrap;gap:8px;background:var(--surface);color:var(--text);border:1px solid var(--line);border-radius:5px;box-shadow:0 6px 20px #0003}
 .ribbon-overflow:not(:popover-open){display:none}
 .ribbon-overflow .ribbon-group{flex-shrink:0;border-right:1px solid var(--line)}
-:is(.numbering-split,.highlight-split){display:flex;border:1px solid transparent;border-radius:3px}
-:is(.numbering-split,.highlight-split):is(:hover,:focus-within){background:#e5edf5;border-color:#c7d7e6}
-#toolbar :is(.numbering-split,.highlight-split) button{border:0;border-radius:0;background:transparent}
-#toolbar :is(#listNumbering,#highlightOptions){min-width:16px;width:16px;padding:3px}
-:is(.numbering-split,.highlight-split):hover :is(#listNumbering,#highlightOptions){box-shadow:inset 1px 0 #c7d7e6}
-#toolbar :is(#listNumbering,#highlightOptions) svg{width:9px;height:9px;stroke-width:1.7}
+:is(.numbering-split,.highlight-split,.font-color-split){display:flex;border:1px solid transparent;border-radius:3px}
+:is(.numbering-split,.highlight-split,.font-color-split):is(:hover,:focus-within){background:#e5edf5;border-color:#c7d7e6}
+#toolbar :is(.numbering-split,.highlight-split,.font-color-split) button{border:0;border-radius:0;background:transparent}
+#toolbar :is(#listNumbering,#highlightOptions,#fontColorOptions){min-width:16px;width:16px;padding:3px}
+:is(.numbering-split,.highlight-split,.font-color-split):hover :is(#listNumbering,#highlightOptions,#fontColorOptions){box-shadow:inset 1px 0 #c7d7e6}
+#toolbar :is(#listNumbering,#highlightOptions,#fontColorOptions) svg{width:9px;height:9px;stroke-width:1.7}
 #toolbar #backColor{width:29px;min-width:29px;padding:2px 5px;height:26px}
-:root[data-theme=dark] :is(.numbering-split,.highlight-split):is(:hover,:focus-within){background:#394d60;border-color:#63798d}
+:root[data-theme=dark] :is(.numbering-split,.highlight-split,.font-color-split):is(:hover,:focus-within){background:#394d60;border-color:#63798d}

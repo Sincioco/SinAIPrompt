@@ -1,4 +1,4 @@
-import {escapeHtml} from './bridge.js';
+import {escapeHtml,request} from './bridge.js';
 import {toPng,parseHtml,ensureStyle,serialize} from './document.js';
 import {setDocumentStyle} from './document-styles.js';
 
@@ -94,7 +94,8 @@ export async function htmlToMarkdown(doc,saveImage){
   const clone=doc.body.cloneNode(true),sources=new Map(),codeBlocks=[];
   for(const image of clone.querySelectorAll('img')){
     const source=image.getAttribute('src');if(!source)continue;
-    const absolute=new URL(source,doc.baseURI).href;
+    const absolute=image.dataset.sinStorage==='reference'
+      ?(await request('map-original-image',{source,base:doc.querySelector('base[href]')?.getAttribute('href')})).source:new URL(source,doc.baseURI).href;
     if(!sources.has(absolute))sources.set(absolute,await saveImage((await toPng(absolute)).data));
     image.setAttribute('src',sources.get(absolute));
   }

@@ -3,6 +3,7 @@ import {pasteSafeHtml,portableHtml,parseHtml} from './document.js';
 import {captureFormat} from './text-formatting.js';
 import {pasteMarkdown} from './markdown.js';
 import {pasteYouTube,editVideoAtoms} from './youtube.js';
+import {cleanOriginalImages} from './original-images.js';
 
 export async function clipboardCommand(doc,name,{changed,insertImage}) {
   const selection=doc.getSelection();if(!selection?.rangeCount)return;
@@ -11,6 +12,7 @@ export async function clipboardCommand(doc,name,{changed,insertImage}) {
   if(name==='copy'||name==='cut'){
     if(range.collapsed)return;
     const wrapper=doc.createElement('div');wrapper.append(range.cloneContents());
+    cleanOriginalImages(wrapper);
     wrapper.querySelectorAll('[data-sin-selected]').forEach(el=>el.removeAttribute('data-sin-selected'));
     Object.assign(wrapper.style,captureFormat(doc));
     const text=range.toString();

@@ -2,6 +2,7 @@ import { request, escapeHtml } from './bridge.js';
 import {modernDocumentStyles,setDocumentStyle} from './document-styles.js';
 
 import {sourceColors} from './source-highlighting.js';
+import {cleanOriginalImages} from './original-images.js';
 
 export const documentStyles = `${modernDocumentStyles}body{background:#fff;overflow-wrap:break-word}img{max-width:100%;height:auto}table{border-collapse:collapse}td,th{border:1px solid #aaa;padding:6px 10px}`;
 export const codeStyles=`
@@ -35,6 +36,7 @@ export function ensureStyle(doc) {
 }
 export function serialize(doc) {
   const clone = doc.documentElement.cloneNode(true);
+  cleanOriginalImages(clone);
   clone.querySelectorAll('[data-sin-runtime]').forEach(el => el.remove());
   clone.querySelectorAll('[data-sin-selected]').forEach(el => el.removeAttribute('data-sin-selected'));
   clone.querySelectorAll('details[data-sin-code-display]').forEach(el=>el.removeAttribute('open'));
@@ -68,14 +70,16 @@ export async function toPng(source) {
   if (data === 'data:,') throw Error('The image is too large to render.');
   return {data, width:canvas.width, height:canvas.height};
 }
-export async function portableHtml(html, base, duplicate=false) {
+export async function portableHtml(html, base, duplicate=false, preserveReferences=false) {
   const doc = parseHtml(html); ensureStyle(doc);
   const actualBase = doc.querySelector('base[href]') ? new URL(doc.querySelector('base').getAttribute('href'), base).href : base;
   const resolve = source => new URL(source, actualBase).href;
   for (const img of doc.querySelectorAll('img')) {
     const source = img.getAttribute('src');
-    if (source) img.setAttribute('src', (await toPng(resolve(source))).data);
-    if(duplicate)img.dataset.sinStorage='inline';
+    if(preserveReferences&&img.dataset.sinStorage==='reference')continue;
+    const original=img.dataset.sinStorage==='reference'?await request('map-original-image',{source,base:doc.querySelector('base[href]')?.getAttribute('href')}):null;
+    if (source) img.setAttribute('src', (await toPng(original?.source||resolve(source))).data);
+    if(duplicate||img.dataset.sinStorage==='reference')img.dataset.sinStorage='inline';
     img.removeAttribute('srcset');
   }
   // Prefer the now-embedded fallback image in picture elements.

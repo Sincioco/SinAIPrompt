@@ -158,6 +158,7 @@ public sealed class Settings
     public bool WrapToolbar { get; set; } = true;
     public bool? ShowTabs { get; set; }
     public string ImageStorage { get; set; } = "";
+    public List<string> RecentColors { get; set; } = [];
     public bool LineNumbers { get; set; } = true;
     public bool RestoreSession { get; set; } = true;
     public bool AutoSaveAllOnClose { get; set; } = true;

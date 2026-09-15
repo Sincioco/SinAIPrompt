@@ -19,14 +19,15 @@ import {createRibbon} from './ribbon.js';
 import {clipboardCommand} from './editor-clipboard.js';
 import {attachFileDrop} from './file-drop.js';
 import {observeEditorChrome} from './editor-chrome.js';
+import {prepareOriginalImages,observeOriginalImages} from './original-images.js';
 
 const frame=document.querySelector('#document'),$=s=>document.querySelector(s);
 let doc=null,selection=null,currentRaw='',base='https://sin-document.local/',loading=Promise.resolve(),loadingNow=false;
-let changeTimer,lastImageStatus="";
+let changeTimer,lastImageStatus="",loadRevision=0;
 function imageStatus(source=""){if(source!==lastImageStatus){lastImageStatus=source;send('image-status',{source});}}
 const exports=new Map();
 const search=createDocumentSearch(()=>doc,changed);
-const images=createImageSelection(frame,changed,image=>imageStatus(image?.src||''));
+const images=createImageSelection(frame,changed,image=>imageStatus(image?.getAttribute('src')||''));
 const imageActions=createImageActions(frame,{edit:openAnnotation,resize:()=>images.resize(),remove:target=>{const range=doc.createRange();range.selectNode(target);selection=range;command('delete');images.select(null);}});
 const videos=createYouTubePlayer(frame,target=>videoSelection.select(target));
 const videoSelection=createVideoSelection(frame,{changed,command,saveSelection,stopPlayback:videos.close,clearImage:()=>{images.select(null);imageActions.close();}});
@@ -35,7 +36,7 @@ const initialChrome=new URLSearchParams(location.search);
 $('#toolbar').hidden=initialChrome.get('toolbar')==='false';
 ribbon.setWrap(initialChrome.get('wrap')!=='false');
 const access=createDocumentAccess($('#toolbar'),()=>doc);
-const imageInsertion=createImageInsertion({saveSelection,command,ready:()=>loading});
+const imageInsertion=createImageInsertion({saveSelection,command,ready:()=>loading,getDocument:()=>doc});
 const {insertImage,storageChoice,storeImage}=imageInsertion;
 observeEditorChrome($('#toolbar'));attachFileDrop(document);
 // Paint the ribbon before waiting for the native font catalog on a first visit.
@@ -58,6 +59,7 @@ function changed(){
 }
 function html(flush=false){if(flush)clearTimeout(changeTimer);return loadingNow?currentRaw:doc?serialize(doc):currentRaw;}
 async function load(raw,newBase=base){
+  const revision=++loadRevision;
   search.invalidate();
   clearTimeout(changeTimer);
   videos.close();videoSelection.select(null);imageActions.close();images.select(null);imageStatus();currentRaw=raw||'';base=newBase;loadingNow=true;selection=null;
@@ -66,25 +68,26 @@ async function load(raw,newBase=base){
   // An explicit document base wins. Otherwise resolve its relative assets against the HTML folder.
   if(!input.querySelector('base[href]'))input.head.prepend(baseTag);
   const style=input.createElement('style');style.dataset.sinRuntime='1';style.textContent=fontCss+editingStyles;input.head.append(style);
-  loading=new Promise(resolve=>{frame.onload=()=>{
+  loading=prepareOriginalImages(input).then(()=>{if(revision!==loadRevision)return;return new Promise(resolve=>{frame.onload=()=>{
     doc=frame.contentDocument;doc.body.contentEditable='true';doc.body.spellcheck=true;loadingNow=false;
     ribbon.attach(doc);
     attachFileDrop(doc);access.attach(doc);
     attachListNumbering(doc);
     images.attach(doc);
+    observeOriginalImages(doc);
     videoSelection.attach(doc);
     videos.attach(doc);
     doc.addEventListener('selectionchange',()=>{saveSelection();syncFormatting();});doc.addEventListener('input',changed);
     doc.addEventListener('click',event=>{if(event.target.closest('a'))event.preventDefault();const image=event.target.closest('img');selectImage(image);imageActions.open(image,event);});
     doc.addEventListener('dblclick',event=>{const image=event.target.closest('img'),code=event.target.closest('pre[data-sin-code]')||event.target.closest('details[data-sin-code-display]')?.querySelector('pre[data-sin-code]');if(image){selectImage(image);openAnnotation(image).catch(report);}else if(code)pasteCode(code).catch(report);});
-    doc.addEventListener('pointerover',event=>imageStatus(event.target.closest('img')?.src||images.selected?.src||''));
-    doc.addEventListener('pointerout',event=>{if(event.target.closest('img'))imageStatus(images.selected?.src||'');});
+    doc.addEventListener('pointerover',event=>imageStatus(event.target.closest('img')?.getAttribute('src')||images.selected?.getAttribute('src')||''));
+    doc.addEventListener('pointerout',event=>{if(event.target.closest('img'))imageStatus(images.selected?.getAttribute('src')||'');});
     doc.addEventListener('keydown',shortcuts);doc.addEventListener('paste',paste);
     doc.addEventListener('dragover',event=>{if(event.dataTransfer.types.includes('Files'))event.preventDefault();});
     doc.addEventListener('drop',event=>{const files=[...event.dataTransfer.files].filter(f=>f.type.startsWith('image/'));if(files.length){event.preventDefault();(async()=>{for(const f of files)await insertImage(await blobData(f));})().catch(report);}});
     resolve();
     requestAnimationFrame(()=>requestAnimationFrame(()=>send('painted')));
-  };frame.srcdoc='<!DOCTYPE html>'+input.documentElement.outerHTML;});
+  };frame.srcdoc='<!DOCTYPE html>'+input.documentElement.outerHTML;});});
   return loading;
 }
 async function setBase(newBase){
@@ -127,11 +130,12 @@ async function openAnnotation(image=null,capturedSource=null){
   if(access.locked)return;
   imageActions.close();
   saveSelection();let mode=image?.dataset.sinStorage||(image?(/^data:/.test(image.getAttribute('src'))?'inline':'separate'):null);
+  if(mode==='reference')mode=null;
   let state;
   // A broken image's small error placeholder is not its intended display size.
   const displayWidth=image?(image.naturalWidth?image.getBoundingClientRect().width:0):800;
   if(image?.dataset.sinAnnotation){state=JSON.parse(image.dataset.sinAnnotation);}
-  else if(image||capturedSource){const png=await toPng(capturedSource||image.src);state={version:1,width:png.width,height:png.height,background:'none',objects:[{id:id(),type:'embedded-image',name:capturedSource?'Screen Capture':'Original Image',source:png.data,x:0,y:0,width:png.width,height:png.height,isOriginalImage:true,visible:true}]};}
+  else if(image||capturedSource){const png=await toPng(capturedSource||image.currentSrc||image.src);state={version:1,width:png.width,height:png.height,background:'none',objects:[{id:id(),type:'embedded-image',name:capturedSource?'Screen Capture':'Original Image',source:png.data,x:0,y:0,width:png.width,height:png.height,isOriginalImage:true,visible:true}]};}
   else {state={version:1,width:800,height:500,blankCanvas:true,background:'none',objects:[]};}
   const result=await annotate(state,{crop:!!capturedSource});if(!result)return;
   if(!mode)mode=await storageChoice();if(!mode)return;
@@ -186,10 +190,11 @@ window.editor={load,html,setBase,focus,command,insertImage,openAnnotation,pasteC
   beginRelocate(){
     const key=id();
     (async()=>{
-      await loading;const original=parseHtml(html()),output=parseHtml(await portableHtml(html(),base));
+      await loading;const original=parseHtml(html()),output=parseHtml(await portableHtml(html(),base,false,true));
       const images=[...output.querySelectorAll('img')];
       for(const [index,img] of [...original.querySelectorAll('img')].entries())
-        if(img.dataset.sinStorage==='separate'||!/^data:/i.test(img.getAttribute('src')||''))
+        if(img.dataset.sinStorage==='reference')images[index].setAttribute('src',await request('relocate-original-image',{source:img.getAttribute('src'),base:original.querySelector('base[href]')?.getAttribute('href')}));
+        else if(img.dataset.sinStorage==='separate'||!/^data:/i.test(img.getAttribute('src')||''))
           images[index].setAttribute('src',await request('save-image-as',{data:images[index].getAttribute('src')}));
       return serialize(output);
     })().then(html=>exports.set(key,{html})).catch(error=>exports.set(key,{error:error.message}));return key;

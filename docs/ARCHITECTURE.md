@@ -666,3 +666,33 @@ explicit pins and manual dragging preserved. Existing default-order coverage now
 also checks timestamp updates. Native/browser regressions cover shared navigation,
 menu locking, palette/application behavior, collapsed-caret typing and backdrops.
 No new modules, dependencies, MainWindow state or guardrail exceptions were added.
+
+## Original image references and ribbon enhancements (September 15, 18:21)
+
+`OriginalImages` owns one editor's exact-file display map and local URI resolution.
+It serves asynchronous file reads through WebView2 resource responses; the map never
+exposes a whole drive or starts a network service. `Web/original-images.js` prepares
+transient `srcset` display URLs and removes them during serialization and clipboard
+copy. Saved `src` values remain ordinary relative/file URIs. The existing insertion,
+clipboard and file-drop owners retain original paths; the native host only adapts
+requests and the existing Save flow. Runtime maps live and die with their editor.
+
+Save As rebases original references after removing the old document base. Different
+drives require absolute paths; insertion offers that fallback explicitly. Annotation
+edits use the existing inline/separate storage flow and never overwrite the original.
+Standalone exports and cross-document copies still embed portable pixels; Markdown
+export resolves originals before creating its independent PNG assets. Missing
+original files display as unavailable without preventing the document from opening.
+
+Settings owns the shared ten-color history. `RecentColors` maintains unique newest-first
+values; each palette owns only its popup and temporary event listeners. Browser-only
+preview history uses local storage in the palette module. Font/highlight callers own
+their remembered color values. `ribbon-overflow.js` moves existing Tools buttons between
+the strip and overflow, retaining handlers and selection; it does not recreate controls.
+
+Validation covers relative/absolute paths outside the document folder, cut/paste,
+Save As, original-file preservation, color history persistence, actual pointer dismissal,
+chevron geometry and individual Tools wrapping. Existing newest-modification ordering
+remains the default, with pins and explicit sort choices preserved. MainWindow remains
+545 lines. No guardrail limits, exceptions, startup scans or dependencies were added;
+existing host/partial-class coupling remains recorded debt.

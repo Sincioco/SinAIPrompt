@@ -62,7 +62,7 @@ export function createRibbon(root,{getDocument,saveSelection,restoreSelection,co
     </div><div class="font-bottom">
       ${button('bold','Bold (Ctrl+B)','<b>B</b>')}${button('italic','Italic (Ctrl+I)','<i>I</i>')}${button('underline','Underline (Ctrl+U)','<u>U</u>')}${button('strikeThrough','Strikethrough','<s>ab</s>')}
       ${button('subscript','Subscript','x<sub>2</sub>')}${button('superscript','Superscript','x<sup>2</sup>')}
-      <span class="highlight-split" role="group" aria-label="Text Highlight Color"><button id="backColor" value="#ffff00" class="text-color highlight-color" aria-label="Text Highlight Color"><span class="color-glyph">${icon('highlight')}</span><span class="color-sample" aria-hidden="true"></span></button><button id="highlightOptions" title="Highlight Color Options" aria-label="Highlight Color Options"><svg viewBox="0 0 12 12" aria-hidden="true"><path d="m3 4.5 3 3 3-3"/></svg></button></span><button id="fontColor" value="#ff0000" class="text-color" aria-label="Font Color"><span class="color-glyph">${icon('fontColor')}</span><span class="color-sample" aria-hidden="true"></span><span class="color-arrow" aria-hidden="true"><svg viewBox="0 0 8 8"><path d="m1.5 3 2.5 2.5L6.5 3"/></svg></span></button>
+      <span class="highlight-split" role="group" aria-label="Text Highlight Color"><button id="backColor" value="#ffff00" class="text-color highlight-color" aria-label="Text Highlight Color"><span class="color-glyph">${icon('highlight')}</span><span class="color-sample" aria-hidden="true"></span></button><button id="highlightOptions" title="Highlight Color Options" aria-label="Highlight Color Options"><svg viewBox="0 0 12 12" aria-hidden="true"><path d="m3 4.5 3 3 3-3"/></svg></button></span><span class="font-color-split" role="group" aria-label="Font Color"><button id="fontColor" value="#ff0000" class="text-color" aria-label="Font Color"><span class="color-glyph">${icon('fontColor')}</span><span class="color-sample" aria-hidden="true"></span></button><button id="fontColorOptions" title="Font Color Options" aria-label="Font Color Options"><svg viewBox="0 0 12 12" aria-hidden="true"><path d="m3 4.5 3 3 3-3"/></svg></button></span>
     </div><div class="group-caption">Font</div></section>
     <section class="ribbon-group paragraph-group" aria-label="Paragraph"><div class="paragraph-row">
       ${button('insertUnorderedList','Bullets',icon('bullets'))}<span class="numbering-split" role="group" aria-label="Numbered List">${button('insertOrderedList','Numbering',icon('numbering'))}<button id="listNumbering" title="List Numbering Options" aria-label="List Numbering Options"><svg viewBox="0 0 12 12" aria-hidden="true"><path d="m3 4.5 3 3 3-3"/></svg></button></span>${button('outdent','Decrease Indent',icon('outdent'))}${button('indent','Increase Indent',icon('indent'))}
@@ -73,9 +73,11 @@ export function createRibbon(root,{getDocument,saveSelection,restoreSelection,co
   const $=selector=>root.querySelector(selector);
   let formatting=null,painter=null,locked=false,painterSheet=null,stylePopup=null,syncFrame=0;
   const colorPickers=[
-    createColorPicker($('#fontColor'),{emptyValue:'#000000',onChange:value=>{command('foreColor',value);$('#fontColor').value=value;}}),
+    createColorPicker($('#fontColor'),{trigger:$('#fontColorOptions'),emptyValue:'#000000',onChange:applyFontColor}),
     createColorPicker($('#backColor'),{trigger:$('#highlightOptions'),emptyLabel:'No Color',emptyValue:'transparent',onChange:applyHighlight})
   ];
+  function applyFontColor(value){command('foreColor',value);$('#fontColor').value=value;}
+  $('#fontColor').onclick=()=>applyFontColor($('#fontColor').value);
   function applyHighlight(value){
     command('hiliteColor',value);$('#backColor').value=value;
     const selection=getDocument().getSelection();if(selection.rangeCount)selection.collapseToEnd();

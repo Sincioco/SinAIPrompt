@@ -48,6 +48,7 @@ public sealed partial class EditorView
     Button sourceBack = null!;
     static string Json(object? value) => JsonSerializer.Serialize(value);
     internal MainWindow? HostWindow { get; set; }
+    readonly OriginalImages originalImages = new(App.Current.Store.DirectoryPath);
     MainWindow Owner => HostWindow ?? (MainWindow)Window.GetWindow(this);
 
     void InitializeHtmlEditor()
@@ -91,6 +92,7 @@ public sealed partial class EditorView
             await Browser.CoreWebView2.CallDevToolsProtocolMethodAsync("Network.setCacheDisabled", "{\"cacheDisabled\":true}");
             if (disposed) return;
             Browser.CoreWebView2.SetVirtualHostNameToFolderMapping("sin-editor.local", Path.Combine(AppContext.BaseDirectory, "Web"), CoreWebView2HostResourceAccessKind.DenyCors);
+            originalImages.Attach(Browser.CoreWebView2);
             await RefreshBase();
             if (disposed) return;
             Browser.CoreWebView2.Settings.AreDefaultContextMenusEnabled = true;
@@ -164,6 +166,10 @@ public sealed partial class EditorView
                     Browser.SetPopups(message.GetProperty("rects").EnumerateArray().Select(rect => new Rect(rect.GetProperty("x").GetDouble(), rect.GetProperty("y").GetDouble(), rect.GetProperty("width").GetDouble(), rect.GetProperty("height").GetDouble())).ToArray(), message.GetProperty("modal").GetBoolean());
                     ChromeChanged?.Invoke(this, EventArgs.Empty); break;
                 case "open-files": await Owner.OpenDroppedPathsAsync(e.AdditionalObjects.OfType<CoreWebView2File>().Select(file => file.Path).ToArray()); break;
+                case "insert-images":
+                    foreach (var file in e.AdditionalObjects.OfType<CoreWebView2File>())
+                        await Browser.CoreWebView2.CallDevToolsProtocolMethodAsync("Runtime.evaluate", Json(new { expression = $"window.editor.insertImage({Json(new Uri(file.Path).AbsoluteUri)})", awaitPromise = true }));
+                    break;
                 case "test-path-status" when App.Current.TestMode: result = PathStatus.Text; break;
                 case "ready": ready = true; LoadHtml(); ApplyHtmlPreferences(); ApplyReadOnly(); initialized.TrySetResult(); break;
                 case "painted": painted.TrySetResult(); break;
@@ -190,7 +196,22 @@ public sealed partial class EditorView
                     result = await HtmlAssets.SavePngAsync(Document.Path!, message.GetProperty("data").GetString()!); break;
                 case "save-image-as" when saveAsPath != null:
                     result = await HtmlAssets.SavePngAsync(saveAsPath, message.GetProperty("data").GetString()!); break;
-                case "read-image": result = await HtmlAssets.ReadImageAsync(Document.Path, message.GetProperty("source").GetString()!); break;
+                case "read-image": result = await HtmlAssets.ReadImageAsync(Document.Path, originalImages.Source(message.GetProperty("source").GetString()!)); break;
+                case "map-original-image":
+                    result = originalImages.Map(Document.Path, message.GetProperty("source").GetString()!, message.TryGetProperty("base", out var mapBase) ? mapBase.GetString() : null); break;
+                case "reference-image":
+                    if (Document.IsReadOnly) throw new IOException("Unlock the document before adding images.");
+                    string? originalSource = OriginalImages.ChooseSource(Owner, message.GetProperty("source").GetString()!);
+                    if (originalSource == null) break;
+                    bool absoluteReference = message.GetProperty("absolute").GetBoolean();
+                    if (!absoluteReference && Document.Path == null && !await Owner.SaveDocument(Document)) break;
+                    string? referenceBase = message.TryGetProperty("base", out var imageBase) ? imageBase.GetString() : null;
+                    var mappedImage = originalImages.Map(Document.Path, originalSource, referenceBase);
+                    result = new { reference = originalImages.Reference(Document.Path, originalSource, absoluteReference, referenceBase), mappedImage.display }; break;
+                case "relocate-original-image" when saveAsPath != null:
+                    string originalReference = message.GetProperty("source").GetString()!;
+                    result = originalImages.Reference(Document.Path, originalReference, Uri.TryCreate(originalReference, UriKind.Absolute, out _),
+                        message.TryGetProperty("base", out var relocationBase) ? relocationBase.GetString() : null, saveAsPath); break;
                 case "open-image": await ImageExternalViewer.OpenAsync(App.Current.Store.DirectoryPath, message.GetProperty("data").GetString()!); break;
                 case "rename-image":
                     if (Document.Path == null) throw new IOException("Save the document before renaming a linked image.");
@@ -199,6 +220,8 @@ public sealed partial class EditorView
                     Dialogs.RenameFile(Owner, Path.GetFileName(path), name => Owner.RenameExplorerImage(new(path, false, Document.Path), name), keepExtension: true); break;
                 case "reuse-image": result = await HtmlAssets.ReusePngAsync(Document.Path, message.GetProperty("data").GetString()!); break;
                 case "templates-load": result = App.Current.Store.Read<List<JsonElement>>("templates.json"); break;
+                case "recent-colors": result = RecentColors.Read(App.Current.Preferences); break;
+                case "color-used": RecentColors.Use(App.Current.Preferences, message.GetProperty("value").GetString()!); App.Current.MarkChanged(); break;
                 case "templates-save": App.Current.Store.Write("templates.json", message.GetProperty("templates")); break;
                 case "test-mouse" when App.Current.TestMode:
                     await Browser.CoreWebView2.CallDevToolsProtocolMethodAsync("Input.dispatchMouseEvent", message.GetProperty("parameters").GetRawText()); break;
@@ -344,5 +367,5 @@ public sealed partial class EditorView
         }
         throw new IOException("Export timed out. Check that all referenced images are available.");
     }
-    public void Dispose() { disposed = true; initialized.TrySetCanceled(); painted.TrySetCanceled(); (Parent as EditorSurface)?.Release(this); Browser.Dispose(); }
+    public void Dispose() { disposed = true; initialized.TrySetCanceled(); painted.TrySetCanceled(); (Parent as EditorSurface)?.Release(this); originalImages.Dispose(); Browser.Dispose(); }
 }

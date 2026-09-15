@@ -21,14 +21,19 @@ export async function runRibbonTests(check) {
     toolbar.style.width='1800px';await delay();const styleWidth=styles.getBoundingClientRect().width;
     toolbar.style.width='2200px';await delay();
     check(Math.abs(styles.getBoundingClientRect().width-styleWidth)<1&&styleWidth<650,'Styles stops growing after the five named presets');
-    const fontColor=document.querySelector('#fontColor'),glyph=fontColor.querySelector('.color-glyph svg').getBoundingClientRect(),bar=fontColor.querySelector('.color-sample').getBoundingClientRect(),arrow=fontColor.querySelector('.color-arrow').getBoundingClientRect();
-    check(glyph.width===16&&glyph.height===16&&bar.width===16&&bar.height===4&&Math.abs(glyph.x-bar.x)<.5&&arrow.left>bar.right&&arrow.height===8,
+    const fontColor=document.querySelector('#fontColor'),glyph=fontColor.querySelector('.color-glyph svg').getBoundingClientRect(),bar=fontColor.querySelector('.color-sample').getBoundingClientRect(),arrow=document.querySelector('#fontColorOptions svg').getBoundingClientRect();
+    check(glyph.width===16&&glyph.height===16&&bar.width===16&&bar.height===4&&Math.abs(glyph.x-bar.x)<.5&&arrow.left>bar.right&&arrow.height===9,
       'Font Color has a compact A centered over its color bar with a separate aligned chevron');
     check(getComputedStyle(fontColor.querySelector('.color-sample')).backgroundColor==='rgb(255, 0, 0)','Font Color starts with the Word red indicator');
     await request('test-capture',{name:'font-color-icon'});
     window.editor.setToolbarWrap(false);toolbar.style.width='1500px';await delay();await delay();
     const strip=document.querySelector('.style-strip');
     check(strip.scrollWidth<=strip.clientWidth+1&&styles.parentElement.classList.contains('ribbon-groups')&&document.querySelector('.ribbon-overflow #link'),'Styles shows all five presets and sends Tools to overflow first');
+    check(document.querySelector('.ribbon-groups #insertImage')&&document.querySelector('.ribbon-overflow #link'),'Individual Tools buttons fill the remaining first-row space before later tools overflow');
+    await request('test-capture',{name:'individual-tool-overflow'});
+    window.editor.setToolbarWrap(true);await delay();await delay();
+    check(document.querySelector('#insertImage').getBoundingClientRect().top<document.querySelector('#link').getBoundingClientRect().top,'Wrapped ribbons keep the Tools buttons that fit on the first row and wrap only the remaining buttons');
+    window.editor.setToolbarWrap(false);
     toolbar.style.width='1900px';await delay();await delay();
     check(document.querySelector('.ribbon-groups #link')&&strip.scrollWidth<=strip.clientWidth+1&&document.querySelector('#moreRibbon').hidden,'A wide single-row ribbon uses its space instead of capping Styles at 190 pixels');
     window.editor.setToolbarWrap(true);
@@ -45,7 +50,7 @@ export async function runRibbonTests(check) {
     }
     await tapOverflow();check(document.querySelector('.ribbon-overflow:popover-open'),'A real mouse click opens ribbon overflow');
     await tapOverflow();check(!document.querySelector('.ribbon-overflow:popover-open'),'A second real mouse click dismisses overflow without immediately reopening it');
-    await load();select('#sample');click('#moreRibbon');click('#fontColor');await delay();
+    await load();select('#sample');click('#moreRibbon');click('#fontColorOptions');await delay();
     check(document.querySelector('.ribbon-overflow:popover-open .color-palette:popover-open'),'Color palette stays anchored inside the ribbon overflow');
     click('.color-palette [data-color="#e97132"]');
     check(doc().querySelector('#sample').innerHTML.includes('233, 113, 50'),'Overflow font controls retain the editor selection');
@@ -131,12 +136,32 @@ export async function runRibbonTests(check) {
     check(next.textContent==='Next paragraph'&&parseFloat(doc().defaultView.getComputedStyle(next).fontSize)===16,'Typing after Heading uses Normal’s 12-point font');
     await load();select('#sample');await delay();
     check(document.querySelector('#backColor').value==='#ffff00'&&document.querySelector('#backColor').style.getPropertyValue('--picked-color')==='#ffff00','Highlight defaults to yellow and its toolbar indicator stays yellow on ordinary text');
-    click('#fontColor');check(document.querySelectorAll('.color-palette .swatch').length===70,'Office palette offers ten theme columns with shades and ten standard colors');
+    click('#fontColorOptions');check(document.querySelectorAll('.color-palette > .palette-grid .swatch').length===70,'Office palette offers ten theme columns with shades and ten standard colors');
     click('.color-palette [data-color="#e97132"]');
     check(doc().querySelector('#sample').innerHTML.includes('233, 113, 50')&&!document.querySelector('.color-palette'),'Choosing a palette color formats the saved editor selection and closes the palette');
     select('#after',2);await delay();
     check(getComputedStyle(doc().querySelector('#after')).color!=='rgb(233, 113, 50)'&&getComputedStyle(fontColor.querySelector('.color-sample')).backgroundColor==='rgb(233, 113, 50)',
       'Font Color retains the chosen indicator when the caret moves to differently colored text');
+    select('#after');click('#fontColor');
+    check(doc().querySelector('#after').innerHTML.includes('233, 113, 50')&&!document.querySelector('.color-palette'),'The left Font Color button applies its remembered color without opening a picker');
+    for(const control of ['highlightOptions','fontColorOptions']){
+      const before=window.editor.html();click('#'+control);await delay();
+      const frame=document.querySelector('#document').getBoundingClientRect();
+      for(const type of ['mousePressed','mouseReleased'])await request('test-mouse',{parameters:{type,x:frame.right-30,y:frame.top+30,button:'left',clickCount:1}});
+      await delay();
+      check(!document.querySelector('.color-palette')&&window.editor.html()===before,'Clicking the document dismisses '+control+' without changing the color or text');
+      click('#'+control);await delay();document.querySelector('#growFont').dispatchEvent(new PointerEvent('pointerdown',{bubbles:true}));
+      check(!document.querySelector('.color-palette'),'Clicking outside in the ribbon dismisses '+control);
+    }
+    for(let i=0;i<12;i++)await request('color-used',{value:'#0101'+i.toString(16).padStart(2,'0')});
+    await request('color-used',{value:'#010105'});await request('color-used',{value:'transparent'});
+    click('#highlightOptions');await delay();await delay();
+    const recent=[...document.querySelectorAll('.recent-colors [data-color]')].map(button=>button.dataset.color);
+    check(recent.length===10&&new Set(recent).size===10&&recent[0]==='#010105'&&!recent.includes('#010100'),'All pickers share ten unique recent colors, moving reused colors first and excluding No Color');
+    click('.recent-colors [data-color="#010105"]');select('#sample');click('#fontColorOptions');await delay();await delay();
+    check(document.querySelector('.recent-colors [data-color]')?.dataset.color==='#010105','Font and highlight palettes share the same recent-color history');
+    document.querySelector('#growFont').dispatchEvent(new PointerEvent('pointerdown',{bubbles:true}));
+    select('#sample');click('#highlightOptions');click('.color-palette [data-color="#ffff00"]');
     select('#sample');click('#backColor');
     check(doc().querySelector('#sample').innerHTML.includes('255, 255, 0')&&!document.querySelector('.color-palette'),'The left highlighter button applies the last color immediately without opening a palette');
     const marker=[...doc().querySelectorAll('#sample span')].find(span=>span.style.backgroundColor==='rgb(255, 255, 0)');

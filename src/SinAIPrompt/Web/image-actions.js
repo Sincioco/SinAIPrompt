@@ -22,9 +22,9 @@ export function createImageActions(frame,{edit,resize,remove}){
     if(action==='resize')resize();
     if(action==='edit')edit(target).catch(report);
     if(action==='delete')remove(target);
-    if(action==='rename')request('rename-image',{source:target.src}).catch(report);
-    if(action==='fullscreen')showFullScreenImage(target.src).catch(report);
-    if(action==='external')(async()=>request('open-image',{data:(await toPng(target.src)).data}))().catch(report);
+    if(action==='rename')request('rename-image',{source:target.getAttribute('src')}).catch(report);
+    if(action==='fullscreen')showFullScreenImage(target.currentSrc||target.src).catch(report);
+    if(action==='external')(async()=>request('open-image',{data:(await toPng(target.currentSrc||target.src)).data}))().catch(report);
   });
   return {open,close};
 }

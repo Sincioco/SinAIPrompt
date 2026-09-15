@@ -67,6 +67,8 @@ internal static class EditorClipboard
             }
             return new { html, text, preserveImageMarkup = data.GetDataPresent(imageFormat) };
         }
+        if (data.GetData(DataFormats.FileDrop) is string[] imageFiles && imageFiles.FirstOrDefault(path => Path.GetExtension(path).ToLowerInvariant() is ".png" or ".jpg" or ".jpeg" or ".gif" or ".bmp" or ".webp" or ".svg") is { } originalImage)
+            return new { image = new Uri(originalImage).AbsoluteUri };
         if (data.GetData("PNG") is MemoryStream png) return new { image = "data:image/png;base64," + Convert.ToBase64String(png.ToArray()) };
         if (data.GetData(DataFormats.Bitmap) is BitmapSource bitmap)
         {

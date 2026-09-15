@@ -9,7 +9,7 @@ if (native) window.chrome.webview.addEventListener('message', ({data}) => {
 export function send(type, data = {}) { window.chrome?.webview?.postMessage({type, ...data}); }
 export function request(type, data = {}) {
   if (!native) {
-    if (['screen-capture','region-capture','open-image','open-video'].includes(type)) return Promise.reject(new Error('This action is available in the desktop application.'));
+    if (['screen-capture','region-capture','open-image','open-video','map-original-image','reference-image','relocate-original-image'].includes(type)) return Promise.reject(new Error('This action is available in the desktop application.'));
     if (type === 'annotation-mode') return Promise.resolve();
     if (type === 'link-preview') return Promise.resolve(null);
     if (type === 'youtube-preview') return Promise.resolve(null);

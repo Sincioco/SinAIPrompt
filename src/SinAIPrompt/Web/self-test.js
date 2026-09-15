@@ -92,8 +92,16 @@ export async function run(){
   check(fullLayout.expanded&&!fullLayout.backgroundEnabled&&Math.abs(fullLayout.x)<1&&Math.abs(fullLayout.y)<1&&Math.abs(fullLayout.width-fullLayout.clientWidth)<1&&Math.abs(fullLayout.height-fullLayout.clientHeight)<1,'Annotation covers the native menu, document list, and status bar');
   check(dialogBounds.x===0&&dialogBounds.y===0&&dialogBounds.width===innerWidth&&dialogBounds.height===innerHeight,'Annotation fills its entire browser viewport');
   check(document.querySelectorAll('dialog.annotation .color-picker').length===4&&!document.querySelector('input[type=color]'),'Annotation outline, fill, text and canvas use the Office palette');
+  check([...document.querySelectorAll('dialog.annotation .color-picker')].filter(button=>button.getClientRects().length).every(button=>{
+    const bounds=button.getBoundingClientRect(),arrow=button.querySelector('.color-arrow svg').getBoundingClientRect();
+    return arrow.width===8&&arrow.height===8&&Math.abs(arrow.y+arrow.height/2-bounds.y-bounds.height/2)<1;
+  }),'Visible annotation color-picker chevrons are vertically centered');
   click('#canvasColor');click('.color-palette [data-color="#156082"]');
   check(document.querySelector('#canvas > rect').getAttribute('fill')==='#156082'&&!document.querySelector('#canvasTransparent').checked,'Canvas palette updates the background and clears transparency');
+  click('#stroke');await delay(60);
+  check(document.querySelector('.recent-colors [data-color]')?.dataset.color==='#156082','Annotation palettes share the latest chosen color with each other');
+  document.querySelector('dialog.annotation header').dispatchEvent(new PointerEvent('pointerdown',{bubbles:true}));
+  check(!document.querySelector('.color-palette'),'Clicking outside an annotation color picker dismisses it');
   click('#canvasColor');click('.color-palette [data-color=none]');
   check(document.querySelector('#canvasTransparent').checked&&document.querySelector('dialog.annotation').open,'No Color restores transparency without closing annotation');
   const canvasPoint=(x,y)=>{const matrix=document.querySelector('#canvas').getScreenCTM();return new DOMPoint(x,y).matrixTransform(matrix);};

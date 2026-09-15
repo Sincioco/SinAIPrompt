@@ -114,4 +114,80 @@ internal static class HtmlAssetsSelfTest
         check(same.Contains("Images/photo.png") && different.Contains("data:image/png;base64,external"),
             "Image clipboard preserves same-document references and gives other documents portable image data");
     }
+
+    internal static async Task References(MainWindow window, Action<bool, string> check)
+    {
+        var view = window.CurrentView!; var browser = view.Browser.CoreWebView2;
+        string original = view.Document.Text, folder = Path.Combine(App.Current.Store.DirectoryPath, "Original images");
+        Directory.CreateDirectory(folder);
+        string path = Path.Combine(folder, "Reference # photo.png");
+        var encoder = new PngBitmapEncoder();
+        encoder.Frames.Add(BitmapFrame.Create(BitmapSource.Create(16, 8, 96, 96, PixelFormats.Bgr32, null, new byte[16 * 8 * 4], 16 * 4)));
+        using (var output = File.Create(path)) encoder.Save(output);
+        byte[] originalBytes = File.ReadAllBytes(path);
+        using var references = new OriginalImages(folder);
+        string otherDrive = Path.GetPathRoot(path) == "C:\\" ? "D:\\" : "C:\\";
+        check(references.Reference(Path.Combine(otherDrive, "Prompt.html"), new Uri(path).AbsoluteUri, false, null) == new Uri(path).AbsoluteUri,
+            "A cross-drive image reference falls back to a valid absolute URI");
+        var clipboard = EditorClipboard.TestData;
+        async Task Evaluate(string expression)
+        {
+            string response = await browser.CallDevToolsProtocolMethodAsync("Runtime.evaluate", JsonSerializer.Serialize(new { expression, awaitPromise = true }));
+            using var parsed = JsonDocument.Parse(response);
+            if (parsed.RootElement.TryGetProperty("exceptionDetails", out var failure)) throw new Exception(failure.ToString());
+        }
+        async Task WaitFor(string selector)
+        {
+            for (int i = 0; i < 150; i++) { if (await view.Browser.ExecuteScriptAsync("!!document.querySelector(" + JsonSerializer.Serialize(selector) + ")") == "true") return; await Task.Delay(20); }
+            throw new Exception("Image reference control did not appear: " + selector);
+        }
+        try
+        {
+            foreach (string mode in new[] { "relative", "absolute" })
+            {
+                await Evaluate("window.editor.load('<p><br></p>').then(()=>window.editor.focus())");
+                await view.Browser.ExecuteScriptAsync("window.editor.setImageStorage('');window.referenceInsert=window.editor.insertImage(" + JsonSerializer.Serialize(new Uri(path).AbsoluteUri) + ");void 0");
+                await WaitFor("dialog button[value=reference]");
+                await view.Browser.ExecuteScriptAsync("document.querySelector('dialog button[value=reference]').click()");
+                await WaitFor("dialog button[value=" + mode + "]");
+                await view.Browser.ExecuteScriptAsync("document.querySelector('dialog button[value=" + mode + "]').click()");
+                await Evaluate("window.referenceInsert");
+                await Evaluate("document.querySelector('#document').contentDocument.images[0].decode()");
+                string html = JsonSerializer.Deserialize<string>(await view.Browser.ExecuteScriptAsync("window.editor.html()"))!;
+                File.WriteAllText(Path.Combine(folder, mode + "-reference.html"), html);
+                check(html.Contains("data-sin-storage=\"reference\"") && !html.Contains("sin-original.local") && !html.Contains("data:image/") &&
+                    Core.ImageReferences.LocalPaths(html, view.Document.Path!).SetEquals([path]), "An " + mode + " original-image reference saves a valid path without embedding pixels or runtime mapping URLs");
+                check(await view.Browser.ExecuteScriptAsync("(()=>{const img=document.querySelector('#document').contentDocument.images[0];return img.naturalWidth===16&&img.currentSrc.includes('sin-original.local')&&img.getAttribute('src').startsWith(" + JsonSerializer.Serialize(mode == "relative" ? "../" : "file:") + ");})()") == "true",
+                    "The sandbox displays an " + mode + " original image outside the document folder");
+                await Evaluate("window.editor.load(" + JsonSerializer.Serialize(html) + ")");
+                await Evaluate("document.querySelector('#document').contentDocument.images[0].decode()");
+                await Evaluate("(()=>{const doc=document.querySelector('#document').contentDocument;doc.images[0].click();doc.dispatchEvent(new Event('selectionchange'));return window.editor.command('cut').then(()=>window.editor.command('paste'));})()");
+                check(await view.Browser.ExecuteScriptAsync("document.querySelector('#document').contentDocument.images.length===1&&!document.querySelector('dialog[open]')") == "true",
+                    "Cut/paste retains the " + mode + " original reference without another storage prompt");
+                string destination = Path.Combine(App.Current.Store.DirectoryPath, "Other folder", "Nested", "Saved elsewhere.html");
+                string relocated = (await view.PrepareSaveAsAsync(destination))!;
+                check(Core.ImageReferences.LocalPaths(relocated, destination).SetEquals([path]) && !relocated.Contains("data:image/") && !Directory.Exists(Path.Combine(Path.GetDirectoryName(destination)!, "Saved elsewhere")),
+                    "Save As preserves the " + mode + " original reference without copying an image folder");
+                string standalone = await view.ExportAsync();
+                check(standalone.Contains("data:image/png;base64,") && !standalone.Contains("sin-original.local") && !standalone.Contains("data-sin-storage=\"reference\""),
+                    "Standalone export embeds portable pixels from the " + mode + " original reference");
+                string markdown = Path.Combine(App.Current.Store.DirectoryPath, "Reference exports", mode + ".md");
+                await view.SaveMarkdownAsync(markdown);
+                check(File.ReadAllText(markdown).Contains("![") && Directory.GetFiles(Path.Combine(Path.GetDirectoryName(markdown)!, mode), "*.png").Length == 1,
+                    "Markdown export writes an independent PNG from the " + mode + " original reference");
+            }
+            await view.Browser.ExecuteScriptAsync("window.editor.setImageStorage('inline');window.referenceEdit=window.editor.openAnnotation(document.querySelector('#document').contentDocument.images[0]);void 0");
+            await WaitFor("dialog.annotation [data-action=apply]");
+            await view.Browser.ExecuteScriptAsync("document.querySelector('dialog.annotation [data-action=apply]').click()");
+            await Evaluate("window.referenceEdit");
+            check(File.ReadAllBytes(path).SequenceEqual(originalBytes) && await view.Browser.ExecuteScriptAsync("document.querySelector('#document').contentDocument.images[0].dataset.sinStorage==='inline'") == "true",
+                "Annotating a referenced image creates an independent edited image and leaves the original file unchanged");
+        }
+        finally
+        {
+            EditorClipboard.TestData = clipboard;
+            await view.Browser.ExecuteScriptAsync("window.editor.setImageStorage(" + JsonSerializer.Serialize(App.Current.Preferences.ImageStorage) + ")");
+            await Evaluate("window.editor.load(" + JsonSerializer.Serialize(original) + ")"); view.AcceptHtml(original);
+        }
+    }
 }
