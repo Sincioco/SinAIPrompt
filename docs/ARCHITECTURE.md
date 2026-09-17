@@ -696,3 +696,23 @@ chevron geometry and individual Tools wrapping. Existing newest-modification ord
 remains the default, with pins and explicit sort choices preserved. MainWindow remains
 545 lines. No guardrail limits, exceptions, startup scans or dependencies were added;
 existing host/partial-class coupling remains recorded debt.
+
+## Bundled pinned references (September 17)
+
+`BundledDocuments` owns the two immutable resource names, startup restoration into an
+explicit session, and non-overwriting publication of independent working copies. It
+receives session/folder/name snapshots and uses Core file I/O; it never accesses a
+window, application singleton, editor, or global mutable state. Exact original HTML
+lives in `Assets/Documents` and is embedded, with no build-time external path.
+
+App delegates restoration once before constructing windows. Existing document models,
+paths, and unsaved recovery text survive; only missing files are created and references
+are pinned. Existing DocumentOrder/session persistence own ordering and saved pin state.
+FileActions wires the two Help commands to this owner, shows the existing asynchronous
+load indicator, then opens/selects a new pinned document. The window stays interactive
+during file I/O. Numbered destinations reserve open names and publish without replacement.
+
+Focused native checks cover exact resource bytes, repeat startup, missing-file recovery,
+edited disk and unsaved session preservation, collisions, and both actual Help handlers.
+MainWindow.xaml.cs remains at 545 lines. No baseline, exclusion, dependency, or exception
+was added; existing host partial-class coupling remains debt.

@@ -12,6 +12,9 @@
   <ItemGroup><ProjectReference Include="../SinAIPrompt.Core/SinAIPrompt.Core.csproj" /></ItemGroup>
   <ItemGroup><Resource Include="Assets\SinAIPrompt.ico" /></ItemGroup>
   <ItemGroup>
+    <EmbeddedResource Include="Assets\Documents\*.html" LogicalName="SinAIPrompt.BundledDocuments.%(Filename)%(Extension)" />
+  </ItemGroup>
+  <ItemGroup>
     <Resource Include="Assets\Splash Screens\Sin-AI-Prompt-Splash-2400x1440.png" />
     <AssemblyMetadata Include="BuildDate" Value="$([System.DateTime]::Now.ToString('yyyy-MM-dd HH:mm:ss zzz'))" />
   </ItemGroup>

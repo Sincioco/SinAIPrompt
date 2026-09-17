@@ -49,7 +49,12 @@
     <MenuItem x:Name="DocumentListMenu" Header="_Navigation Pane" IsCheckable="True" InputGestureText="Ctrl+Shift+L" Click="DocumentListClick"/>
     <MenuItem x:Name="ContentViewMenu" Header="Content View" IsCheckable="True"/><MenuItem Header="Sort Documents"><MenuItem Header="Newest First (Last Modified)" Tag="newest" Click="SortDocumentsClick"/><MenuItem Header="Date Created (Newest First)" Tag="created" Click="SortDocumentsClick"/><MenuItem Header="Manual Order" Tag="manual" Click="SortDocumentsClick"/></MenuItem>
    </MenuItem>
-   <MenuItem Header="_Help" Template="{StaticResource CompactMenuHeader}"><MenuItem x:Name="AboutMenu" Header="_About…" Click="AboutClick"/></MenuItem>
+   <MenuItem Header="_Help" Template="{StaticResource CompactMenuHeader}">
+    <MenuItem x:Name="AddInstructionsMenu" Header="Re-add AI _Instructions" Tag="2026-09-16 1025 - AI Instructions.html" Click="AddBundledDocumentClick" ToolTip="Add and pin the bundled original. Existing versions are kept; a numbered copy is created when needed."/>
+    <MenuItem x:Name="AddFormattingMenu" Header="Re-add _Output Formatting" Tag="AI Prompt - Output Formatting.html" Click="AddBundledDocumentClick" ToolTip="Add and pin the bundled original. Existing versions are kept; a numbered copy is created when needed."/>
+    <Separator/>
+    <MenuItem x:Name="AboutMenu" Header="_About…" Click="AboutClick"/>
+   </MenuItem>
   </Menu><Button HorizontalAlignment="Right" Margin="0,2,5,2" Content="&#xE713;" FontFamily="Segoe Fluent Icons" Style="{StaticResource FlatButton}" Width="32" Click="SettingsClick" ToolTip="Settings" AutomationProperties.Name="Settings"/></Grid></Border>
 
   <Grid Grid.Row="3" x:Name="Workspace"><Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition x:Name="ListColumn" Width="0"/><ColumnDefinition x:Name="SplitterColumn" Width="0"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*" MinWidth="240"/></Grid.ColumnDefinitions>
@@ -63,6 +68,6 @@
   <Border x:Name="StatusBar" Grid.Row="4" Height="30" Background="{DynamicResource EditorBrush}" BorderBrush="{DynamicResource LineBrush}" BorderThickness="0,1,0,0"><Grid><Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="66"/><ColumnDefinition Width="154"/><ColumnDefinition Width="126"/></Grid.ColumnDefinitions>
    <TextBlock x:Name="PositionStatus" Text="Ln 1, Col 1" Style="{StaticResource StatusText}" MinWidth="72"/><TextBlock x:Name="CountStatus" Grid.Column="1" Text="0 characters" Style="{StaticResource StatusText}"/><TextBlock Grid.Column="2" Text="{Binding ElementName=EditorHost,Path=Content.PathStatus.Text}" ToolTip="{Binding RelativeSource={RelativeSource Self},Path=Text}" Style="{StaticResource StatusText}" TextTrimming="CharacterEllipsis" TextAlignment="Center" Opacity="0.35"/><Button x:Name="ZoomStatus" Grid.Column="3" Content="120%" Style="{StaticResource FlatButton}" FontSize="11" Click="ResetZoomClick" ToolTip="Reset Zoom To 100%"/><Button x:Name="NewlineStatus" Grid.Column="4" Content="Windows (CRLF)" Style="{StaticResource FlatButton}" FontSize="11" Click="NewlineClick" ToolTip="Line Endings"/><Button x:Name="EncodingStatus" Grid.Column="5" Content="UTF-8" Style="{StaticResource FlatButton}" FontSize="11" Click="EncodingClick" ToolTip="Text Encoding"/>
   </Grid></Border>
-  <ProgressBar x:Name="OpenProgress" Grid.Row="4" Height="3" IsIndeterminate="True" Visibility="Collapsed" VerticalAlignment="Top" AutomationProperties.Name="Converting Markdown"/>
+  <ProgressBar x:Name="OpenProgress" Grid.Row="4" Height="3" IsIndeterminate="True" Visibility="Collapsed" VerticalAlignment="Top" AutomationProperties.Name="Loading Documents"/>
  </Grid><ContentControl x:Name="AnnotationHost" Visibility="Collapsed" HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch" Background="{DynamicResource EditorBrush}"/></Grid></Border>
 </Window>

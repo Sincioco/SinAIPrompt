@@ -10,7 +10,26 @@ namespace SinAIPrompt;
 public partial class MainWindow
 {
     int fileOperationDepth;
-    int markdownImports;
+    int documentLoads;
+    async void AddBundledDocumentClick(object sender, RoutedEventArgs e)
+    {
+        if (IsAnnotating) return;
+        var menu = (MenuItem)sender;
+        menu.IsEnabled = false;
+        documentLoads++; OpenProgress.Visibility = Visibility.Visible;
+        try
+        {
+            var copy = await BundledDocuments.CreateCopyAsync((string)menu.Tag,
+                BundledDocuments.WorkingDirectory(Preferences, App.Current.Store.DirectoryPath),
+                Application.Current.Windows.OfType<MainWindow>().SelectMany(w => w.Documents.Select(d => d.Name)));
+            if (!IsLoaded || App.Current.Exiting) return;
+            AddDocument(copy); AddRecent(copy.Path!);
+            Explorer.SetMode(false); SetDocumentList(true); Explorer.QueueRefresh();
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
+        { MessageBox.Show(this, ex.Message, "Could not add reference document", MessageBoxButton.OK, MessageBoxImage.Error); }
+        finally { menu.IsEnabled = true; if (--documentLoads == 0) OpenProgress.Visibility = Visibility.Collapsed; }
+    }
     public void OpenPaths(IEnumerable<string> paths) => _ = OpenPathsAsync(paths);
     internal async Task OpenPathsAsync(IEnumerable<string> paths)
     {
@@ -22,9 +41,9 @@ public partial class MainWindow
                 var path = Path.GetFullPath(rawPath);
                 if (MarkdownImport.IsMarkdown(path))
                 {
-                    markdownImports++; OpenProgress.Visibility = Visibility.Visible;
+                    documentLoads++; OpenProgress.Visibility = Visibility.Visible;
                     try { path = await MarkdownImport.ConvertAsync(path, GetEditor(activeDocument!).ConvertMarkdownAsync); }
-                    finally { if (--markdownImports == 0) OpenProgress.Visibility = Visibility.Collapsed; }
+                    finally { if (--documentLoads == 0) OpenProgress.Visibility = Visibility.Collapsed; }
                 }
                 var existing = Documents.FirstOrDefault(d => string.Equals(d.Path, path, StringComparison.OrdinalIgnoreCase));
                 if (existing != null) { ActiveDocument = existing; continue; }

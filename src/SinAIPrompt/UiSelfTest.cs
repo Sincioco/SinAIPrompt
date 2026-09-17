@@ -47,6 +47,7 @@ internal static class UiSelfTest
                 if (view.Browser.CoreWebView2 != null && await view.Browser.ExecuteScriptAsync("!!window.editor && !!document.querySelector('#document').contentDocument?.body?.isContentEditable") == "true") { loaded = true; break; }
             }
             Check(loaded, "Native WebView2 HTML editor initializes from installed Visual Studio components");
+            await BundledDocumentsSelfTest.Run(window, Check);
             await NavigationSelfTest.Run(window, Check);
             await BrandingSelfTest.Run(window, Check);
             await ScreenCaptureSelfTest.Run(window, Check);

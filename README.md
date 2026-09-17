@@ -61,6 +61,27 @@ Dragging keeps the current canvas scale while the scrollable workspace expands. 
 
 An annotated image is displayed as a lossless PNG. Editable original image sources and objects are retained in the HTML image's `data-sin-annotation` metadata, so copying the HTML also preserves its editing state. Cropping does not discard original pixels. Large annotated files can contain both source images and the rendered PNG.
 
+## Bundled reference documents
+
+The two original pinned references are permanently included under
+`src/SinAIPrompt/Assets/Documents/` and embedded in the compiled application:
+
+- `2026-09-16 1025 - AI Instructions.html`
+- `AI Prompt - Output Formatting.html`
+
+At startup, the app reopens and pins these exact filenames, recreating missing files
+from the bundle. A restored document keeps its original location and recovery text.
+Otherwise, references use the working folder, then the autosave folder if no working
+folder is configured, or `Reference Documents` under application storage as a fallback.
+Existing files are never replaced, including edited or newer versions.
+
+**Help → Re-add AI Instructions** and **Help → Re-add Output Formatting** add and pin
+fresh copies of the bundled originals and show the Document List. If a filename is
+already on disk or open in any window, a numbered name keeps both versions. These
+commands also work after a reference has been closed or deleted. Automatic startup
+restoration recognizes the exact bundled filenames; differently named versions remain
+independent documents. Bundled HTML uses the same script-disabled editor as other files.
+
 ## Object templates
 
 Select one or more objects and choose **Save selected as template**. Click a saved template to insert it. Use its down-arrow button to export a `.pmt-template.json` file, or **Import PMT template** to bring one in.

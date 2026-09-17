@@ -60,11 +60,13 @@ public partial class App : Application
             MessageBox.Show(message, "Sin - AI Prompt", MessageBoxButton.OK, MessageBoxImage.Error);
         };
         if (TestMode) { await UiSelfTest.Run(this); return; }
-        _ = ListenForFiles();
         var session = Preferences.RestoreSession ? Store.Read<Session>("session.json") : new Session();
+        var referenceErrors = await BundledDocuments.EnsureAsync(session, BundledDocuments.WorkingDirectory(Preferences, Store.DirectoryPath));
         foreach (var saved in session.Windows.Where(w => w.Documents.Count > 0)) { var window = new MainWindow(saved); window.Show(); }
         if (Windows.OfType<MainWindow>().FirstOrDefault() is not { } main) { main = new MainWindow(); main.Show(); }
         MainWindow = main; ShutdownMode = ShutdownMode.OnLastWindowClose;
+        _ = ListenForFiles();
+        if (referenceErrors.Count > 0) MessageBox.Show(main, "Could not restore these reference documents. You can try again from Help.\n\n" + string.Join("\n", referenceErrors), "Sin - AI Prompt", MessageBoxButton.OK, MessageBoxImage.Warning);
         _ = Task.Run(() =>
         {
             try { FileAssociations.Register(); }
