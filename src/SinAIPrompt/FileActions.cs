@@ -202,6 +202,7 @@ public partial class MainWindow
         Add("_Rename…", () => RenameDocument(doc), true, needsPath: doc.Path != null);
         Add("D_uplicate", () => _ = RunDocumentAction("Duplicating Document…", async () => await DuplicateDocument(doc)), false, needsPath: false);
         Add(doc.Pinned ? "Un_pin" : "_Pin To Top", () => documentOrder.TogglePin(doc), false, needsPath: false);
+        Add("Choose _Emoji…", () => EmojiPicker.Create(this, doc, Preferences, App.Current.MarkChanged).ShowDialog(), false, needsPath: false);
         Add(doc.IsReadOnly ? "_Unlock Document" : "_Lock Document", () => _ = RunDocumentAction("Changing Document Lock…",
             () => DocumentLock.ChangeAsync(this, doc, !doc.IsReadOnly, () => SaveDocument(doc))), false, needsPath: false);
         Add("_Delete…", () => DeleteDocumentFile(doc, (path, dirty) => Dialogs.DeleteFile(this, path, dirty)), true);

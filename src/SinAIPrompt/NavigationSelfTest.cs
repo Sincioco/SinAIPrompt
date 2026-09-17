@@ -42,7 +42,8 @@ internal static class NavigationSelfTest
             tabs.ScrollIntoView(document); window.UpdateLayout();
             var item = (ListBoxItem)tabs.ItemContainerGenerator.ContainerFromItem(document);
             var marker = Descendants(item).OfType<TextBlock>().First(text => text.Text.Contains("📌"));
-            check(marker.ActualWidth + marker.Margin.Left + marker.Margin.Right + .5 >= marker.DesiredSize.Width && ((Grid)VisualTreeHelper.GetParent(VisualTreeHelper.GetParent(marker))).ColumnDefinitions[1].Width.IsAuto,
+            var markerPanel = (FrameworkElement)VisualTreeHelper.GetParent(marker);
+            check(marker.ActualWidth + marker.Margin.Left + marker.Margin.Right + .5 >= marker.DesiredSize.Width && ((Grid)VisualTreeHelper.GetParent(markerPanel)).ColumnDefinitions[Grid.GetColumn(markerPanel)].Width.IsAuto,
                 "Pinned tab markers use their full desired width instead of a clipped fixed column");
             document.Pinned = pinned; document.Notify();
             var session = window.Snapshot();

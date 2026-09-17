@@ -50,8 +50,8 @@
     <MenuItem x:Name="ContentViewMenu" Header="Content View" IsCheckable="True"/><MenuItem Header="Sort Documents"><MenuItem Header="Newest First (Last Modified)" Tag="newest" Click="SortDocumentsClick"/><MenuItem Header="Date Created (Newest First)" Tag="created" Click="SortDocumentsClick"/><MenuItem Header="Manual Order" Tag="manual" Click="SortDocumentsClick"/></MenuItem>
    </MenuItem>
    <MenuItem Header="_Help" Template="{StaticResource CompactMenuHeader}">
-    <MenuItem x:Name="AddInstructionsMenu" Header="Re-add AI _Instructions" Tag="2026-09-16 1025 - AI Instructions.html" Click="AddBundledDocumentClick" ToolTip="Add and pin the bundled original. Existing versions are kept; a numbered copy is created when needed."/>
-    <MenuItem x:Name="AddFormattingMenu" Header="Re-add _Output Formatting" Tag="AI Prompt - Output Formatting.html" Click="AddBundledDocumentClick" ToolTip="Add and pin the bundled original. Existing versions are kept; a numbered copy is created when needed."/>
+    <MenuItem x:Name="AddInstructionsMenu" Header="AI _Instructions" Tag="2026-09-16 1025 - AI Instructions.html" Click="AddBundledDocumentClick" ToolTip="Add and pin the bundled original. Existing versions are kept; a numbered copy is created when needed."/>
+    <MenuItem x:Name="AddFormattingMenu" Header="AI _Chat Formatting" Tag="AI Prompt - Output Formatting.html" Click="AddBundledDocumentClick" ToolTip="Add and pin the bundled original. Existing versions are kept; a numbered copy is created when needed."/>
     <Separator/>
     <MenuItem x:Name="AboutMenu" Header="_About…" Click="AboutClick"/>
    </MenuItem>

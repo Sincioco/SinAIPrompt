@@ -136,6 +136,7 @@ internal static class PromptExplorerSelfTest
                 "Explorer updates image usage from an unsaved open document without creating editors");
             opened.Text = liveHtml; await explorer.RefreshAsync();
             await FileActions(window, explorer, folder, check);
+            await Scrollbars(explorer, folder, check);
             explorer.SetMode(false);
             check(((ListBox)window.FindName("DocumentList")).IsVisible && !tree.IsVisible && window.Documents.Contains(original), "Mode toggle restores the original open Document List");
             explorer.SetMode(true); window.UpdateLayout(); await Task.Delay(100);
@@ -150,6 +151,39 @@ internal static class PromptExplorerSelfTest
             explorer.SetMode(oldMode); settings.ExplorerShowFolders = oldFolders;
             await explorer.SetFolderAsync(oldRoot); window.SetDocumentList(oldVisible);
         }
+    }
+
+    static async Task Scrollbars(PromptExplorer explorer, string folder, Action<bool, string> check)
+    {
+        string scrollingFolder = Path.Combine(folder, "scrollbar-fixture");
+        Directory.CreateDirectory(scrollingFolder);
+        for (int i = 0; i < 80; i++) File.WriteAllText(Path.Combine(scrollingFolder, $"{i:D2} - {new string('W', 130)}.html"), "<p>Scroll fixture</p>");
+        await explorer.SetFolderAsync(scrollingFolder); explorer.UpdateLayout();
+        static IEnumerable<DependencyObject> Visuals(DependencyObject parent)
+        {
+            yield return parent;
+            for (int i = 0; i < VisualTreeHelper.GetChildrenCount(parent); i++)
+                foreach (var child in Visuals(VisualTreeHelper.GetChild(parent, i))) yield return child;
+        }
+        var controls = Visuals(explorer.Tree).ToArray();
+        var scroll = controls.OfType<ScrollViewer>().First();
+        var viewport = controls.OfType<ScrollContentPresenter>().Single(item => item.TemplatedParent == scroll);
+        var bars = controls.OfType<System.Windows.Controls.Primitives.ScrollBar>().Where(bar => bar.TemplatedParent == scroll).ToArray();
+        var vertical = bars.Single(bar => bar.Orientation == Orientation.Vertical);
+        var horizontal = bars.Single(bar => bar.Orientation == Orientation.Horizontal);
+        var bounds = viewport.TransformToAncestor(scroll).TransformBounds(new Rect(viewport.RenderSize));
+        check(vertical.IsVisible && horizontal.IsVisible && viewport.ClipToBounds &&
+            bounds.Right <= vertical.TranslatePoint(new Point(), scroll).X + 0.1 &&
+            bounds.Bottom <= horizontal.TranslatePoint(new Point(), scroll).Y + 0.1,
+            "Long Explorer filenames and rows are clipped before both reserved scrollbar gutters");
+        scroll.ScrollToRightEnd(); scroll.ScrollToBottom(); explorer.UpdateLayout();
+        check(scroll.HorizontalOffset > 0 && scroll.VerticalOffset > 0,
+            "Explorer retains horizontal and vertical scrolling with long filenames and long lists");
+        var bitmap = new RenderTargetBitmap((int)Math.Ceiling(explorer.ActualWidth), (int)Math.Ceiling(explorer.ActualHeight), 96, 96, PixelFormats.Pbgra32);
+        bitmap.Render(explorer);
+        var encoder = new PngBitmapEncoder(); encoder.Frames.Add(BitmapFrame.Create(bitmap));
+        using (var output = File.Create(Path.Combine(App.Current.Store.DirectoryPath, "explorer-scrollbars.png"))) encoder.Save(output);
+        await explorer.SetFolderAsync(folder);
     }
 
     static async Task FileActions(MainWindow window, PromptExplorer explorer, string folder, Action<bool, string> check)

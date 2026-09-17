@@ -49,6 +49,7 @@ internal static class UiSelfTest
             Check(loaded, "Native WebView2 HTML editor initializes from installed Visual Studio components");
             await BundledDocumentsSelfTest.Run(window, Check);
             await NavigationSelfTest.Run(window, Check);
+            EmojiPickerSelfTest.Run(window, Check);
             await BrandingSelfTest.Run(window, Check);
             await ScreenCaptureSelfTest.Run(window, Check);
             await DocumentCommandSelfTest.NewPromptReady(window, Check);

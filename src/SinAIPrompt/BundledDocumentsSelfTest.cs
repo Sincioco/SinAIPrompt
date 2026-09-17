@@ -82,6 +82,8 @@ internal static class BundledDocumentsSelfTest
         try
         {
             preferences.ExplorerDirectory = folder;
+            check(Equals(window.AddInstructionsMenu.Header, "AI _Instructions") && Equals(window.AddFormattingMenu.Header, "AI _Chat Formatting"),
+                "Help names the bundled references AI Instructions and AI Chat Formatting");
             foreach (var menu in new[] { window.AddInstructionsMenu, window.AddFormattingMenu })
             {
                 string name = (string)menu.Tag, path = Path.Combine(folder, name);

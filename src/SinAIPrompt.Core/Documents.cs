@@ -22,6 +22,7 @@ public sealed class Document : INotifyPropertyChanged
     public int UntitledNumber { get; set; } = 1;
     public bool AutoSave { get; set; }
     public bool Pinned { get; set; }
+    public string Emoji { get; set; } = "";
     public bool IsReadOnly { get; set; }
     public string ReadOnlySuffix => IsReadOnly ? " [Read-Only]" : "";
     public string LockMarker => IsReadOnly ? "\uE72E" : "";
@@ -34,11 +35,11 @@ public sealed class Document : INotifyPropertyChanged
     public int Zoom { get; set; } = 100;
     public bool Dirty => Text != SavedText || EncodingName != SavedEncoding || NewLine != SavedNewLine;
     public string Name => Path != null ? System.IO.Path.GetFileName(Path) : DraftName ?? $"Prompt {UntitledNumber}";
-    public string AccessibleName => $"{Name}. {(Pinned ? "Pinned. " : "")}{(Dirty ? "Modified" : "Unmodified")}.";
+    public string AccessibleName => $"{(Emoji.Length > 0 ? Emoji + " " : "")}{Name}. {(Pinned ? "Pinned. " : "")}{(Dirty ? "Modified" : "Unmodified")}.";
     public string Tooltip => (Path ?? Name) + (Dirty ? "\nUnsaved changes" : "");
     public string Marker => (Pinned ? "📌" : "") + (Dirty ? "•" : "");
     public event PropertyChangedEventHandler? PropertyChanged;
-    public void Notify() { foreach (var name in new[] { nameof(Name), nameof(Dirty), nameof(Marker), nameof(Tooltip), nameof(AccessibleName), nameof(IsReadOnly), nameof(LockMarker) }) PropertyChanged?.Invoke(this, new(name)); }
+    public void Notify() { foreach (var name in new[] { nameof(Name), nameof(Emoji), nameof(Dirty), nameof(Marker), nameof(Tooltip), nameof(AccessibleName), nameof(IsReadOnly), nameof(LockMarker) }) PropertyChanged?.Invoke(this, new(name)); }
 }
 
 public static class TextFiles
@@ -159,6 +160,7 @@ public sealed class Settings
     public bool? ShowTabs { get; set; }
     public string ImageStorage { get; set; } = "";
     public List<string> RecentColors { get; set; } = [];
+    public List<string> RecentEmojis { get; set; } = [];
     public bool LineNumbers { get; set; } = true;
     public bool RestoreSession { get; set; } = true;
     public bool AutoSaveAllOnClose { get; set; } = true;

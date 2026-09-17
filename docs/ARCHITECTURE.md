@@ -716,3 +716,25 @@ Focused native checks cover exact resource bytes, repeat startup, missing-file r
 edited disk and unsaved session preservation, collisions, and both actual Help handlers.
 MainWindow.xaml.cs remains at 545 lines. No baseline, exclusion, dependency, or exception
 was added; existing host partial-class coupling remains debt.
+
+## Document emojis and Explorer clipping (September 18, Prompt 75)
+
+`Document.Emoji` owns the navigation label and persists through the existing session
+snapshot, including drafts and document renames. It does not alter HTML or filenames.
+`Settings.RecentEmojis` owns the shared twenty-choice history. `EmojiPicker` owns only
+its dialog's search and page, uses a built-in named catalog (fifty choices per page),
+and receives the document, settings and change callback explicitly. The existing
+FileActions context-menu adapter invokes it for tabs and document rows; their shared
+XAML template renders the label. No new window fields or startup work are required.
+Assignments follow the open document/session, like pins; closing a document and opening
+it afresh does not recover its emoji from the HTML file.
+
+`PromptExplorer.xaml` owns a local ScrollViewer template with reserved scrollbar rows
+and columns and a clipped content viewport. It preserves virtualized tree navigation,
+expanded branches and two-axis scrolling without measuring filenames on every refresh.
+The Help label changes retain the existing bundled-reference publication handlers.
+
+Native checks cover search, pagination, assignment/removal/cancel, twenty-entry recency,
+session serialization, shared navigation bindings, Help actions, and long filenames in
+a list overflowing both scrollbar axes. MainWindow stays at 545 lines; no guardrail
+exceptions, dependencies, global mutable state or reverse dependencies were introduced.
