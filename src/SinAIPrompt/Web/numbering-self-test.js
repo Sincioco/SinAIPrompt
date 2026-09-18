@@ -17,6 +17,20 @@ export async function runNumberingTests(check){
     button.click();await closed;
   };
   try{
+    await load('<p id="first">First list</p>');
+    caret('#first');document.querySelector('[data-cmd="insertOrderedList"]').click();
+    check(numbers('ol')[0]===1,'The Numbering button starts at one when no earlier list exists');
+    await load('<ol start="5"><li>Five<ol><li>Nested one</li><li>Nested two</li></ol></li><li>Six</li></ol><h2>Next section</h2><p id="new">Seven</p>');
+    caret('#new');document.querySelector('[data-cmd="insertOrderedList"]').click();
+    check(numbers(lastList())[0]===7,'New numbered lists continue the previous outer list by default without first choosing Continue');
+    caret(lastList().querySelector('li'));await enter();doc.execCommand('insertText',false,'Eight');
+    check(numbers(lastList()).join()==='7,8','Default continued numbering increments on Enter');
+    caret(lastList().querySelector('li'));await options('restart');
+    check(numbers(lastList()).join()==='1,2','Explicit Restart At 1 still overrides the continuation default');
+    await load('<ol start="9"><li>Nine</li></ol><h2>Break</h2><p id="new">Ten</p>');
+    caret('#new');window.editor.command('insertOrderedList');
+    const automatic=window.editor.html();await load(automatic);
+    check(numbers(lastList())[0]===10,'Default continuation is retained when the document is saved and reopened');
     await load('<ol><li>One</li><li>Two</li></ol><h2>Next section</h2><ol id="second"><li>Three</li><li value="3">Four</li><li value="3">Five</li></ol>');
     caret('#second li');setListNumber(doc,'continue');
     check(numbers('#second').join() === '3,4,5','Continue Previous List repairs all following duplicated numbers in one operation');

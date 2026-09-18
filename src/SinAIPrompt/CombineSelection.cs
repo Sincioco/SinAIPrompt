@@ -10,12 +10,25 @@ namespace SinAIPrompt;
 public sealed class CombineSelection
 {
     readonly List<object> items = [];
+    bool enabled;
+    internal bool Enabled
+    {
+        get => enabled;
+        set
+        {
+            if (enabled == value) return;
+            enabled = value;
+            if (!enabled) items.Clear();
+            Changed?.Invoke();
+        }
+    }
     internal event Action? Changed;
     internal IReadOnlyList<object> Items => items.ToArray();
     static string Key(object item) => item is Document doc ? doc.Id.ToString() : ((PromptEntry)item).Path.ToUpperInvariant();
     internal int Order(object item) => items.FindIndex(value => Key(value) == Key(item)) + 1;
     internal void Set(object item, bool selected)
     {
+        if (selected && !Enabled) return;
         int index = Order(item) - 1;
         if (selected && index < 0) items.Add(item);
         else if (!selected && index >= 0) items.RemoveAt(index);
@@ -44,7 +57,7 @@ public sealed class CombineSelectionBox : CheckBox
     public CombineSelectionBox()
     {
         Margin = new Thickness(0, 0, 6, 0); VerticalAlignment = VerticalAlignment.Center;
-        FontSize = 10; ToolTip = "Select for File → Combine. Numbers show selection order.";
+        FontSize = 10; ToolTip = "Select for Combine or Delete. Numbers show selection order.";
         Checked += Pick; Unchecked += Pick;
         Loaded += (_, _) => { if (Selection != null) { Selection.Changed -= Refresh; Selection.Changed += Refresh; } Refresh(); };
         Unloaded += (_, _) => { if (Selection != null) Selection.Changed -= Refresh; };
@@ -59,15 +72,15 @@ public sealed class CombineSelectionBox : CheckBox
     }
     void Refresh()
     {
-        bool eligible = Item is Document || Item is PromptEntry { IsHtml: true };
-        Visibility = Selection != null && eligible ? Visibility.Visible : Visibility.Collapsed;
+        bool eligible = Item is Document || Item is PromptEntry { IsFolder: false };
+        Visibility = Selection?.Enabled == true && eligible ? Visibility.Visible : Visibility.Collapsed;
         refreshing = true;
         try
         {
             int order = eligible && Selection != null ? Selection.Order(Item!) : 0;
             IsChecked = order > 0; Content = order > 0 ? order.ToString() : "";
             string name = Item is Document doc ? doc.Name : Item is PromptEntry entry ? entry.Name : "";
-            AutomationProperties.SetName(this, "Select for Combine: " + name + (order > 0 ? $", order {order}" : ""));
+            AutomationProperties.SetName(this, "Select file: " + name + (order > 0 ? $", order {order}" : ""));
         }
         finally { refreshing = false; }
     }

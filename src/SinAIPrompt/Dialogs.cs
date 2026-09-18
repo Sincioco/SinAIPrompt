@@ -113,4 +113,23 @@ public static class Dialogs
         buttons.Children.Add(Button("Cancel", () => w.Close(), primary: true, cancel: true)); panel.Children.Add(buttons);
         w.Content = panel; w.ShowDialog(); return confirmed;
     }
+
+    internal static bool DeleteFiles(Window owner, IReadOnlyList<string> paths, IReadOnlyList<string> drafts, bool dirty)
+    {
+        bool confirmed = false;
+        var dialog = Create(owner, "Delete Selected Files - Sin - AI Prompt", 580);
+        var panel = new StackPanel { Margin = new Thickness(24) };
+        panel.Children.Add(new TextBlock { Text = "Delete the selected items?", FontSize = 20 });
+        string details = string.Join("\n", paths.Select(path => "Recycle: " + path).Concat(drafts.Select(name => "Close unsaved: " + name)));
+        panel.Children.Add(new ScrollViewer { MaxHeight = 260, Margin = new Thickness(0, 12, 0, 12), VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+            Content = new TextBlock { Text = details, TextWrapping = TextWrapping.Wrap } });
+        panel.Children.Add(new TextBlock { Text = (paths.Count > 0 ? "Saved files will move to the Recycle Bin and their open tabs will close. " : "") +
+            (dirty ? "Unsaved changes to those files will be discarded. " : "") +
+            (drafts.Count > 0 ? "Unsaved documents will close without saving; their contents cannot be recovered from the Recycle Bin." : ""),
+            TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 0, 0, 20) });
+        var buttons = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right };
+        buttons.Children.Add(Button("Delete", () => { confirmed = true; dialog.Close(); }));
+        buttons.Children.Add(Button("Cancel", () => dialog.Close(), primary: true, cancel: true));
+        panel.Children.Add(buttons); dialog.Content = panel; dialog.ShowDialog(); return confirmed;
+    }
 }

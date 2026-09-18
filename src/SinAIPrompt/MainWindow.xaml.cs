@@ -19,6 +19,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     public ObservableCollection<Document> Documents { get; } = [];
     readonly Dictionary<Guid, EditorView> editors = [];
     readonly DocumentOrder documentOrder;
+    readonly DocumentPrivacy privacy;
     readonly HashSet<Guid> restoredDocuments = [];
     readonly Dictionary<Guid, string?> noticedVersions = [];
     readonly Dictionary<Guid, DateTime> pendingAutoSaves = [];
@@ -30,7 +31,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         get => activeDocument;
         set
         {
-            if (value == null || (value == activeDocument && EditorHost.Content is EditorView) || IsAnnotating || documentOrder?.IsSorting == true || !Documents.Contains(value)) return;
+            if (value == null || !privacy.IsVisible(value) || (value == activeDocument && EditorHost.Content is EditorView) || IsAnnotating || documentOrder?.IsSorting == true || !Documents.Contains(value)) return;
             activeDocument = value;
             if (EditorHost != null)
             {
@@ -64,6 +65,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     public MainWindow(WindowSession? session = null)
     {
         InitializeComponent(); DataContext = this; SearchPanel.GetEditor = () => CurrentView;
+        privacy = new(Documents, Tabs, Preferences);
         navigation = new(Workspace, DocumentPane, DocumentSplitter, HorizontalNavigation, TabRow, ListColumn, SplitterColumn, TabBarMenu, Preferences, App.Current.MarkChanged);
         tabStrip = new(Tabs, HorizontalNavigation, ScrollTabsLeft, ScrollTabsRight);
         _ = new EditorChromeLayout(Workspace, EditorHost, DocumentPane, DocumentSplitter, SearchPanel, ContentsView);
@@ -85,11 +87,15 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             if (session.Maximized) WindowState = WindowState.Maximized;
         }
         else navigation.SavedWidth = Math.Clamp(Preferences.ListWidth, 150, 650);
-        if (Documents.Count == 0) NewDocument();
+        if (activeDocument == null) ActiveDocument = privacy.VisibleDocument() ?? NewDocument();
         SetDocumentList(session?.DocumentList ?? (Preferences.ExplorerMode || Preferences.DocumentList), false);
         navigation.InitializeTabs(session?.ShowTabs);
         WrapToolbarMenu.Click += (_, _) => { Preferences.WrapToolbar = WrapToolbarMenu.IsChecked; ApplyPreferences(); };
-        Explorer.Initialize(Preferences, DocumentList, Documents, ActiveDocument?.Path == null ? Preferences.AutoSaveDirectory : Path.GetDirectoryName(ActiveDocument.Path), OpenExplorerFile, RenameExplorerFile, entry => DeleteExplorerEntry(entry), () => NewDocument(), ShowExplorerPath, App.Current.MarkChanged);
+        MultiFileSelectionMenu.Click += (_, _) => Explorer.SetMultiFileSelection(MultiFileSelectionMenu.IsChecked);
+        Explorer.DocumentVisible = privacy.IsVisible; Explorer.EntryVisible = privacy.IsVisible;
+        ShowPrivateDocumentsMenu.IsChecked = Preferences.ShowPrivateDocuments;
+        Explorer.Initialize(Preferences, DocumentList, Documents, ActiveDocument?.Path == null ? Preferences.AutoSaveDirectory : Path.GetDirectoryName(ActiveDocument.Path), OpenExplorerFile, RenameExplorerFile, entry => DeleteExplorerEntry(entry), DeleteSelectedFiles, () => CombineFilesFromUi(Explorer.ExplorerSelection), () => NewDocument(), ShowExplorerPath, App.Current.MarkChanged);
+        Explorer.EmojiForPath = path => Documents.FirstOrDefault(doc => string.Equals(doc.Path, path, StringComparison.OrdinalIgnoreCase))?.Emoji ?? DocumentEmojis.Read(Preferences, path);
         ContentsView.Initialize(ContentViewMenu, Preferences, App.Current.MarkChanged);
         Explorer.OpenDocuments = () => Documents.Where(d => d.Path != null).Select(d => (d.Path!, d.Text)).ToArray();
         SourceInitialized += (_, _) => ApplyTheme();
@@ -98,7 +104,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         Loaded += (_, _) => { initialized = true; UpdateTabWidths(); ApplyPreferences(); CurrentView?.FocusEditing(); };
         autoSaveTimer.Tick += (_, _) => FlushAutoSaves(false);
         autoSaveTimer.Start();
-        Closed += (_, _) => { Explorer.Dispose(); (EditorHost.Content as ExplorerPreview)?.Dispose(); documentOrder.Dispose(); autoSaveTimer.Stop(); if (Application.Current.Windows.OfType<MainWindow>().Any() && !App.Current.Exiting) { App.Current.MarkChanged(); App.Current.SaveState(); } };
+        Closed += (_, _) => { Explorer.Dispose(); privacy.Dispose(); (EditorHost.Content as ExplorerPreview)?.Dispose(); documentOrder.Dispose(); autoSaveTimer.Stop(); if (Application.Current.Windows.OfType<MainWindow>().Any() && !App.Current.Exiting) { App.Current.MarkChanged(); App.Current.SaveState(); } };
     }
     public Document NewDocument(string? excludedPath = null)
     {
@@ -110,13 +116,16 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             if (IsLoaded) MessageBox.Show(this, "The auto-save folder is unavailable. This document will stay open until you save it manually.\n\n" + ex.Message, "Could not create the file", MessageBoxButton.OK, MessageBoxImage.Warning);
             else Dispatcher.BeginInvoke(() => MessageBox.Show(this, "The auto-save folder is unavailable. Use Save As to save this document.\n\n" + ex.Message, "Sin - AI Prompt"));
         }
-        AddDocument(doc); FocusEditor(); return doc;
+        AddDocument(doc, scrollToTop: true); FocusEditor(); return doc;
     }
-    void AddDocument(Document doc, bool activate = true)
+    void AddDocument(Document doc, bool activate = true, bool scrollToTop = false)
     {
+        DocumentEmojis.Restore(doc, Preferences);
         Documents.Add(doc);
+        if (scrollToTop) documentOrder.Apply();
         doc.PropertyChanged += (_, _) => { if (doc == ActiveDocument) { Title = "Sin - AI Prompt - " + doc.Name + doc.ReadOnlySuffix + (doc.Dirty ? " *" : ""); UpdateStatus(); } };
         if (activate) { ActiveDocument = doc; UpdateTabWidths(); }
+        if (scrollToTop) navigation.ScrollToTop(DocumentList, doc);
         App.Current.MarkChanged();
         if (doc.AutoSave && doc.Dirty) pendingAutoSaves[doc.Id] = DateTime.UtcNow;
     }
@@ -187,6 +196,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             if (relocated != null) doc.Text = relocated;
             try { TextFiles.Save(doc, path!, conflict); }
             catch { doc.Text = original; throw; }
+            DocumentEmojis.Set(doc, doc.Emoji, Preferences);
             if (view != null) await view.RefreshBase(reloadDocument: relocated == null);
             if (relocated != null) { view!.AcceptHtml(doc.Text); view.ReloadSavedHtml(); }
             AddRecent(path!); noticedVersions.Remove(doc.Id); autoSaveErrors.Remove(doc.Id); pendingAutoSaves.Remove(doc.Id); ExternalNotice.Visibility = Visibility.Collapsed; UpdateStatus(); App.Current.MarkChanged(); return true;
@@ -213,7 +223,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         int index = Documents.IndexOf(doc); bool active = doc == ActiveDocument;
         Explorer.DocumentSelection.Set(doc, false);
         Documents.Remove(doc); editors.GetValueOrDefault(doc.Id)?.Dispose(); editors.Remove(doc.Id); restoredDocuments.Remove(doc.Id); noticedVersions.Remove(doc.Id); pendingAutoSaves.Remove(doc.Id); autoSaveErrors.Remove(doc.Id);
-        if (Documents.Count == 0) NewDocument(fileDeleted ? doc.Path : null); else if (active) ActiveDocument = Documents[Math.Min(index, Documents.Count - 1)];
+        if (Documents.Count == 0) NewDocument(fileDeleted ? doc.Path : null); else if (active) ActiveDocument = privacy.VisibleDocument(Documents[Math.Min(index, Documents.Count - 1)]) ?? NewDocument();
         UpdateTabWidths(); FocusEditor(); App.Current.MarkChanged();
     }
     public async Task<bool> PrepareClose()
@@ -295,7 +305,12 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         { var target = FindDocument(e.OriginalSource as DependencyObject); MoveDocument(doc, target == null ? Documents.Count - 1 : Documents.IndexOf(target)); }
         e.Handled = true;
     }
-    void NavigationKeyDown(object sender, KeyEventArgs e) { if (e.Key == Key.Enter) { FocusEditor(); e.Handled = true; } }
+    async void NavigationKeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key == Key.Enter) { FocusEditor(); e.Handled = true; }
+        if (e.Key == Key.Delete && sender == DocumentList && Explorer.DocumentSelection.Enabled)
+        { e.Handled = true; await DeleteFilesFromUi(Explorer.DocumentSelection.Items); }
+    }
     void WindowDragOver(object sender, DragEventArgs e) { if (IsAnnotating) return; if (e.Data.GetDataPresent(DataFormats.FileDrop)) { e.Effects = DragDropEffects.Copy; e.Handled = true; } }
     async void WindowDrop(object sender, DragEventArgs e) { if (IsAnnotating) return; if (e.Data.GetData(DataFormats.FileDrop) is string[] paths) { e.Handled = true; await OpenDroppedPathsAsync(paths); } }
     void FocusEditor() { if (IsLoaded) Dispatcher.BeginInvoke(() => CurrentView?.FocusEditing(), DispatcherPriority.Input); }
@@ -427,7 +442,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         else if (e.Key == Key.F5) { InsertDate(); e.Handled = true; }
         else if (e.Key == Key.Escape && SearchPanel.Visibility == Visibility.Visible) { CloseSearchClick(this, e); e.Handled = true; }
     }
-    void CycleDocument(int direction) { if (Documents.Count > 0) ActiveDocument = Documents[(Documents.IndexOf(ActiveDocument!) + direction + Documents.Count) % Documents.Count]; FocusEditor(); }
+    void CycleDocument(int direction) { ActiveDocument = privacy.Adjacent(ActiveDocument, direction); FocusEditor(); }
     internal bool TryInsertShortcut(Key key, ModifierKeys modifiers, DateTime? now = null)
     {
         if (modifiers != ModifierKeys.Control || Editor == null) return false;
@@ -523,7 +538,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     void RecentOpened(object sender, RoutedEventArgs e)
     {
         RecentMenu.Items.Clear();
-        foreach (var path in Preferences.Recent.Take(Settings.RecentFileLimit).ToArray()) { var item = new MenuItem { Header = path.Replace("_", "__"), ToolTip = path }; item.Click += (_, _) => OpenPaths([path]); RecentMenu.Items.Add(item); }
+        foreach (var path in Preferences.Recent.Where(privacy.IsPathVisible).Take(Settings.RecentFileLimit).ToArray()) { var item = new MenuItem { Header = path.Replace("_", "__"), ToolTip = path }; item.Click += (_, _) => OpenPaths([path]); RecentMenu.Items.Add(item); }
         if (RecentMenu.Items.Count == 0) RecentMenu.Items.Add(new MenuItem { Header = "No Recently Opened Files", IsEnabled = false });
     }
     void NewlineClick(object sender, RoutedEventArgs e)

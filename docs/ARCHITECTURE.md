@@ -731,8 +731,8 @@ Windows DirectWrite/Direct2D/WIC. ABI signatures were checked against installed 
 headers; no new package or runtime download is required. The existing
 FileActions context-menu adapter invokes it for tabs and document rows; their shared
 XAML template renders the label. No new window fields or startup work are required.
-Assignments follow the open document/session, like pins; closing a document and opening
-it afresh does not recover its emoji from the HTML file.
+Draft assignments follow the open document/session, like pins. Saved-file labels now
+also use the application settings metadata described below; they never enter HTML.
 
 `App.xaml` owns the shared navigation ScrollViewer template with reserved scrollbar rows
 and columns and a clipped content viewport. Both navigation lists use it, keeping pin
@@ -753,7 +753,16 @@ List; Tabs retain their original view. Explorer filtering visits only already-lo
 rows and keeps matching ancestors visible. It performs no filesystem content search
 and creates no editors. The shared header owns the search toggle and input. Each pane
 owns a `CombineSelection`; disposable checkbox views show its selection order. Sorting,
-filtering and Explorer row reconstruction do not change that order.
+filtering and Explorer row reconstruction do not change that order. View → Multi File
+Selection enables both pane selections for the current window. Each selection defaults
+off, clears its items when disabled, and notifies its checkbox views to collapse without
+reserving space. The File Combine command follows the View toggle. This temporary mode
+is not persisted, so new windows and app launches start with normal single-file navigation.
+New and combined documents apply the existing sort before activation. `NavigationLayout`
+resets the Document List viewport after queued selection/layout scrolling completes,
+provided the user has not selected another document. Existing-file navigation and
+session restoration retain their usual selected-document scrolling. Native checks
+start at the bottom of a long list and verify both creation paths return to the top.
 
 `DocumentCombine` owns snapshot composition and output-name reservation. The existing
 FileActions adapter flushes selected open editors, reads unopened HTML on a worker,
@@ -773,3 +782,42 @@ Focused checks cover debounce, active-document preservation, scrollbar geometry,
 selection persistence, both Combine entry paths, names/collisions, source/image
 preservation, numbering, unsaved ordering/recovery and the exact Title/Heading/Heading2
 Enter/Backspace/Enter regression. No architecture exceptions or dependencies were added.
+
+## File selection actions, private documents and numbering defaults (September 18)
+
+`CombineSelection` remains the ordered selection owner for each navigation pane. Its
+checkbox views now cover all Explorer files for deletion; Combine still requires HTML.
+The File menu, Document List keyboard/context actions, and Explorer keyboard/context
+actions delegate to the existing FileActions integration. One confirmation lists saved
+paths and unsaved draft names separately. Autosave stays paused across confirmation and
+the whole batch; recycling uses the existing worker-based Windows Recycle Bin operation.
+Completed items leave the selection, a failure stops with remaining items selected, and
+confirmed drafts close without a Save dialog. No permanent-delete fallback was added.
+Combining is also available when right-clicking one of at least two checked files.
+
+`DocumentPrivacy` owns a filtered tab view and document/path visibility predicates.
+`Document.IsPrivate` remains session metadata; `Settings.ShowPrivateDocuments` owns the
+shared visibility preference. `NavigationFilter` combines privacy with filename filtering,
+including loaded Explorer rows. The host switches away from a newly hidden document,
+preserving its editor, autosave and recovery state. Hidden entries are removed from bulk
+selections and Recent Files display. New windows restore a visible document or create a
+blank one when all restored documents are private. This is visibility, not encryption;
+closing a document ends its session privacy marking. No file content or permissions change.
+
+Core `DocumentEmojis` owns saved-file emoji metadata in Settings with normalized Windows
+path keys. Drafts retain their existing document-owned label until Save. The picker,
+open/save, rename and delete adapters reuse this owner. After successful combination,
+only source documents without a label receive ❌; the result stays unmarked. Unopened
+Explorer inputs keep their labels without joining the open-document collection or loading
+editors. Explorer uses the existing cached color-emoji renderer and an explicit label
+callback. Settings/session round trips preserve labels; source HTML remains untouched.
+
+`Web/list-numbering.js` now selects continuation whenever a new ordered list has an earlier
+list at the same nesting depth. The first list still starts at 1; explicit restart/custom
+values, native Enter, and persisted continuation metadata retain their existing behavior.
+
+Native/browser checks cover mixed saved/draft cancellation and deletion, actual recycling,
+partial failure, source/preview cleanup, private visibility and persistence, context Combine,
+preserved/custom/cross-mark labels, unopened inputs, default numbering and explicit restart.
+Changes add no dependencies, entry-point algorithms, broad mutable state or guardrail
+exceptions. Existing FileActions/MainWindow partial coupling remains integration debt.

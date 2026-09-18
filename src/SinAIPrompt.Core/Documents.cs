@@ -22,6 +22,7 @@ public sealed class Document : INotifyPropertyChanged
     public int UntitledNumber { get; set; } = 1;
     public bool AutoSave { get; set; }
     public bool Pinned { get; set; }
+    public bool IsPrivate { get; set; }
     public string Emoji { get; set; } = "";
     public bool IsReadOnly { get; set; }
     public string ReadOnlySuffix => IsReadOnly ? " [Read-Only]" : "";
@@ -36,7 +37,7 @@ public sealed class Document : INotifyPropertyChanged
     public bool Dirty => Text != SavedText || EncodingName != SavedEncoding || NewLine != SavedNewLine;
     public string Name => Path != null ? System.IO.Path.GetFileName(Path) : DraftName ?? $"Prompt {UntitledNumber}";
     public string AccessibleName => $"{(Emoji.Length > 0 ? Emoji + " " : "")}{Name}. {(Pinned ? "Pinned. " : "")}{(Dirty ? "Modified" : "Unmodified")}.";
-    public string Tooltip => (Path ?? Name) + (Dirty ? "\nUnsaved changes" : "");
+    public string Tooltip => (Path ?? Name) + (IsPrivate ? "\nPrivate document" : "") + (Dirty ? "\nUnsaved changes" : "");
     public string Marker => (Pinned ? "📌" : "") + (Dirty ? "•" : "");
     public event PropertyChangedEventHandler? PropertyChanged;
     public void Edit(string text)
@@ -163,9 +164,11 @@ public sealed class Settings
     public bool ShowToolbar { get; set; } = true;
     public bool WrapToolbar { get; set; } = true;
     public bool? ShowTabs { get; set; }
+    public bool ShowPrivateDocuments { get; set; } = true;
     public string ImageStorage { get; set; } = "";
     public List<string> RecentColors { get; set; } = [];
     public List<string> RecentEmojis { get; set; } = [];
+    public Dictionary<string, string> FileEmojis { get; set; } = [];
     public bool LineNumbers { get; set; } = true;
     public bool RestoreSession { get; set; } = true;
     public bool AutoSaveAllOnClose { get; set; } = true;

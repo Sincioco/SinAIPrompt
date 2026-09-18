@@ -19,17 +19,20 @@ internal sealed class NavigationFilter : IDisposable
     readonly TextBox input;
     readonly TextBlock status;
     readonly ListCollectionView view;
+    readonly Func<PromptEntry, bool> entryVisible;
     readonly DispatcherTimer debounce = new() { Interval = TimeSpan.FromMilliseconds(250) };
     string query = "";
     bool explorerMode;
 
-    internal NavigationFilter(ListBox documents, IList source, TreeView tree, Button toggle, FrameworkElement panel, TextBox input, TextBlock status)
+    internal NavigationFilter(ListBox documents, IList source, TreeView tree, Button toggle, FrameworkElement panel, TextBox input, TextBlock status,
+        Func<Document, bool> documentVisible, Func<PromptEntry, bool> entryVisible)
     {
         this.documents = documents; this.tree = tree; this.toggle = toggle;
         this.panel = panel; this.input = input; this.status = status;
+        this.entryVisible = entryVisible;
         // A private view leaves Tabs, which share the source collection, unfiltered.
         view = new ListCollectionView(source);
-        view.Filter = item => item is Document doc && Matches(doc.Name);
+        view.Filter = item => item is Document doc && documentVisible(doc) && Matches(doc.Name);
         view.LiveFilteringProperties.Add(nameof(Document.Name)); view.IsLiveFiltering = true;
         documents.IsSynchronizedWithCurrentItem = false;
         documents.ItemsSource = view;
@@ -62,6 +65,7 @@ internal sealed class NavigationFilter : IDisposable
         bool FilterRow(TreeViewItem row, bool ancestorMatches)
         {
             if (row.Tag is not PromptEntry entry) return false;
+            if (!entryVisible(entry)) { row.Visibility = Visibility.Collapsed; return false; }
             bool match = ancestorMatches || Matches(entry.Name), childMatch = false;
             foreach (var child in row.Items.OfType<TreeViewItem>()) childMatch |= FilterRow(child, match);
             row.Visibility = match || childMatch ? Visibility.Visible : Visibility.Collapsed;

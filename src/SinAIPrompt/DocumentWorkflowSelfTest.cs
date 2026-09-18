@@ -51,17 +51,21 @@ internal static class DocumentWorkflowSelfTest
         var settings = new Settings();
         using (var order = new DocumentOrder(documents, settings, window.Dispatcher, () => { }))
         {
+            async Task WaitForTop(Document expected)
+            {
+                for (int i = 0; i < 100 && documents[0] != expected; i++) await Task.Delay(20);
+            }
             order.Apply(); check(documents[0] == old, "Default document order is newest modification first");
             order.SetMode("created"); check(documents[0] == recent, "Document order can use creation date instead");
             order.TogglePin(old); check(documents[0] == old, "Pinned documents stay above the selected date order");
             var restored = JsonSerializer.Deserialize<Document>(JsonSerializer.Serialize(old))!;
             check(restored.Pinned && restored.CreatedUtc == old.CreatedUtc, "Pins and cached sort dates survive session serialization");
             order.TogglePin(old); check(documents[0] == recent, "Unpin restores the selected document date order");
-            order.SetMode("newest"); recent.ModifiedUtc = now.AddMinutes(1); recent.Notify(); await Task.Delay(80);
+            order.SetMode("newest"); recent.ModifiedUtc = now.AddMinutes(1); recent.Notify(); await WaitForTop(recent);
             check(settings.DocumentSort == "newest" && documents[0] == recent, "The default Last Modified order follows updated file timestamps without opening editors");
-            recent.ModifiedUtc = now.AddMinutes(-1); recent.Notify(); old.Edit("An unsaved edit"); await Task.Delay(80);
+            recent.ModifiedUtc = now.AddMinutes(-1); recent.Notify(); old.Edit("An unsaved edit"); await WaitForTop(old);
             check(documents[0] == old && old.Dirty && old.ModifiedUtc >= now, "Typing unsaved text moves its document to the top without saving");
-            order.TogglePin(recent); old.Edit("Another unsaved edit"); await Task.Delay(80);
+            order.TogglePin(recent); old.Edit("Another unsaved edit"); await WaitForTop(recent);
             check(documents[0] == recent && documents[1] == old, "An edited draft stays immediately below pinned documents");
             var edited = JsonSerializer.Deserialize<Document>(JsonSerializer.Serialize(old))!;
             check(edited.ModifiedUtc == old.ModifiedUtc && edited.Dirty, "Unsaved modification order survives session recovery");

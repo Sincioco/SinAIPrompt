@@ -99,6 +99,7 @@ public partial class MainWindow
                 if (open == window.ActiveDocument) window.ExternalNotice.Visibility = Visibility.Collapsed;
             }
             Preferences.Recent.RemoveAll(p => string.Equals(p, oldPath, StringComparison.OrdinalIgnoreCase));
+            DocumentEmojis.Rename(Preferences, oldPath, destination);
             AddRecent(destination); App.Current.MarkChanged();
         }
         finally { foreach (var window in windows) window.fileOperationDepth--; }

@@ -70,8 +70,7 @@ export function toggleNumbering(doc){
   const item=[...doc.querySelectorAll('ol > li')].find(el=>!existing.has(el))||currentItem(doc);
   if(!wasNumbered&&item?.parentElement.tagName==='OL'){
     const previous=previousItem(doc,item);
-    const mode=previous?.parentElement.querySelector('[data-sin-list-mode]')?.dataset.sinListMode;
-    if(mode==='continue')setListNumber(doc,'continue',1,item);
+    if(previous)setListNumber(doc,'continue',1,item);
   }
   refreshContinuations(doc);
 }

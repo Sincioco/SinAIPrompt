@@ -112,6 +112,8 @@ internal static class UiSelfTest
             await DocumentCommandSelfTest.DuplicateAndRevert(window, Check);
             await DocumentWorkflowSelfTest.Run(window, Check);
             await DocumentCombineSelfTest.Run(window, Check);
+            await FileSelectionSelfTest.Run(window, Check);
+            await DocumentPrivacySelfTest.Run(window, Check);
             await PromptExplorerSelfTest.Run(window, Check);
             string saved = File.ReadAllText(first.Path!); File.AppendAllText(first.Path!, "<!-- external -->");
             bool conflict = false;try { TextFiles.Save(first, first.Path!); } catch (IOException) { conflict = true; }

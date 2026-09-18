@@ -1,5 +1,6 @@
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Threading;
 using SinAIPrompt.Core;
 
 namespace SinAIPrompt;
@@ -49,5 +50,16 @@ internal sealed class NavigationLayout(Grid workspace, FrameworkElement pane, Fr
         SavedWidth = Math.Clamp(width, 150, Math.Max(150, workspace.ActualWidth - 245));
         if (Visible) listColumn.Width = new GridLength(SavedWidth);
         preferences.ListWidth = SavedWidth; changed();
+    }
+    public void ScrollToTop(ListBox list, object selected)
+    {
+        // Selection and virtualized layout can queue their own BringIntoView.
+        // Scroll afterward, unless the user has already selected another file.
+        list.Dispatcher.BeginInvoke(() =>
+        {
+            if (!list.IsLoaded || list.SelectedItem != selected) return;
+            list.ApplyTemplate();
+            if (list.Template.FindName("PART_ScrollViewer", list) is ScrollViewer scroll) scroll.ScrollToTop();
+        }, DispatcherPriority.ContextIdle);
     }
 }

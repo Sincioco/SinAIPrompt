@@ -13,6 +13,11 @@ internal static class DocumentCommandSelfTest
     {
         var previous = window.ActiveDocument!;
         var previousView = window.CurrentView!;
+        bool previousNavigation = window.IsDocumentList, previousMode = window.Explorer.ExplorerMode;
+        window.SetDocumentList(true); window.Explorer.SetMode(false); window.UpdateLayout();
+        var scroll = NavigationSelfTest.Descendants(window.DocumentList).OfType<ScrollViewer>().First();
+        scroll.ScrollToBottom(); window.UpdateLayout();
+        check(scroll.VerticalOffset > 0, "New document scroll regression starts at the bottom of a long Document List");
         double previousRibbon = window.DocumentPane.Margin.Top;
         var watch = System.Diagnostics.Stopwatch.StartNew();
         var draft = window.NewDocument();
@@ -33,6 +38,9 @@ internal static class DocumentCommandSelfTest
                 if (view.Browser.CoreWebView2 != null && await view.Browser.ExecuteScriptAsync("!!window.editor && !!document.querySelector('#document').contentDocument?.body?.isContentEditable") == "true") { loaded = true; break; }
             }
             check(loaded, $"New prompt editor initializes ({watch.ElapsedMilliseconds} ms)");
+            window.UpdateLayout();
+            check(scroll.VerticalOffset == 0 && window.Documents.IndexOf(draft) == window.Documents.Count(doc => doc.Pinned),
+                "Creating a document scrolls to the top with the new draft immediately below pinned documents");
             // No click, focus() call, selection setup, or editing command in this test:
             // real input must land in the blank paragraph created by New document.
             await view.Browser.CoreWebView2!.CallDevToolsProtocolMethodAsync("Input.insertText", "{\"text\":\"Ready to type\"}");
@@ -78,7 +86,7 @@ internal static class DocumentCommandSelfTest
             check(NavigationSelfTest.RegionContains(view.Browser, 20, 20) && view.IsEnabled && view.Parent == window.EditorHost,
                 "Returning from preview and annotation restores the selected ribbon and input");
         }
-        finally { window.ActiveDocument = previous; window.RemoveDocument(draft); }
+        finally { window.ActiveDocument = previous; window.RemoveDocument(draft); window.Explorer.SetMode(previousMode); window.SetDocumentList(previousNavigation); }
         bool show = App.Current.Preferences.ShowToolbar, wrap = App.Current.Preferences.WrapToolbar;
         App.Current.Preferences.ShowToolbar = false; App.Current.Preferences.WrapToolbar = false;
         var hiddenDraft = window.NewDocument(); var hiddenView = window.CurrentView!;

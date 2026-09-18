@@ -20,10 +20,21 @@ public partial class PromptExplorer : UserControl, IDisposable
     internal CombineSelection DocumentSelection { get; } = new();
     internal CombineSelection ExplorerSelection { get; } = new();
     internal CombineSelection CombineSelection => ExplorerMode ? ExplorerSelection : DocumentSelection;
+    internal void SetMultiFileSelection(bool enabled) => DocumentSelection.Enabled = ExplorerSelection.Enabled = enabled;
+    internal Func<Document, bool> DocumentVisible { get; set; } = _ => true;
+    internal Func<PromptEntry, bool> EntryVisible { get; set; } = _ => true;
+    internal Func<string, string> EmojiForPath { get; set; } = _ => "";
+    internal void RefreshPrivacy()
+    {
+        foreach (var item in DocumentSelection.Items.OfType<Document>()) if (!DocumentVisible(item)) DocumentSelection.Set(item, false);
+        foreach (var item in ExplorerSelection.Items.OfType<PromptEntry>()) if (!EntryVisible(item)) ExplorerSelection.Set(item, false);
+        filter?.Refresh();
+    }
     Settings settings = null!;
     Func<string, CancellationToken, Task> open = null!;
     Func<PromptEntry, string, Task> rename = null!;
     Func<PromptEntry, Task> delete = null!;
+    Func<Task> deleteSelected = null!, combineSelected = null!;
     Action create = null!, changed = null!;
     Action<string> status = null!;
     FileSystemWatcher? watcher;
@@ -43,12 +54,12 @@ public partial class PromptExplorer : UserControl, IDisposable
         refreshTimer.Tick += async (_, _) => { refreshTimer.Stop(); await RefreshAsync(); };
     }
     internal void Initialize(Settings preferences, ListBox openDocuments, System.Collections.IList documents, string? initialFolder, Func<string, CancellationToken, Task> openFile,
-        Func<PromptEntry, string, Task> renameFile, Func<PromptEntry, Task> deleteEntry, Action newDocument, Action<string> showPath, Action saveSettings)
+        Func<PromptEntry, string, Task> renameFile, Func<PromptEntry, Task> deleteEntry, Func<Task> deleteFiles, Func<Task> combineFiles, Action newDocument, Action<string> showPath, Action saveSettings)
     {
         settings = preferences; documentList = openDocuments; documentList.Margin = new Thickness(0, 40, 0, 0);
-        filter = new(openDocuments, documents, Tree, SearchFiles, FilterPanel, FilterInput, FilterStatus);
+        filter = new(openDocuments, documents, Tree, SearchFiles, FilterPanel, FilterInput, FilterStatus, doc => DocumentVisible(doc), entry => EntryVisible(entry));
         openDocuments.Tag = DocumentSelection;
-        open = openFile; rename = renameFile; delete = deleteEntry; create = newDocument; status = showPath; changed = saveSettings;
+        open = openFile; rename = renameFile; delete = deleteEntry; deleteSelected = deleteFiles; combineSelected = combineFiles; create = newDocument; status = showPath; changed = saveSettings;
         Folders.IsChecked = settings.ExplorerShowFolders;
         root = settings.ExplorerDirectory.Length > 0 ? settings.ExplorerDirectory : initialFolder ?? "";
         SetMode(settings.ExplorerMode);
@@ -104,6 +115,13 @@ public partial class PromptExplorer : UserControl, IDisposable
         label.Children.Add(new CombineSelectionBox { Item = entry, Selection = ExplorerSelection });
         label.Children.Add(new Image { Source = icons?.GetValueOrDefault(entry.IsFolder ? 3 : entry.IsImage ? 72 : 0),
             Width = 16, Height = 16, Margin = new Thickness(0, 0, 6, 0), VerticalAlignment = VerticalAlignment.Center });
+        string emoji = entry.IsFolder ? "" : EmojiForPath(entry.Path);
+        if (emoji.Length > 0)
+        {
+            var icon = new Image { Source = (ImageSource?)((ColorEmoji)FindResource("ColorEmoji")).Convert(emoji, typeof(Image), null!, System.Globalization.CultureInfo.CurrentCulture),
+                Width = 20, Height = 20, Margin = new Thickness(0, 0, 6, 0), VerticalAlignment = VerticalAlignment.Center };
+            System.Windows.Automation.AutomationProperties.SetName(icon, emoji); label.Children.Add(icon);
+        }
         var text = new TextBlock { Text = entry.Name, VerticalAlignment = VerticalAlignment.Center };
         if (entry.IsUnused) text.Foreground = Brushes.Red;
         label.Children.Add(text);
@@ -172,7 +190,10 @@ public partial class PromptExplorer : UserControl, IDisposable
             menu.Items.Add(item);
         }
         if (entry.IsImage || entry.IsHtml) Add("Rename…", () => Rename(entry), "F2");
-        if (!entry.IsFolder || entry.ParentHtml != null) Add("Delete to Recycle Bin…", () => Delete(entry), "Delete");
+        if (ExplorerSelection.Enabled && ExplorerSelection.Order(entry) > 0 && ExplorerSelection.Items.Count > 1)
+            Add("Combine Selected Documents…", async () => await combineSelected());
+        if (ExplorerSelection.Enabled && ExplorerSelection.Order(entry) > 0) Add("Delete Selected Files…", () => Delete(entry), "Delete");
+        else if (!entry.IsFolder || entry.ParentHtml != null) Add("Delete to Recycle Bin…", () => Delete(entry), "Delete");
         if (menu.Items.Count > 0) menu.Items.Add(new Separator());
         Add("Show in File Explorer", () => ExplorerFileOperations.ShowLocation(entry.Path, true));
         Add("Open Containing Folder", () => ExplorerFileOperations.ShowLocation(entry.Path, false));
@@ -181,13 +202,20 @@ public partial class PromptExplorer : UserControl, IDisposable
     async void Delete(PromptEntry entry)
     {
         SetBusy(true); Notice.Text = "";
-        try { await delete(entry); await RefreshAsync(); }
+        try
+        {
+            if (ExplorerSelection.Enabled && ExplorerSelection.Order(entry) > 0) await deleteSelected();
+            else await delete(entry);
+            await RefreshAsync();
+        }
         catch (OperationCanceledException) { }
         catch (Exception ex) { MessageBox.Show(Window.GetWindow(this), ex.Message, "Delete to Recycle Bin", MessageBoxButton.OK, MessageBoxImage.Information); }
         finally { SetBusy(false); }
     }
     void TreeKeyDown(object sender, KeyEventArgs e)
     {
+        if (e.Key == Key.Delete && ExplorerSelection.Enabled && ExplorerSelection.Items.FirstOrDefault() is PromptEntry first)
+        { e.Handled = true; Delete(first); return; }
         if (e.Key == Key.F5) { e.Handled = true; QueueRefresh(); }
         if (e.Key == Key.F2 && Tree.SelectedItem is TreeViewItem { Tag: PromptEntry entry } && (entry.IsImage || entry.IsHtml)) { e.Handled = true; Rename(entry); }
         if (e.Key == Key.Delete && Tree.SelectedItem is TreeViewItem { Tag: PromptEntry selected } && (!selected.IsFolder || selected.ParentHtml != null)) { e.Handled = true; Delete(selected); }

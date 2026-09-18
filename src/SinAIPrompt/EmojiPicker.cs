@@ -51,7 +51,7 @@ internal static class EmojiPicker
 
         void Select(string value)
         {
-            document.Emoji = value; document.Notify();
+            DocumentEmojis.Set(document, value, settings);
             if (value.Length > 0)
             {
                 settings.RecentEmojis.RemoveAll(item => item == value);

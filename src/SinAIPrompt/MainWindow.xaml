@@ -18,7 +18,8 @@
     <Separator/><MenuItem Header="_Save" InputGestureText="Ctrl+S" Click="SaveClick"/>
     <MenuItem Header="Save _As" InputGestureText="Ctrl+Shift+S" Click="SaveAsClick"/>
     <MenuItem Header="Export as _Markdown…" Click="ExportMarkdownClick"/>
-    <MenuItem x:Name="CombineMenu" Header="_Combine Selected Documents…" Click="CombineDocumentsClick" ToolTip="Check files in either navigation list. They are combined in selection order."/>
+    <MenuItem x:Name="CombineMenu" Header="_Combine Selected Documents…" IsEnabled="{Binding ElementName=MultiFileSelectionMenu,Path=IsChecked}" Click="CombineDocumentsClick" ToolTip="Enable View → Multi File Selection, then check files in selection order."/>
+    <MenuItem x:Name="DeleteSelectedFilesMenu" Header="_Delete Selected Files…" IsEnabled="{Binding ElementName=MultiFileSelectionMenu,Path=IsChecked}" Click="DeleteSelectedFilesClick" ToolTip="Move checked files to the Recycle Bin; close checked unsaved documents after confirmation."/>
     <MenuItem Header="Export As Standalone HTML…" Click="ExportHtmlClick"/><MenuItem Header="Save A_ll" InputGestureText="Ctrl+Alt+S" Click="SaveAllClick"/>
     <Separator/><MenuItem Header="_Close Tab" InputGestureText="Ctrl+W" Click="CloseTabClick"/>
     <MenuItem Header="Close Window" InputGestureText="Ctrl+Shift+W" Click="WindowCloseClick"/>
@@ -48,6 +49,8 @@
     <MenuItem x:Name="WordWrapMenu" Header="_Word Wrap" IsCheckable="True" Click="WordWrapClick"/>
     <Separator/><MenuItem x:Name="TabBarMenu" Header="Tab Bar" IsCheckable="True"/><MenuItem x:Name="WrapToolbarMenu" Header="Wrap Toolbar / Ribbon" IsCheckable="True"/>
     <MenuItem x:Name="DocumentListMenu" Header="_Navigation Pane" IsCheckable="True" InputGestureText="Ctrl+Shift+L" Click="DocumentListClick"/>
+    <MenuItem x:Name="MultiFileSelectionMenu" Header="_Multi File Selection" IsCheckable="True" IsChecked="False"/>
+    <MenuItem x:Name="ShowPrivateDocumentsMenu" Header="Show _Private Documents" IsCheckable="True" Click="ShowPrivateDocumentsClick"/>
     <MenuItem x:Name="ContentViewMenu" Header="Content View" IsCheckable="True"/><MenuItem Header="Sort Documents"><MenuItem Header="Newest First (Last Modified)" Tag="newest" Click="SortDocumentsClick"/><MenuItem Header="Date Created (Newest First)" Tag="created" Click="SortDocumentsClick"/><MenuItem Header="Manual Order" Tag="manual" Click="SortDocumentsClick"/></MenuItem>
    </MenuItem>
    <MenuItem Header="_Help" Template="{StaticResource CompactMenuHeader}">

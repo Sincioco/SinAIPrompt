@@ -12,10 +12,12 @@ internal static class BrandingSelfTest
 {
     internal static async Task Run(MainWindow owner, Action<bool, string> check)
     {
+        owner.Activate();
+        await System.Windows.Threading.Dispatcher.Yield(System.Windows.Threading.DispatcherPriority.ApplicationIdle);
         owner.AboutMenu.RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
-        await Task.Delay(80);
+        await System.Windows.Threading.Dispatcher.Yield(System.Windows.Threading.DispatcherPriority.ApplicationIdle);
         using var about = Application.Current.Windows.OfType<BrandingWindow>().Single();
-        await Task.Delay(60); about.UpdateLayout();
+        about.UpdateLayout();
         var canvas = (Grid)((Viewbox)about.Content).Child;
         check(((BitmapImage)canvas.Children.OfType<Image>().Single().Source).UriSource.ToString().Contains("Sin-AI-Prompt-Splash-2400x1440.png") && about.Owner == owner,
             "Help/About opens with the permanently embedded splash artwork");

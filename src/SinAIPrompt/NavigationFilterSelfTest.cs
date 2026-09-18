@@ -15,6 +15,13 @@ internal static class NavigationFilterSelfTest
         var active = window.ActiveDocument!;
         string root = App.Current.Preferences.ExplorerDirectory;
         var list = window.DocumentList;
+        var multi = window.MultiFileSelectionMenu;
+        async Task SelectMultiple(bool enabled)
+        {
+            multi.IsChecked = enabled; multi.RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
+            await System.Windows.Threading.Dispatcher.Yield(System.Windows.Threading.DispatcherPriority.ApplicationIdle);
+            window.UpdateLayout();
+        }
         bool pin = active.Pinned, locked = active.IsReadOnly;
         try
         {
@@ -22,6 +29,15 @@ internal static class NavigationFilterSelfTest
             active.Pinned = true; active.IsReadOnly = true; active.Notify(); await Task.Delay(80);
             list.ScrollIntoView(active); window.UpdateLayout();
             var row = (ListBoxItem)list.ItemContainerGenerator.ContainerFromItem(active);
+            var checkbox = NavigationSelfTest.Descendants(row).OfType<CombineSelectionBox>().Single();
+            check(!multi.IsChecked && !window.CombineMenu.IsEnabled && !explorer.DocumentSelection.Enabled && !explorer.ExplorerSelection.Enabled && checkbox.Visibility == Visibility.Collapsed,
+                "Multi File Selection defaults off with no checkbox space and Combine disabled");
+            await SelectMultiple(true);
+            list.ScrollIntoView(active); window.UpdateLayout();
+            row = (ListBoxItem)list.ItemContainerGenerator.ContainerFromItem(active);
+            checkbox = NavigationSelfTest.Descendants(row).OfType<CombineSelectionBox>().Single();
+            check(checkbox.IsVisible && explorer.DocumentSelection.Enabled && explorer.ExplorerSelection.Enabled && window.CombineMenu.IsEnabled && window.ActiveDocument == active,
+                $"View Multi File Selection enables both navigation lists without switching the active document (checkbox={checkbox.IsVisible}, documents={explorer.DocumentSelection.Enabled}, explorer={explorer.ExplorerSelection.Enabled}, command={window.CombineMenu.IsEnabled}, active={window.ActiveDocument == active})");
             var scrollbar = NavigationSelfTest.Descendants(list).OfType<ScrollBar>().Single(bar => bar.Orientation == Orientation.Vertical);
             double left = scrollbar.TranslatePoint(new Point(), list).X;
             var markers = NavigationSelfTest.Descendants(row).OfType<TextBlock>().Where(text => text.Text == active.Marker || text.Text == active.LockMarker).ToArray();
@@ -61,10 +77,19 @@ internal static class NavigationFilterSelfTest
             await explorer.RefreshAsync(); explorer.FilterInput.Clear(); await Task.Delay(350); window.UpdateLayout();
             var selected = NavigationSelfTest.Descendants(explorer.Tree).OfType<CombineSelectionBox>().Single(box => box.Item is PromptEntry { Name: "Alpha.html" });
             check(selected.IsChecked == true && selected.Content.ToString() == "1", "Combine selection order survives filtering and Explorer refresh");
-            explorer.ExplorerSelection.Clear();
+            explorer.DocumentSelection.Set(active, true); await SelectMultiple(false);
+            check(explorer.DocumentSelection.Items.Count == 0 && explorer.ExplorerSelection.Items.Count == 0 && selected.Visibility == Visibility.Collapsed && !window.CombineMenu.IsEnabled,
+                "Turning Multi File Selection off hides checkboxes and clears both ordered selections");
+            explorer.SetMode(false); window.UpdateLayout();
+            check(NavigationSelfTest.Descendants(list).OfType<CombineSelectionBox>().All(box => box.Visibility == Visibility.Collapsed) && window.ActiveDocument == active,
+                "Returning to Document List keeps checkboxes hidden and the active document unchanged");
+            await SelectMultiple(true);
+            check(explorer.DocumentSelection.Items.Count == 0 && explorer.ExplorerSelection.Items.Count == 0,
+                "Re-enabling Multi File Selection starts with an empty selection");
         }
         finally
         {
+            await SelectMultiple(false);
             if (explorer.FilterPanel.IsVisible) explorer.SearchFiles.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             active.Pinned = pin; active.IsReadOnly = locked; active.Notify();
             if (root.Length > 0) await explorer.SetFolderAsync(root);

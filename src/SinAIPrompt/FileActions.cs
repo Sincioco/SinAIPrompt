@@ -155,9 +155,11 @@ public partial class MainWindow
                 if (window.EditorHost.Content is ExplorerPreview preview && (string.Equals(preview.FilePath, entry.Path, StringComparison.OrdinalIgnoreCase) ||
                     entry.IsFolder && preview.FilePath.StartsWith(Path.TrimEndingDirectorySeparator(entry.Path) + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase)))
                     window.CloseExplorerPreview();
+                window.Explorer.ExplorerSelection.Set(entry, false);
                 window.Explorer.QueueRefresh();
             }
             Preferences.Recent.RemoveAll(path => string.Equals(path, entry.Path, StringComparison.OrdinalIgnoreCase));
+            DocumentEmojis.Forget(Preferences, entry.Path);
             App.Current.MarkChanged(); return true;
         }
         finally { foreach (var window in windows) window.fileOperationDepth--; }
@@ -170,13 +172,13 @@ public partial class MainWindow
         var doc = FindDocument(e.OriginalSource as DependencyObject);
         if (doc == null && e.CursorLeft == -1) doc = list.SelectedItem as Document;
         if (doc == null) return;
-        var menu = CreateDocumentMenu(doc);
+        var menu = CreateDocumentMenu(doc, list == DocumentList);
         menu.PlacementTarget = list.ItemContainerGenerator.ContainerFromItem(doc) as UIElement ?? list;
         menu.Placement = e.CursorLeft == -1 ? PlacementMode.Bottom : PlacementMode.MousePoint;
         menu.IsOpen = true;
     }
 
-    internal ContextMenu CreateDocumentMenu(Document doc)
+    internal ContextMenu CreateDocumentMenu(Document doc, bool documentList = false)
     {
         var menu = new ContextMenu();
         void Add(string label, Action action, bool needsFile, bool needsPath = true)
@@ -202,10 +204,15 @@ public partial class MainWindow
         Add("_Rename…", () => RenameDocument(doc), true, needsPath: doc.Path != null);
         Add("D_uplicate", () => _ = RunDocumentAction("Duplicating Document…", async () => await DuplicateDocument(doc)), false, needsPath: false);
         Add(doc.Pinned ? "Un_pin" : "_Pin To Top", () => documentOrder.TogglePin(doc), false, needsPath: false);
-        Add("Choose _Emoji…", () => EmojiPicker.Create(this, doc, Preferences, App.Current.MarkChanged).ShowDialog(), false, needsPath: false);
+        Add("_Private", () => { doc.IsPrivate = !doc.IsPrivate; doc.Notify(); RefreshPrivateDocuments(); }, false, needsPath: false);
+        ((MenuItem)menu.Items[^1]).IsCheckable = true; ((MenuItem)menu.Items[^1]).IsChecked = doc.IsPrivate;
+        Add("Choose _Emoji…", () => EmojiPicker.Create(this, doc, Preferences, () => { Explorer.QueueRefresh(); App.Current.MarkChanged(); }).ShowDialog(), false, needsPath: false);
         Add(doc.IsReadOnly ? "_Unlock Document" : "_Lock Document", () => _ = RunDocumentAction("Changing Document Lock…",
             () => DocumentLock.ChangeAsync(this, doc, !doc.IsReadOnly, () => SaveDocument(doc))), false, needsPath: false);
-        Add("_Delete…", () => DeleteDocumentFile(doc, (path, dirty) => Dialogs.DeleteFile(this, path, dirty)), true);
+        if (Explorer.DocumentSelection.Enabled && Explorer.DocumentSelection.Order(doc) > 0 && Explorer.DocumentSelection.Items.Count > 1)
+            Add("_Combine Selected Documents…", () => _ = CombineFilesFromUi(Explorer.DocumentSelection), false, needsPath: false);
+        bool multiple = documentList && Explorer.DocumentSelection.Enabled && Explorer.DocumentSelection.Order(doc) > 0;
+        Add(multiple ? "_Delete Selected Files…" : "_Delete…", () => _ = DeleteFilesFromUi(multiple ? Explorer.DocumentSelection.Items : [doc]), false, needsPath: false);
         menu.Items.Add(new Separator());
         Add("Copy Full _Path", () => Clipboard.SetText(FullPathText(doc.Path!)), false);
         Add("Copy for _AI Use", () => _ = RunDocumentAction("Saving And Locking Document…", () => CopyForAiUse(doc)), false, needsPath: false);
@@ -224,19 +231,37 @@ public partial class MainWindow
         if (doc.IsReadOnly && doc.Path != null) (copy ?? Clipboard.SetText)(AiInstructionText(doc.Path));
     }
 
-    async void CombineDocumentsClick(object sender, RoutedEventArgs e) => await RunDocumentAction("Combining Documents…", async () => await CombineSelectedDocuments());
-    internal async Task<Document> CombineSelectedDocuments()
+    void ShowPrivateDocumentsClick(object sender, RoutedEventArgs e)
     {
-        var selection = Explorer.CombineSelection;
+        Preferences.ShowPrivateDocuments = ShowPrivateDocumentsMenu.IsChecked;
+        foreach (var window in Application.Current.Windows.OfType<MainWindow>()) window.RefreshPrivateDocuments();
+    }
+    void RefreshPrivateDocuments()
+    {
+        ShowPrivateDocumentsMenu.IsChecked = Preferences.ShowPrivateDocuments;
+        privacy.Refresh(); Explorer.RefreshPrivacy();
+        if (activeDocument == null || !privacy.IsVisible(activeDocument) || EditorHost.Content is ExplorerPreview preview && !privacy.IsPathVisible(preview.FilePath))
+            ActiveDocument = privacy.VisibleDocument() ?? NewDocument();
+        UpdateTabWidths(); App.Current.MarkChanged();
+    }
+
+    async void CombineDocumentsClick(object sender, RoutedEventArgs e) => await CombineFilesFromUi();
+    Task CombineFilesFromUi(CombineSelection? selection = null) => RunDocumentAction("Combining Documents…", async () => await CombineSelectedDocuments(selection));
+    internal async Task<Document> CombineSelectedDocuments(CombineSelection? selectedSelection = null)
+    {
+        var selection = selectedSelection ?? Explorer.CombineSelection;
         var selected = selection.Items;
         if (selected.Count < 2) throw new ArgumentException("Check at least two HTML documents in the navigation list. The numbers beside them show their combination order.");
+        if (selected.OfType<PromptEntry>().Any(entry => !entry.IsHtml)) throw new ArgumentException("Combine supports HTML documents. Uncheck other file types before combining.");
         var sources = new List<DocumentCombine.Source>();
+        var inputs = new List<Document>();
         foreach (var item in selected)
         {
             var doc = item as Document;
             if (item is PromptEntry entry)
                 doc = Documents.FirstOrDefault(document => string.Equals(document.Path, entry.Path, StringComparison.OrdinalIgnoreCase)) ?? await Task.Run(() => TextFiles.Open(entry.Path));
             if (doc == null || item is Document && !Documents.Contains(doc)) throw new IOException("A selected document has closed. Select the files again.");
+            DocumentEmojis.Restore(doc, Preferences); inputs.Add(doc);
             if (!await FlushDocument(doc)) throw new OperationCanceledException();
             var path = doc.Path ?? Path.Combine(App.Current.Store.DirectoryPath, "Untitled.html");
             sources.Add(new(doc.Text, new Uri(Path.GetFullPath(path)).AbsoluteUri));
@@ -244,7 +269,8 @@ public partial class MainWindow
         var processor = CurrentView ?? GetEditor(ActiveDocument!);
         var combined = await DocumentCombine.CreateAsync(sources, processor,
             Explorer.ExplorerMode ? Preferences.ExplorerDirectory : Preferences.AutoSaveDirectory, Documents.Select(doc => doc.Name).ToArray());
-        AddDocument(combined); selection.Clear(); Explorer.QueueRefresh();
+        foreach (var input in inputs) if (input.Emoji.Length == 0) DocumentEmojis.Set(input, "❌", Preferences);
+        AddDocument(combined, scrollToTop: true); selection.Clear(); Explorer.QueueRefresh();
         return combined;
     }
 
@@ -300,26 +326,44 @@ public partial class MainWindow
         Application.Current.Windows.OfType<MainWindow>()
             .SelectMany(w => w.Documents.Where(d => string.Equals(d.Path, path, StringComparison.OrdinalIgnoreCase)).Select(d => (w, d))).ToList();
 
-    internal bool DeleteDocumentFile(Document doc, Func<string, bool, bool> confirm, Action<string>? recycle = null)
+    async void DeleteSelectedFilesClick(object sender, RoutedEventArgs e) => await DeleteSelectedFiles();
+    Task DeleteSelectedFiles() => DeleteFilesFromUi(Explorer.CombineSelection.Items);
+    async Task DeleteFilesFromUi(IReadOnlyList<object> items)
     {
-        if (!Documents.Contains(doc) || doc.Path == null) return false;
-        string path = doc.Path;
-        var references = OpenReferences(path);
-        var windows = references.Select(r => r.Window).Distinct().ToArray();
-        // Modal dialogs pump the dispatcher. Pause writes until cancellation or successful removal.
+        try { await DeleteFiles(items); }
+        catch (OperationCanceledException) { }
+        catch (Exception ex) { MessageBox.Show(this, ex.Message, "Delete Selected Files", MessageBoxButton.OK, MessageBoxImage.Error); }
+    }
+
+    internal async Task<int> DeleteFiles(IReadOnlyList<object> items, Func<IReadOnlyList<string>, IReadOnlyList<string>, bool, bool>? confirm = null)
+    {
+        if (IsAnnotating) return 0;
+        if (items.Count == 0) throw new ArgumentException("Check the files or unsaved documents you want to delete first.");
+        if (items.OfType<Document>().Any(doc => !Documents.Contains(doc))) throw new IOException("A selected document has closed. Select the files again.");
+        var drafts = items.OfType<Document>().Where(doc => doc.Path == null).Distinct().ToArray();
+        var paths = items.Select(item => item is Document doc ? doc.Path : item is PromptEntry { IsFolder: false } entry ? entry.Path : null)
+            .OfType<string>().Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+        var windows = Application.Current.Windows.OfType<MainWindow>().ToArray();
+        // Pause autosave across confirmation and the whole batch, including drafts.
         foreach (var window in windows) window.fileOperationDepth++;
+        int deleted = 0;
         try
         {
-            if (!confirm(path, references.Any(r => r.Doc.Dirty))) return false;
-            if (recycle != null) recycle(path);
-            else ExplorerFileOperations.Recycle(path, false);
-            if (File.Exists(path)) throw new IOException("The file was not deleted. Its documents are still open.");
-            // Another window can Save as or open this file while a modal dialog is displayed.
-            // Close only references that still point at the deleted path, including newly opened ones.
-            foreach (var (window, open) in OpenReferences(path)) window.RemoveDocument(open, fileDeleted: true);
-            Preferences.Recent.RemoveAll(p => string.Equals(p, path, StringComparison.OrdinalIgnoreCase));
-            App.Current.MarkChanged(); return true;
+            var references = paths.SelectMany(OpenReferences).ToArray();
+            foreach (var (window, doc) in references) if (window.editors.TryGetValue(doc.Id, out var view)) await view.FlushAsync();
+            confirm ??= (files, unsaved, dirty) => Dialogs.DeleteFiles(this, files, unsaved, dirty);
+            if (!confirm(paths, drafts.Select(doc => doc.Name).ToArray(), references.Any(r => r.Doc.Dirty))) return 0;
+            await Dialogs.WithProgress(this, "Deleting Selected Files…", async () =>
+            {
+                foreach (string path in paths)
+                    if (await DeleteExplorerEntry(new(path, false), (_, _) => true)) deleted++;
+                foreach (var draft in drafts)
+                    if (Documents.Contains(draft) && draft.Path == null) { RemoveDocument(draft); deleted++; }
+            });
+            return deleted;
         }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        { throw new IOException($"{deleted} item(s) processed. Remaining items were kept open and selected.\n\n{ex.Message}", ex); }
         finally { foreach (var window in windows) window.fileOperationDepth--; }
     }
 }
