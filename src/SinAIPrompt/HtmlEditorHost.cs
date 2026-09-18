@@ -137,7 +137,7 @@ public sealed partial class EditorView
             string normalized = TextFiles.Normalize(html);
             if (Document.Text == normalized) return;
             // The hidden WPF TextBox is populated only when source view is opened.
-            Document.Text = normalized; Document.Notify(); App.Current.MarkChanged();
+            Document.Edit(normalized); App.Current.MarkChanged();
             HtmlChanged?.Invoke(this, EventArgs.Empty); return;
         }
         receiving = true;

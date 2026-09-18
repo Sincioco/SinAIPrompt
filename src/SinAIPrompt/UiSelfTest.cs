@@ -49,8 +49,9 @@ internal static class UiSelfTest
             Check(loaded, "Native WebView2 HTML editor initializes from installed Visual Studio components");
             await BundledDocumentsSelfTest.Run(window, Check);
             await NavigationSelfTest.Run(window, Check);
-            EmojiPickerSelfTest.Run(window, Check);
             await BrandingSelfTest.Run(window, Check);
+            await NavigationFilterSelfTest.Run(window, Check);
+            await EmojiPickerSelfTest.Run(window, Check);
             await ScreenCaptureSelfTest.Run(window, Check);
             await DocumentCommandSelfTest.NewPromptReady(window, Check);
             await EditorStartupSelfTest.ClosingDuringStartup(window, Check);
@@ -110,6 +111,7 @@ internal static class UiSelfTest
             Check(await window.SaveDocument(first), "Save after source edits succeeds");
             await DocumentCommandSelfTest.DuplicateAndRevert(window, Check);
             await DocumentWorkflowSelfTest.Run(window, Check);
+            await DocumentCombineSelfTest.Run(window, Check);
             await PromptExplorerSelfTest.Run(window, Check);
             string saved = File.ReadAllText(first.Path!); File.AppendAllText(first.Path!, "<!-- external -->");
             bool conflict = false;try { TextFiles.Save(first, first.Path!); } catch (IOException) { conflict = true; }

@@ -39,6 +39,11 @@ public sealed class Document : INotifyPropertyChanged
     public string Tooltip => (Path ?? Name) + (Dirty ? "\nUnsaved changes" : "");
     public string Marker => (Pinned ? "📌" : "") + (Dirty ? "•" : "");
     public event PropertyChangedEventHandler? PropertyChanged;
+    public void Edit(string text)
+    {
+        if (Text == text) return;
+        Text = text; ModifiedUtc = DateTime.UtcNow; Notify();
+    }
     public void Notify() { foreach (var name in new[] { nameof(Name), nameof(Emoji), nameof(Dirty), nameof(Marker), nameof(Tooltip), nameof(AccessibleName), nameof(IsReadOnly), nameof(LockMarker) }) PropertyChanged?.Invoke(this, new(name)); }
 }
 

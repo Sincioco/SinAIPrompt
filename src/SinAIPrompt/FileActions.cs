@@ -224,6 +224,30 @@ public partial class MainWindow
         if (doc.IsReadOnly && doc.Path != null) (copy ?? Clipboard.SetText)(AiInstructionText(doc.Path));
     }
 
+    async void CombineDocumentsClick(object sender, RoutedEventArgs e) => await RunDocumentAction("Combining Documents…", async () => await CombineSelectedDocuments());
+    internal async Task<Document> CombineSelectedDocuments()
+    {
+        var selection = Explorer.CombineSelection;
+        var selected = selection.Items;
+        if (selected.Count < 2) throw new ArgumentException("Check at least two HTML documents in the navigation list. The numbers beside them show their combination order.");
+        var sources = new List<DocumentCombine.Source>();
+        foreach (var item in selected)
+        {
+            var doc = item as Document;
+            if (item is PromptEntry entry)
+                doc = Documents.FirstOrDefault(document => string.Equals(document.Path, entry.Path, StringComparison.OrdinalIgnoreCase)) ?? await Task.Run(() => TextFiles.Open(entry.Path));
+            if (doc == null || item is Document && !Documents.Contains(doc)) throw new IOException("A selected document has closed. Select the files again.");
+            if (!await FlushDocument(doc)) throw new OperationCanceledException();
+            var path = doc.Path ?? Path.Combine(App.Current.Store.DirectoryPath, "Untitled.html");
+            sources.Add(new(doc.Text, new Uri(Path.GetFullPath(path)).AbsoluteUri));
+        }
+        var processor = CurrentView ?? GetEditor(ActiveDocument!);
+        var combined = await DocumentCombine.CreateAsync(sources, processor,
+            Explorer.ExplorerMode ? Preferences.ExplorerDirectory : Preferences.AutoSaveDirectory, Documents.Select(doc => doc.Name).ToArray());
+        AddDocument(combined); selection.Clear(); Explorer.QueueRefresh();
+        return combined;
+    }
+
     async Task RunDocumentAction(string title, Func<Task> action)
     {
         try { await Dialogs.WithProgress(this, title, action); }

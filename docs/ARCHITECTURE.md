@@ -722,19 +722,54 @@ was added; existing host partial-class coupling remains debt.
 `Document.Emoji` owns the navigation label and persists through the existing session
 snapshot, including drafts and document renames. It does not alter HTML or filenames.
 `Settings.RecentEmojis` owns the shared twenty-choice history. `EmojiPicker` owns only
-its dialog's search and page, uses a built-in named catalog (fifty choices per page),
-and receives the document, settings and change callback explicitly. The existing
+its input, preview and recent choices, and receives the document, settings and change
+callback explicitly. The Windows emoji panel owns catalog/search/skin-tone selection;
+`WindowsEmojiPanel` calls the installed CoreInputView API without SDK projections or
+simulated Windows shortcuts. `ColorEmoji`, an application resource instance, owns a
+bounded frozen bitmap cache and renders the installed Segoe UI Emoji color font with
+Windows DirectWrite/Direct2D/WIC. ABI signatures were checked against installed SDK
+headers; no new package or runtime download is required. The existing
 FileActions context-menu adapter invokes it for tabs and document rows; their shared
 XAML template renders the label. No new window fields or startup work are required.
 Assignments follow the open document/session, like pins; closing a document and opening
 it afresh does not recover its emoji from the HTML file.
 
-`PromptExplorer.xaml` owns a local ScrollViewer template with reserved scrollbar rows
-and columns and a clipped content viewport. It preserves virtualized tree navigation,
+`App.xaml` owns the shared navigation ScrollViewer template with reserved scrollbar rows
+and columns and a clipped content viewport. Both navigation lists use it, keeping pin
+and lock markers outside the scrollbar gutter. It preserves virtualized tree navigation,
 expanded branches and two-axis scrolling without measuring filenames on every refresh.
 The Help label changes retain the existing bundled-reference publication handlers.
 
-Native checks cover search, pagination, assignment/removal/cancel, twenty-entry recency,
+Native checks cover native API availability, actual colored pixels, complete Unicode
+emoji sequences, assignment/removal/cancel, twenty-entry recency,
 session serialization, shared navigation bindings, Help actions, and long filenames in
 a list overflowing both scrollbar axes. MainWindow stays at 545 lines; no guardrail
 exceptions, dependencies, global mutable state or reverse dependencies were introduced.
+
+## Filename filtering, combination and paragraph fixes (September 18)
+
+`NavigationFilter` owns a 250 ms debounce and a private collection view for Document
+List; Tabs retain their original view. Explorer filtering visits only already-loaded
+rows and keeps matching ancestors visible. It performs no filesystem content search
+and creates no editors. The shared header owns the search toggle and input. Each pane
+owns a `CombineSelection`; disposable checkbox views show its selection order. Sorting,
+filtering and Explorer row reconstruction do not change that order.
+
+`DocumentCombine` owns snapshot composition and output-name reservation. The existing
+FileActions adapter flushes selected open editors, reads unopened HTML on a worker,
+and opens only the completed result. `Web/document-combine.js` parses detached HTML,
+uses the existing portable-image export, preserves source order and normalizes outer
+ordered lists to one sequence. Images are embedded so outputs do not depend on source
+folders; source documents remain unchanged. Existing host partial-class integration
+and the portable export's handling of arbitrary imported stylesheets remain limitations.
+
+`Document.Edit` records real text changes for the existing `DocumentOrder`; legacy
+metadata loading does not overwrite a newer unsaved timestamp. `text-formatting.js`
+applies the next paragraph preset after any native split, including nonempty tails
+after a Backspace merge. `word-styles.js` returns the formatted block so the caller
+can place the caret at its beginning; native editing still owns undo.
+
+Focused checks cover debounce, active-document preservation, scrollbar geometry,
+selection persistence, both Combine entry paths, names/collisions, source/image
+preservation, numbering, unsaved ordering/recovery and the exact Title/Heading/Heading2
+Enter/Backspace/Enter regression. No architecture exceptions or dependencies were added.

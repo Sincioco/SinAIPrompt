@@ -134,6 +134,23 @@ export async function runRibbonTests(check) {
     check(next?.tagName==='P'&&next.dataset.sinStyle==='normal'&&next.textContent===''&&next.contains(doc().getSelection().anchorNode),'Enter after Heading creates Normal and keeps the caret on the new paragraph');
     doc().execCommand('insertText',false,'Next paragraph');
     check(next.textContent==='Next paragraph'&&parseFloat(doc().defaultView.getComputedStyle(next).fontSize)===16,'Typing after Heading uses Normal’s 12-point font');
+    for(const id of ['title','heading','heading2']){
+      await window.editor.load('<p id="sample">First line</p>');
+      select('#sample');style(id);select('#sample');doc().getSelection().collapseToEnd();
+      const key=async(name,code,text)=>{
+        await request('test-key',{parameters:{type:'keyDown',key:name,code:name,windowsVirtualKeyCode:code,...(text?{text}:{})}});
+        await request('test-key',{parameters:{type:'keyUp',key:name,code:name,windowsVirtualKeyCode:code}});await delay();
+      };
+      await key('Enter',13,'\r');doc().execCommand('insertText',false,'xy');
+      const second=doc().body.lastElementChild,caret=doc().createRange();caret.selectNodeContents(second);caret.collapse(true);
+      doc().getSelection().removeAllRanges();doc().getSelection().addRange(caret);
+      await key('Backspace',8);await key('Enter',13,'\r');
+      const split=doc().body.lastElementChild,css=doc().defaultView.getComputedStyle(split);
+      check(doc().body.children.length===2&&split.textContent==='xy'&&split.dataset.sinStyle==='normal'&&css.fontWeight==='400'&&css.borderBottomStyle==='none',
+        id+' Enter/Backspace/Enter resets the nonempty second paragraph to Normal: '+split.outerHTML);
+      doc().execCommand('insertText',false,'Z');
+      check(split.textContent==='Zxy'&&doc().body.firstElementChild.dataset.sinStyle===id,'Splitting '+id+' keeps the original style and puts typing before the second-line text');
+    }
     await load();select('#sample');await delay();
     check(document.querySelector('#backColor').value==='#ffff00'&&document.querySelector('#backColor').style.getPropertyValue('--picked-color')==='#ffff00','Highlight defaults to yellow and its toolbar indicator stays yellow on ordinary text');
     click('#fontColorOptions');check(document.querySelectorAll('.color-palette > .palette-grid .swatch').length===70,'Office palette offers ten theme columns with shades and ten standard colors');

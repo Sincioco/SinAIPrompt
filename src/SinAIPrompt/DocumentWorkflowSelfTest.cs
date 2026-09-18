@@ -59,6 +59,12 @@ internal static class DocumentWorkflowSelfTest
             order.TogglePin(old); check(documents[0] == recent, "Unpin restores the selected document date order");
             order.SetMode("newest"); recent.ModifiedUtc = now.AddMinutes(1); recent.Notify(); await Task.Delay(80);
             check(settings.DocumentSort == "newest" && documents[0] == recent, "The default Last Modified order follows updated file timestamps without opening editors");
+            recent.ModifiedUtc = now.AddMinutes(-1); recent.Notify(); old.Edit("An unsaved edit"); await Task.Delay(80);
+            check(documents[0] == old && old.Dirty && old.ModifiedUtc >= now, "Typing unsaved text moves its document to the top without saving");
+            order.TogglePin(recent); old.Edit("Another unsaved edit"); await Task.Delay(80);
+            check(documents[0] == recent && documents[1] == old, "An edited draft stays immediately below pinned documents");
+            var edited = JsonSerializer.Deserialize<Document>(JsonSerializer.Serialize(old))!;
+            check(edited.ModifiedUtc == old.ModifiedUtc && edited.Dirty, "Unsaved modification order survives session recovery");
         }
         string folder = Path.Combine(App.Current.Store.DirectoryPath, "rename-from-ribbon"); Directory.CreateDirectory(folder);
         string source = Path.Combine(folder, "Before.html"), images = Path.Combine(folder, "Before"); Directory.CreateDirectory(images);

@@ -132,7 +132,7 @@ internal static class NavigationSelfTest
         try { return GetWindowRgn(browser.Handle, region) > 0 && PtInRegion(region, (int)(x * browser.ZoomFactor * dpi.DpiScaleX), (int)(y * browser.ZoomFactor * dpi.DpiScaleY)); }
         finally { DeleteObject(region); }
     }
-    static IEnumerable<DependencyObject> Descendants(DependencyObject parent)
+    internal static IEnumerable<DependencyObject> Descendants(DependencyObject parent)
     {
         for (int i = 0; i < VisualTreeHelper.GetChildrenCount(parent); i++)
         {

@@ -63,7 +63,7 @@ public sealed partial class EditorView : Grid, IDisposable
         SetColumn(Editor, 1); Children.Add(Editor);
         Gutter = new LineNumberGutter(Editor) { Visibility = App.Current.Preferences.LineNumbers ? Visibility.Visible : Visibility.Collapsed };
         Children.Add(Gutter);
-        Editor.TextChanged += (_, _) => { doc.Text = TextFiles.Normalize(Editor.Text); doc.Notify(); Gutter.Rebuild(); App.Current.MarkChanged(); };
+        Editor.TextChanged += (_, _) => { doc.Edit(TextFiles.Normalize(Editor.Text)); Gutter.Rebuild(); App.Current.MarkChanged(); };
         Editor.SelectionChanged += (_, _) => { doc.Caret = TextFiles.ToNormalizedOffset(Editor.Text, Editor.SelectionStart); doc.SelectionLength = TextFiles.ToNormalizedOffset(Editor.Text, Editor.SelectionStart + Editor.SelectionLength) - doc.Caret; };
         Editor.AddHandler(ScrollViewer.ScrollChangedEvent, new ScrollChangedEventHandler((_, _) => { Gutter.RequestRefresh(); doc.Scroll = Editor.VerticalOffset; doc.HorizontalScroll = Editor.HorizontalOffset; }));
         Editor.SizeChanged += (_, _) => Gutter.RequestRefresh();

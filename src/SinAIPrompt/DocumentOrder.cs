@@ -61,7 +61,11 @@ internal sealed class DocumentOrder : IDisposable
             }).ToArray());
             if (disposed) return;
             foreach (var item in dates) if (documents.Contains(item.Doc) && item.Doc.CreatedUtc == default)
-            { item.Doc.CreatedUtc = item.Created; item.Doc.ModifiedUtc = item.Modified; observed[item.Doc] = (item.Doc.Pinned, item.Created, item.Modified); }
+            {
+                item.Doc.CreatedUtc = item.Created;
+                if (item.Doc.ModifiedUtc == default) item.Doc.ModifiedUtc = item.Modified;
+                observed[item.Doc] = (item.Doc.Pinned, item.Doc.CreatedUtc, item.Doc.ModifiedUtc);
+            }
             Apply();
         }, DispatcherPriority.Background);
     }

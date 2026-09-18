@@ -16,6 +16,10 @@ public partial class PromptExplorer : UserControl, IDisposable
     FrameworkElement documentList = null!;
     readonly ObservableCollection<TreeViewItem> roots = [];
     readonly DispatcherTimer refreshTimer = new() { Interval = TimeSpan.FromMilliseconds(500) };
+    NavigationFilter? filter;
+    internal CombineSelection DocumentSelection { get; } = new();
+    internal CombineSelection ExplorerSelection { get; } = new();
+    internal CombineSelection CombineSelection => ExplorerMode ? ExplorerSelection : DocumentSelection;
     Settings settings = null!;
     Func<string, CancellationToken, Task> open = null!;
     Func<PromptEntry, string, Task> rename = null!;
@@ -38,10 +42,12 @@ public partial class PromptExplorer : UserControl, IDisposable
         InitializeComponent(); Tree.ItemsSource = roots;
         refreshTimer.Tick += async (_, _) => { refreshTimer.Stop(); await RefreshAsync(); };
     }
-    internal void Initialize(Settings preferences, FrameworkElement openDocuments, string? initialFolder, Func<string, CancellationToken, Task> openFile,
+    internal void Initialize(Settings preferences, ListBox openDocuments, System.Collections.IList documents, string? initialFolder, Func<string, CancellationToken, Task> openFile,
         Func<PromptEntry, string, Task> renameFile, Func<PromptEntry, Task> deleteEntry, Action newDocument, Action<string> showPath, Action saveSettings)
     {
         settings = preferences; documentList = openDocuments; documentList.Margin = new Thickness(0, 40, 0, 0);
+        filter = new(openDocuments, documents, Tree, SearchFiles, FilterPanel, FilterInput, FilterStatus);
+        openDocuments.Tag = DocumentSelection;
         open = openFile; rename = renameFile; delete = deleteEntry; create = newDocument; status = showPath; changed = saveSettings;
         Folders.IsChecked = settings.ExplorerShowFolders;
         root = settings.ExplorerDirectory.Length > 0 ? settings.ExplorerDirectory : initialFolder ?? "";
@@ -58,6 +64,7 @@ public partial class PromptExplorer : UserControl, IDisposable
         Tree.Visibility = ExplorerTools.Visibility = explorer ? Visibility.Visible : Visibility.Collapsed;
         documentList.Visibility = explorer ? Visibility.Collapsed : Visibility.Visible;
         ModeButton.ToolTip = explorer ? "Switch To Document List" : "Switch To Prompt Explorer";
+        filter?.SetMode(explorer);
     }
     void ModeClick(object sender, RoutedEventArgs e)
     {
@@ -81,7 +88,7 @@ public partial class PromptExplorer : UserControl, IDisposable
             root = Path.GetFullPath(path); settings.ExplorerDirectory = root; RootLabel.Text = root; changed();
             ChooseFolder.Content = new Image { Source = icons[3], Width = 16, Height = 16 };
             refreshing = true;
-            try { roots.Clear(); foreach (var entry in entries) roots.Add(Row(entry)); }
+            try { roots.Clear(); foreach (var entry in entries) roots.Add(Row(entry)); filter?.Refresh(); }
             finally { refreshing = false; }
             watcher = new FileSystemWatcher(root) { IncludeSubdirectories = true, NotifyFilter = NotifyFilters.FileName | NotifyFilters.DirectoryName | NotifyFilters.LastWrite };
             watcher.Changed += Watch; watcher.Created += Watch; watcher.Deleted += Watch; watcher.Renamed += Watch;
@@ -94,6 +101,7 @@ public partial class PromptExplorer : UserControl, IDisposable
     TreeViewItem Row(PromptEntry entry)
     {
         var label = new StackPanel { Orientation = Orientation.Horizontal };
+        label.Children.Add(new CombineSelectionBox { Item = entry, Selection = ExplorerSelection });
         label.Children.Add(new Image { Source = icons?.GetValueOrDefault(entry.IsFolder ? 3 : entry.IsImage ? 72 : 0),
             Width = 16, Height = 16, Margin = new Thickness(0, 0, 6, 0), VerticalAlignment = VerticalAlignment.Center });
         var text = new TextBlock { Text = entry.Name, VerticalAlignment = VerticalAlignment.Center };
@@ -128,14 +136,14 @@ public partial class PromptExplorer : UserControl, IDisposable
         if (row.Tag is not PromptEntry entry || row.Items.Count != 1 || ((TreeViewItem)row.Items[0]).Tag != null) return;
         if (entry.ImageFolder != null)
         {
-            row.Items.Clear(); row.Items.Add(Row(new(entry.ImageFolder, true, entry.Path))); return;
+            row.Items.Clear(); row.Items.Add(Row(new(entry.ImageFolder, true, entry.Path))); filter?.Refresh(); return;
         }
         SetBusy(true);
         try
         {
             var children = await ReadAsync(entry.Path, entry.ParentHtml);
             if (disposed) return;
-            row.Items.Clear(); foreach (var child in children) row.Items.Add(Row(child));
+            row.Items.Clear(); foreach (var child in children) row.Items.Add(Row(child)); filter?.Refresh();
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { Notice.Text = ex.Message; }
         finally { SetBusy(false); }
@@ -244,7 +252,7 @@ public partial class PromptExplorer : UserControl, IDisposable
                 return row;
             }
             refreshing = true;
-            try { roots.Clear(); foreach (var item in snapshot[root]) roots.Add(Restore(item)); }
+            try { roots.Clear(); foreach (var item in snapshot[root]) roots.Add(Restore(item)); filter?.Refresh(); }
             finally { refreshing = false; }
             Notice.Text = roots.Count == 0 ? "No supported files in this folder." : "";
         }
@@ -252,5 +260,5 @@ public partial class PromptExplorer : UserControl, IDisposable
         finally { SetBusy(false); }
     }
     void SetBusy(bool value) { busy += value ? 1 : -1; Progress.Visibility = busy > 0 ? Visibility.Visible : Visibility.Hidden; }
-    public void Dispose() { disposed = true; revision++; watcher?.Dispose(); refreshTimer.Stop(); selection.Cancel(); selection.Dispose(); }
+    public void Dispose() { disposed = true; revision++; watcher?.Dispose(); refreshTimer.Stop(); filter?.Dispose(); selection.Cancel(); selection.Dispose(); }
 }

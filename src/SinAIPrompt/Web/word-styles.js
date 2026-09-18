@@ -37,7 +37,7 @@ function restoreBookmark(doc,{start,end,empty}) {
 export function applyParagraphStyle(doc,id) {
   const style=styleById(id,doc);if(!style||!doc.getSelection()?.rangeCount)return;
   const bookmark=textBookmark(doc);
-  let blocks=selectedBlocks(doc);
+  let blocks=selectedBlocks(doc),formatted=null;
   if(!blocks.length){doc.execCommand('formatBlock',false,'p');blocks=selectedBlocks(doc);}
   for(const block of blocks){
     const cell=block.matches('td,th');
@@ -60,8 +60,10 @@ export function applyParagraphStyle(doc,id) {
     const range=doc.createRange();range.selectNodeContents(block);
     const selection=doc.getSelection();selection.removeAllRanges();selection.addRange(range);
     doc.execCommand('insertHTML',false,replacement.outerHTML);
+    formatted=currentBlock(doc);
   }
   restoreBookmark(doc,bookmark);
+  return formatted;
 }
 
 // Preview uses a runtime stylesheet, so hovering never changes saved HTML or undo.

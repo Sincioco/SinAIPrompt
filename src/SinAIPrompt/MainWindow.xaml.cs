@@ -89,7 +89,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         SetDocumentList(session?.DocumentList ?? (Preferences.ExplorerMode || Preferences.DocumentList), false);
         navigation.InitializeTabs(session?.ShowTabs);
         WrapToolbarMenu.Click += (_, _) => { Preferences.WrapToolbar = WrapToolbarMenu.IsChecked; ApplyPreferences(); };
-        Explorer.Initialize(Preferences, DocumentList, ActiveDocument?.Path == null ? Preferences.AutoSaveDirectory : Path.GetDirectoryName(ActiveDocument.Path), OpenExplorerFile, RenameExplorerFile, entry => DeleteExplorerEntry(entry), () => NewDocument(), ShowExplorerPath, App.Current.MarkChanged);
+        Explorer.Initialize(Preferences, DocumentList, Documents, ActiveDocument?.Path == null ? Preferences.AutoSaveDirectory : Path.GetDirectoryName(ActiveDocument.Path), OpenExplorerFile, RenameExplorerFile, entry => DeleteExplorerEntry(entry), () => NewDocument(), ShowExplorerPath, App.Current.MarkChanged);
         ContentsView.Initialize(ContentViewMenu, Preferences, App.Current.MarkChanged);
         Explorer.OpenDocuments = () => Documents.Where(d => d.Path != null).Select(d => (d.Path!, d.Text)).ToArray();
         SourceInitialized += (_, _) => ApplyTheme();
@@ -211,6 +211,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     internal void RemoveDocument(Document doc, bool fileDeleted = false)
     {
         int index = Documents.IndexOf(doc); bool active = doc == ActiveDocument;
+        Explorer.DocumentSelection.Set(doc, false);
         Documents.Remove(doc); editors.GetValueOrDefault(doc.Id)?.Dispose(); editors.Remove(doc.Id); restoredDocuments.Remove(doc.Id); noticedVersions.Remove(doc.Id); pendingAutoSaves.Remove(doc.Id); autoSaveErrors.Remove(doc.Id);
         if (Documents.Count == 0) NewDocument(fileDeleted ? doc.Path : null); else if (active) ActiveDocument = Documents[Math.Min(index, Documents.Count - 1)];
         UpdateTabWidths(); FocusEditor(); App.Current.MarkChanged();
@@ -260,7 +261,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     }
     void NavigationMouseDown(object sender, MouseButtonEventArgs e)
     {
-        dragOrigin = e.GetPosition(this); dragDocument = FindDocument(e.OriginalSource as DependencyObject);
+        dragOrigin = e.GetPosition(this); dragDocument = CombineSelectionBox.ContainsTarget(e.OriginalSource as DependencyObject) ? null : FindDocument(e.OriginalSource as DependencyObject);
         if (dragDocument != null && EditorHost.Content is ExplorerPreview) ActiveDocument = dragDocument;
     }
     void NavigationMouseMove(object sender, MouseEventArgs e)
