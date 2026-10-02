@@ -54,8 +54,9 @@ async function focus(){
 }
 function changed(){
   if(!doc||loadingNow)return;search.invalidate();saveSelection();clearTimeout(changeTimer);
-  // Keep full-document serialization and native synchronization out of keystrokes.
-  changeTimer=setTimeout(()=>{currentRaw=serialize(doc);send('change',{html:currentRaw});},150);
+  // Embedded screenshots make full HTML serialization/IPC expensive. Wait for a
+  // typing pause; explicit save, source switching and closing still flush now.
+  changeTimer=setTimeout(()=>{currentRaw=serialize(doc);send('change',{html:currentRaw});},600);
 }
 function html(flush=false){if(flush)clearTimeout(changeTimer);return loadingNow?currentRaw:doc?serialize(doc):currentRaw;}
 async function load(raw,newBase=base){

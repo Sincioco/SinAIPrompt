@@ -16,12 +16,12 @@ public partial class App : Application
     public Settings Preferences { get; private set; } = new();
     public bool TestMode { get; private set; }
     public bool Exiting { get; private set; }
-    public string? PersistenceError { get; private set; }
+    public string? PersistenceError => persistence?.Error;
     Mutex? instanceMutex;
     string pipeName = "";
     readonly CancellationTokenSource stop = new();
     readonly DispatcherTimer timer = new() { Interval = TimeSpan.FromSeconds(2) };
-    bool sessionChanged;
+    SessionPersistence? persistence;
 
     protected override async void OnStartup(StartupEventArgs e)
     {
@@ -50,6 +50,7 @@ public partial class App : Application
             await Dispatcher.Yield(DispatcherPriority.Background); // Paint before restoring documents; no minimum display time.
         }
         Preferences = Store.Read<Settings>("settings.json");
+        persistence = new(() => Store, () => Preferences, () => new Session { Windows = Windows.OfType<MainWindow>().Select(w => w.Snapshot()).ToList() });
         Preferences.NextDocumentNumber = Math.Max(1, Preferences.NextDocumentNumber);
         if (Preferences.Recent.Count > Settings.RecentFileLimit) Preferences.Recent.RemoveRange(Settings.RecentFileLimit, Preferences.Recent.Count - Settings.RecentFileLimit);
         DispatcherUnhandledException += (_, ev) =>
@@ -73,9 +74,9 @@ public partial class App : Application
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { }
         });
         if (args.Count > 0) main.OpenPaths(args);
-        timer.Tick += (_, _) => { if (sessionChanged) SaveState(); };
+        timer.Tick += (_, _) => _ = persistence.SaveInBackground();
         timer.Start();
-        sessionChanged = true;
+        MarkChanged();
         SessionEnding += (_, _) => { foreach (var window in Windows.OfType<MainWindow>()) window.FlushAutoSaves(true); SaveState(); };
     }
     async Task ListenForFiles()
@@ -124,18 +125,8 @@ public partial class App : Application
         Store = new Store(folder);
         MarkChanged();
     }
-    public void MarkChanged() => sessionChanged = true;
-    public bool SaveState()
-    {
-        try
-        {
-            Store.Write("settings.json", Preferences);
-            if (Preferences.RestoreSession) Store.Write("session.json", new Session { Windows = Windows.OfType<MainWindow>().Select(w => w.Snapshot()).ToList() });
-            else Store.Write("session.json", new Session());
-            sessionChanged = false; PersistenceError = null; return true;
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { PersistenceError = ex.Message; return false; }
-    }
+    public void MarkChanged() => persistence?.MarkChanged();
+    public bool SaveState() => persistence!.SaveNow();
     public async void ExitAll()
     {
         var windows = Windows.OfType<MainWindow>().ToArray();

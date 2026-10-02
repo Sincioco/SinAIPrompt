@@ -289,13 +289,17 @@ export async function run(){
   const timings=[];
   try{
     for(const letter of 'responsive typing'){
-      const start=performance.now();doc().execCommand('insertText',false,letter);timings.push(performance.now()-start);await delay(15);
+      const start=performance.now();doc().execCommand('insertText',false,letter);timings.push(performance.now()-start);await delay(letter===' '?300:180);
     }
-    check(snapshots===0,'Typing in a document with 2 MB of image metadata avoids full HTML snapshots on each key');
+    check(snapshots===0,'Human-paced typing and short word pauses avoid full HTML snapshots with 2 MB of image metadata');
     const typed=parseHtml(window.editor.html()).querySelector('#typing').textContent.replace(/\u00a0/g,' ');
     check(typed==='Typing:responsive typing','Immediate save reads the latest text before the deferred update');
-    const beforeIdle=snapshots;await delay(250);
+    const beforeIdle=snapshots;await delay(750);
     check(snapshots===beforeIdle+1,'A typing burst synchronizes one HTML snapshot after the user pauses');
+    doc().execCommand('insertText',false,'!');
+    check(parseHtml(window.editor.html(true)).querySelector('#typing').textContent.endsWith('!'),'Explicit flush includes the latest keystroke without waiting for idle');
+    const afterFlush=snapshots;await delay(750);
+    check(snapshots===afterFlush,'Explicit flush cancels the pending duplicate HTML snapshot');
     results.push('Typing input handling: maximum '+Math.max(...timings).toFixed(1)+' ms per character with '+(largeImage.dataset.sinAnnotation.length/1048576).toFixed(1)+' MB of image metadata');
   }finally{delete root.cloneNode;await window.editor.load(savedHtml);doc().body.dispatchEvent(new Event('input',{bubbles:true}));}
   return results;

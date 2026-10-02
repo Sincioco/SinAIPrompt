@@ -22,6 +22,7 @@ Paths below are relative to `src/`; unqualified native filenames are under
 | File operations and annotation hosting | `FileActions.cs`, `HtmlFileActions.cs`, `HtmlFileRename.cs`, `AnnotationHost.cs`: partial `MainWindow` implementations sharing that window's state | Existing legacy integration boundaries, not independent state owners. Native file/asset and modal-layout checks. |
 | Visual/source editing adapter | `EditorView.cs` + `HtmlEditorHost.cs`: one document's WPF source view, WebView lifecycle, synchronization, mapping, native messages | Calls the window and platform adapters. Existing reverse coupling must not spread. Source/visual, immediate save, image, typing tests. |
 | Document data and persistence | `SinAIPrompt.Core/Documents.cs`: `Document`, settings/session records, `TextFiles`, `Store`, numbering, search | Core uses .NET APIs; no dependency on the WPF app or WebView. Save/conflict, recovery, numbering checks. |
+| Periodic session recovery | `SessionPersistence.cs` owns detached recovery snapshots, revisions, the newest pending snapshot and one background writer; App schedules it | Captures window/document values on the dispatcher, sharing only immutable strings. Streams JSON on the worker. Explicit saves drain the worker before publication. Native checks cover dispatcher access, snapshot isolation, ordering, retry, atomic backup, relocation and exact JSON compatibility. |
 | Platform services | `HtmlAssets.cs`, `AnnotationClipboard.cs`, `FileAssociations.cs`, `StorageLocation.cs`; `Dialogs.cs` builds native dialogs | Narrow Windows/file operations. Clipboard, PNG, storage and native dialog tests. |
 | Screen capture | `ScreenCapture.cs` owns Win32 monitor/window enumeration and physical-pixel capture; each `ScreenCaptureDialog` owns its picker, cancellable countdown and window restoration; `CaptureRegionWindow` owns selection over one frozen bitmap | The host passes only its owner window and receives an in-memory PNG. Capture/encoding run on workers; the browser reuses annotation and image storage. `ScreenCaptureSelfTest` covers actual window pixels, picker initialization, cursor option, delay, cancellation, scaling and negative coordinates. |
 | Browser editor | `SinAIPrompt/Web/editor.js`: live document, caret/selection, pending synchronization and exports | Uses `document.js`, annotation UI, highlighting, and bridge. Browser integration suite. |
@@ -848,3 +849,42 @@ native PNG/bitmap pixels. The annotation dialog shrank from 243 to 239 lines; it
 new inspector and popup owners contain 40 and 37 lines. MainWindow remains at 561
 lines against the unchanged 564-line ceiling. The checker passes with its existing
 size/reduction review warnings; deeper native-host coupling remains a manual review.
+
+## Typing responsiveness with screenshots (October 3)
+
+`SessionPersistence` moves periodic recovery serialization and disk writes off the
+WPF dispatcher. It retains only the newest queued snapshot, skips already queued
+revisions, and retries failed writes. Explicit close/settings/relocation saves remain
+ordered barriers. Its private string converter uses the installed .NET 10 segmented
+JSON writer to bound encoding buffers for large embedded images. Atomic replacement,
+backups, escaping and the existing recovery format remain unchanged.
+
+`Web/editor.js` owns the existing document synchronization timer. Its 600 ms trailing
+delay keeps full HTML serialization and native IPC out of human-paced typing and
+short word pauses. Explicit save, source switching and close still flush immediately.
+Mouse tab switching retains its cached editor and pending timer. The native dirty
+indicator, autosave and recovery receive visual edits after the typing pause.
+
+A read-only copy of the 81-document, 357 MiB recovery session reproduced a 1,166.90 ms
+dispatcher-blocking save. The updated capture returned in 5.75 ms, with a maximum
+31.79 ms dispatcher heartbeat gap while its worker completed in 1,016.84 ms. Temporary
+allocations fell from 3,326,999,640 to 3,353,160 bytes; complete output hashes matched.
+The 13.8-million-character active document contained seven images. At 180 ms key
+cadence, CDP input round-trip p95 fell from 48.08 to 2.17 ms, and 34 in-burst HTML
+transfers became one after idle. Renderer long tasks fell from nine to zero. A faster
+run delivered about 111 words per minute with no in-burst transfers or long tasks.
+CDP bypasses WPF input delivery; the separate dispatcher heartbeat covers that owner.
+The remaining idle HTML transfer takes about 45 ms and is not an end-to-end physical
+keyboard latency measurement.
+
+Regression checks exercise human-paced typing, explicit flush cancellation, detached
+recovery state, worker ordering, failed replacement/retry, storage moves and segmented
+Unicode/escaping compatibility. App shrank from 158 to 149 lines; the persistence owner
+is 153 lines. MainWindow remains at 561 lines. No dependencies, guardrail exceptions,
+baseline changes or new coupling into the entry point were introduced.
+
+The new persistence regressions occupy 110 lines; native test integration grew by
+one line, the editor by one line, and its existing browser test by four lines. The
+final offline package passed 810 native/browser checks, 16 architecture-checker
+fixtures and syntax checks for all 48 JavaScript modules. The architecture checker
+retains its two existing MainWindow size/reduction review warnings.

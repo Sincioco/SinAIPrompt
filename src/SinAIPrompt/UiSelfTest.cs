@@ -17,6 +17,7 @@ internal static class UiSelfTest
         void Check(bool condition, string name) { if (!condition) throw new Exception(name); results.Add("PASS " + name); File.WriteAllLines(Path.Combine(folder, "ui-test-results.txt"), results); }
         try
         {
+            await SessionPersistenceSelfTest.Run(folder, Check);
             await LinkPreviewSelfTest.Run(Check);
             await HtmlAssetsSelfTest.Run(folder, Check);
             string documents = Path.Combine(folder, "documents"); Directory.CreateDirectory(documents);
