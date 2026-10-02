@@ -113,6 +113,17 @@ internal static class HtmlAssetsSelfTest
         string different = System.Text.Json.JsonSerializer.Serialize(await EditorClipboard.ReadAsync("document-two"));
         check(same.Contains("Images/photo.png") && different.Contains("data:image/png;base64,external"),
             "Image clipboard preserves same-document references and gives other documents portable image data");
+        EditorClipboard.CopyImage(image);
+        var copiedImage = EditorClipboard.TestData!;
+        check(copiedImage.GetFormats(false).Order().SequenceEqual(new[] { "Bitmap", "PNG" }),
+            "Copy Image exposes PNG and Windows Bitmap formats without HTML or editable-object metadata");
+        var copiedPng = (MemoryStream)copiedImage.GetData("PNG")!;
+        check(copiedPng.ToArray().SequenceEqual(Convert.FromBase64String(image[(image.IndexOf(',') + 1)..])),
+            "Copy Image retains the exact PNG bytes");
+        var bitmap = new FormatConvertedBitmap((BitmapSource)copiedImage.GetData(DataFormats.Bitmap)!, PixelFormats.Bgra32, null, 0);
+        var pixel = new byte[4]; bitmap.CopyPixels(pixel, 4, 0);
+        check(bitmap.PixelWidth == 1 && bitmap.PixelHeight == 1 && pixel.SequenceEqual(new byte[] { 0, 0, 255, 255 }),
+            "Copy Image provides decoded Windows bitmap pixels at the original dimensions");
     }
 
     internal static async Task References(MainWindow window, Action<bool, string> check)

@@ -9,6 +9,7 @@ import {runNumberingTests} from './numbering-self-test.js';
 import {runCodeBlockTests} from './code-block-self-test.js';
 import {runMediaTests} from './media-self-test.js';
 import {runContentTests} from './content-self-test.js';
+import {runAnnotationEnhancementTests} from './annotation-enhancements-self-test.js';
 
 export async function run(){
   const results=[];const check=(value,name)=>{if(!value)throw Error(name);results.push(name);};
@@ -141,11 +142,13 @@ export async function run(){
   document.querySelector('#canvasZoom').value='100';document.querySelector('#canvasZoom').dispatchEvent(new Event('change',{bubbles:true}));
   click('[data-tool=arrow]');await drag(canvasPoint(50,150),canvasPoint(430,75));
   check(document.querySelectorAll('[data-layer]').length===2,'Dragging draws an arrow on a separate layer');
+  click('[data-tool=select]');
   const endpoint=document.querySelector('[data-end="2"]');const endRect=endpoint.getBoundingClientRect();
   await drag({x:endRect.x+endRect.width/2,y:endRect.y+endRect.height/2},canvasPoint(470,90));
   check(Math.abs(Number(document.querySelector('[data-endpoint=x2]').value)-470)<2,'Dragging arrow endpoint moves its target independently');
   click('[data-tool=rectangle]');await drag(canvasPoint(30,125),canvasPoint(200,180));
   check(document.querySelectorAll('[data-layer]').length===3,'Dragging draws a resizable rectangle');
+  click('[data-tool=select]');
   const handle=document.querySelector('[data-handle=se]');const handleRect=handle.getBoundingClientRect();
   await drag({x:handleRect.x+handleRect.width/2,y:handleRect.y+handleRect.height/2},canvasPoint(240,195));
   check(Number(document.querySelector('[data-geometry=width]').value)>200,'Dragging rectangle handle resizes the object');
@@ -154,6 +157,7 @@ export async function run(){
   const fill=document.querySelector('#noFill');fill.checked=false;fill.dispatchEvent(new Event('change',{bubbles:true}));
   check(document.querySelectorAll('[data-layer]').length===4,'Circle drawing and transparent outline controls work');
   click('[data-tool=line]');await drag(canvasPoint(10,190),canvasPoint(200,210));
+  click('[data-tool=select]');
   check(document.querySelector('[data-end="1"]'),'Line exposes independently draggable endpoints');
   click('[data-action=undo]');check(document.querySelectorAll('[data-layer]').length===4,'Annotation undo removes the last drawing');
   click('[data-action=redo]');check(document.querySelectorAll('[data-layer]').length===5,'Annotation redo restores the drawing');
@@ -274,6 +278,7 @@ export async function run(){
   check(capturedImage?.dataset.sinStorage==='inline'&&preceding.toString()===textBeforeCapture,'Applying a screen capture inserts at the saved caret with the chosen storage and editable layer');
   await window.editor.load(beforeCapture);
   const savedHtml=window.editor.html();
+  await runAnnotationEnhancementTests(check,png);
   await runRibbonTests(check);
   await window.editor.load('<p id="typing">Typing:</p>');
   const largeImage=doc().createElement('img');largeImage.src=png;

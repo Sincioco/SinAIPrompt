@@ -76,6 +76,8 @@ h3{font-size:11px;letter-spacing:1.1px;text-transform:uppercase;color:#63768a;ma
 .canvas-stage{position:relative;min-width:100%;min-height:100%;padding:50px;width:max-content;display:flex;align-items:center;justify-content:center}
 .canvas-stage svg{display:block;outline:1px solid #e5e5e5;background:white;touch-action:none;user-select:none}
 .canvas-stage svg [data-object]{cursor:move}
+.canvas-stage svg [data-locked=true]{cursor:default}
+.canvas-viewport:not([data-tool=select]):not([data-tool=pan]) svg *{cursor:crosshair}
 .canvas-viewport[data-tool=pan],.canvas-viewport[data-tool=pan] svg *{cursor:grab!important}
 .canvas-viewport.panning,.canvas-viewport.panning svg *{cursor:grabbing!important}
 .canvas-stage svg [data-handle]{fill:white;stroke:#0874c9;stroke-width:1.5;cursor:nwse-resize}
@@ -89,6 +91,9 @@ h3{font-size:11px;letter-spacing:1.1px;text-transform:uppercase;color:#63768a;ma
 .layer span{overflow:hidden;text-overflow:ellipsis}
 .layer.selected{background:#dcecf9;border-color:#7aadd4}
 .layer input{margin:0}
+.annotation-menu{position:fixed;inset:auto;margin:0;padding:5px;min-width:200px;border:1px solid var(--line);border-radius:5px;background:var(--surface);color:var(--text);box-shadow:0 6px 20px #0003}
+.annotation-menu button{display:block;width:100%;text-align:left;border:0}
+.annotation-menu hr{margin:5px 0;border:0;border-top:1px solid var(--line)}
 .annotation footer{align-items:center;justify-content:space-between;padding:10px 16px}
 .annotation footer .actions{display:flex;gap:8px}
 .template-row{display:flex;gap:4px;margin:5px 0}

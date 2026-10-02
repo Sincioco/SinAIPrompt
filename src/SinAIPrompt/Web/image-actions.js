@@ -2,9 +2,9 @@ import {request,report} from './bridge.js';
 import {toPng} from './document.js';
 
 // Image actions are temporary editor chrome, separate from document/resize state.
-export function createImageActions(frame,{edit,resize,remove}){
+export function createImageActions(frame,{select,edit,resize,remove}){
   const menu=document.createElement('div');menu.className='image-actions';menu.popover='auto';menu.setAttribute('role','menu');
-  menu.innerHTML=[['edit','Edit Image'],['resize','Resize Image'],['rename','Rename Image'],['delete','Delete Image'],['fullscreen','View Full Screen'],['external','View Externally']]
+  menu.innerHTML=[['select','Select Image'],['copy','Copy Image'],['edit','Edit Image'],['resize','Resize Image'],['rename','Rename Image'],['delete','Delete Image'],['fullscreen','View Full Screen'],['external','View Externally']]
     .map(([action,label])=>`<button role="menuitem" data-image-action="${action}">${label}</button>`).join('');
   document.body.append(menu);let image=null;
   function close(){menu.hidePopover();image=null;}
@@ -19,6 +19,8 @@ export function createImageActions(frame,{edit,resize,remove}){
   menu.addEventListener('click',event=>{
     const action=event.target.closest('[data-image-action]')?.dataset.imageAction,target=image;
     if(!action||!target?.isConnected)return;close();
+    if(action==='select'){target.ownerDocument.body.focus();select(target);}
+    if(action==='copy')(async()=>request('copy-image',{data:(await toPng(target.currentSrc||target.src)).data}))().catch(report);
     if(action==='resize')resize();
     if(action==='edit')edit(target).catch(report);
     if(action==='delete')remove(target);

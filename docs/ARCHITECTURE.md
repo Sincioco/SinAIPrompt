@@ -35,7 +35,7 @@ Paths below are relative to `src/`; unqualified native filenames are under
 | Settings and editor chrome | `SettingsDialog.cs` owns tabbed settings controls; `Settings.ShowToolbar` persists visibility. `ToolbarVisibility` filters blank-menu double clicks with an explicit settings object and apply callback. `EditorPathStatus` owns one editor's hovered/selected image source and displayed path | The native host binds the status text and receives image-status messages. Browser/native checks cover settings save, toolbar visibility, local image paths and document fallback. No new state in MainWindow. |
 | Document copies and revert | `DocumentCopies.cs` owns duplicate naming and copy creation, using the existing browser export/asset relocation path. `FileActions.cs` coordinates selected document, paused autosaves, progress and revert confirmation | Saved copies own their own image folders; drafts embed image copies. Native checks cover current unsaved text, names, collisions, separate/inline images, original-file preservation, cancel and confirmed revert. |
 | Text clipboard and Office fonts | `EditorClipboard.cs` owns Windows HTML/text exchange and isolated test clipboard; `EditorFonts.cs` owns an immutable cached catalog of existing local Aptos faces | `Web/editor-clipboard.js` operates on an explicit document selection. Font catalog reads run off the UI thread; a local WebView mapping serves existing Office fonts without copying, downloading or exporting them. Actual local-font loads and Unicode clipboard round trips tested. |
-| Annotation interaction | `Web/annotation-ui.js`: one dialog's scene, selection, gesture, zoom, history, inspector | Uses model, templates, clipboard, and bridge. Mouse/keyboard, crop, copy/paste, modal tests. |
+| Annotation interaction | `Web/annotation-ui.js`: one dialog's scene, selection, gesture, zoom and history; `annotation-inspector.js` adapts explicit objects to property controls; `annotation-menu.js` owns only the temporary context menu | Uses model, templates, clipboard, and bridge. Mouse/keyboard, lock, crop, copy/paste, modal tests. |
 | Annotation representation | `Web/annotation-model.js`: geometry, movement, SVG/PNG rendering; no persistent scene ownership | Explicit scene/object arguments; image/escaping utilities. Geometry and render behavior covered through browser tests. |
 | Exchange and utilities | `Web/templates.js`, `annotation-clipboard.js`, `document.js`, `source-highlighting.js` | Focused data operations. `bridge.js` owns pending native requests and small browser dialogs; it must not become a feature/state hub. |
 | Guardrail tooling | `scripts/Test-Architecture.ps1` owns traversal, measurements, and rule evaluation; `architecture-rules.json` owns reviewed limits | No application/runtime dependency. `Test-Architecture.Tests.ps1` owns isolated fixtures and pass/fail checks. |
@@ -821,3 +821,30 @@ partial failure, source/preview cleanup, private visibility and persistence, con
 preserved/custom/cross-mark labels, unopened inputs, default numbering and explicit restart.
 Changes add no dependencies, entry-point algorithms, broad mutable state or guardrail
 exceptions. Existing FileActions/MainWindow partial coupling remains integration debt.
+
+## Image editing enhancements (October 2)
+
+`annotation-ui.js` retains scene, selection, drawing-tool and undo ownership. Drawing
+completion keeps the chosen tool active. Each scene object's existing `locked` field
+persists with annotation metadata; interactive mutations exclude locked objects, while
+selection, copying and undo remain available. Inspector controls were extracted into
+`annotation-inspector.js` under the passing existing browser/native suite. The helper
+receives explicit objects and leaves transactions and history with the dialog.
+`annotation-menu.js` owns popup presentation and delegates selection, copying and locks
+through narrow callbacks. `annotation-clipboard.js` reuses the existing native PNG/SVG
+clipboard path, accepting a format for direct context-menu actions.
+
+`image-actions.js` delegates Select Image to the existing document selection owner and
+converts the displayed source to full-size PNG for Copy Image. `EditorClipboard` owns
+PNG/Windows Bitmap publication without HTML or annotation metadata; `HtmlEditorHost`
+only adapts the request. Read-only document images remain selectable and copyable.
+No dependency, MainWindow state, guardrail exception or baseline change was introduced.
+Existing native-host/partial-class coupling remains debt.
+
+Packaged native/browser checks cover repeated drawing, real right-click selection,
+PNG/SVG clipboard formats, mixed locked/unlocked edits, async crop cancellation,
+lock undo/redo and serialization, menu ordering, read-only image copying and exact
+native PNG/bitmap pixels. The annotation dialog shrank from 243 to 239 lines; its
+new inspector and popup owners contain 40 and 37 lines. MainWindow remains at 561
+lines against the unchanged 564-line ceiling. The checker passes with its existing
+size/reduction review warnings; deeper native-host coupling remains a manual review.

@@ -30,6 +30,17 @@ internal static class EditorClipboard
         else Clipboard.SetDataObject(data, true);
     }
 
+    internal static void CopyImage(string png)
+    {
+        var bytes = Convert.FromBase64String(png[(png.IndexOf(',') + 1)..]);
+        var data = new DataObject();
+        data.SetData("PNG", new MemoryStream(bytes));
+        using var stream = new MemoryStream(bytes);
+        data.SetImage(BitmapFrame.Create(stream, BitmapCreateOptions.PreservePixelFormat, BitmapCacheOption.OnLoad));
+        if (App.Current.TestMode) TestData = data;
+        else Clipboard.SetDataObject(data, true);
+    }
+
     internal static async Task<object?> ReadAsync(string? documentKey = null)
     {
         var data = App.Current.TestMode ? TestData : Clipboard.GetDataObject();

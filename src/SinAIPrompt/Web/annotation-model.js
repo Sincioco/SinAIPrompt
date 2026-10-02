@@ -45,7 +45,7 @@ function roundPath(b,r={}) {
   return `M${x+tl},${y}H${x+w-tr}Q${x+w},${y} ${x+w},${y+tr}V${y+h-br}Q${x+w},${y+h} ${x+w-br},${y+h}H${x+bl}Q${x},${y+h} ${x},${y+h-bl}V${y+tl}Q${x},${y} ${x+tl},${y}Z`;
 }
 export function objectSvg(o, interactive=false) {
-  const attr=interactive?`data-object="${escapeHtml(o.id)}"`:'';
+  const attr=interactive?`data-object="${escapeHtml(o.id)}" data-locked="${!!o.locked}"`:'';
   const stroke=o.outlineVisible===false?'none':o.stroke||'none';
   const style=`fill="${escapeHtml(o.fill||'none')}" stroke="${escapeHtml(stroke)}" stroke-width="${Number(o.strokeWidth)||0}"`;
   let content='';

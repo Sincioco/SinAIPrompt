@@ -28,7 +28,7 @@ function imageStatus(source=""){if(source!==lastImageStatus){lastImageStatus=sou
 const exports=new Map();
 const search=createDocumentSearch(()=>doc,changed);
 const images=createImageSelection(frame,changed,image=>imageStatus(image?.getAttribute('src')||''));
-const imageActions=createImageActions(frame,{edit:openAnnotation,resize:()=>images.resize(),remove:target=>{const range=doc.createRange();range.selectNode(target);selection=range;command('delete');images.select(null);}});
+const imageActions=createImageActions(frame,{select:selectImage,edit:openAnnotation,resize:()=>images.resize(),remove:target=>{const range=doc.createRange();range.selectNode(target);selection=range;command('delete');images.select(null);}});
 const videos=createYouTubePlayer(frame,target=>videoSelection.select(target));
 const videoSelection=createVideoSelection(frame,{changed,command,saveSelection,stopPlayback:videos.close,clearImage:()=>{images.select(null);imageActions.close();}});
 const ribbon=createRibbon($('#toolbar'),{getDocument:()=>doc,saveSelection,restoreSelection,command,changed});

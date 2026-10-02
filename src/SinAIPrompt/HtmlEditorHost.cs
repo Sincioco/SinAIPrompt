@@ -180,6 +180,7 @@ public sealed partial class EditorView
                 case "annotation-paste": result = AnnotationClipboard.Read(); break;
                 case "editor-copy": EditorClipboard.Copy(message.GetProperty("html").GetString()!, message.GetProperty("text").GetString()!, message.TryGetProperty("internalHtml", out var internalHtml) ? internalHtml.GetString() : null, Document.Id.ToString()); break;
                 case "editor-paste": result = await EditorClipboard.ReadAsync(Document.Id.ToString()); break;
+                case "copy-image": EditorClipboard.CopyImage(message.GetProperty("data").GetString()!); break;
                 case "editor-fonts": result = await EditorFonts.StyleSheetAsync(Browser.CoreWebView2); break;
                 case "link-preview": result = await LinkPreview.FetchAsync(message.GetProperty("url").GetString()!); break;
                 case "youtube-preview": result = await LinkPreview.FetchVideoAsync(message.GetProperty("url").GetString()!, message.GetProperty("saveThumbnail").GetBoolean()); break;

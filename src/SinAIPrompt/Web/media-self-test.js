@@ -21,7 +21,23 @@ export async function runMediaTests(check){
     window.editor.command('selectAll');window.editor.command('delete');await window.editor.insertImage(png,'separate');
     check(doc().images[0].getAttribute('src')===source,'An explicit separate insertion overrides the default and reuses the existing image');
     doc().images[0].click();
-    check([...document.querySelectorAll('[data-image-action]')].map(b=>b.textContent).join('|')==='Edit Image|Resize Image|Rename Image|Delete Image|View Full Screen|View Externally'&&!document.querySelector('dialog[open]'),'Image actions are a six-option dropdown, not a dialog');
+    check([...document.querySelectorAll('[data-image-action]')].map(b=>b.textContent).join('|')==='Select Image|Copy Image|Edit Image|Resize Image|Rename Image|Delete Image|View Full Screen|View Externally'&&!document.querySelector('dialog[open]'),'Image dropdown starts with Select Image and Copy Image');
+    const beforeCopy=window.editor.html(),selectedImage=doc().images[0];
+    await realClick(document.querySelector('[data-image-action=select]'));
+    check(doc().getSelection().getRangeAt(0).cloneContents().querySelector('img')?.getAttribute('src')===source&&!document.querySelector('.image-actions').matches(':popover-open'),'Select Image closes the menu and selects the whole image');
+    selectedImage.click();await realClick(document.querySelector('[data-image-action=copy]'));
+    await wait(async()=>(await request('editor-paste'))?.image?.startsWith('data:image/png;base64,'));
+    const copied=await request('editor-paste'),copyPreview=new Image();copyPreview.src=copied.image;await copyPreview.decode();
+    check(copyPreview.naturalWidth===100&&copyPreview.naturalHeight===60&&!copied.html&&window.editor.html()===beforeCopy,'Copy Image puts original-size PNG pixels on the clipboard without document edits or HTML');
+    try{
+      window.editor.setReadOnly(true);selectedImage.click();
+      check(!document.querySelector('[data-image-action=select]').disabled&&!document.querySelector('[data-image-action=copy]').disabled&&document.querySelector('[data-image-action=edit]').disabled,'Read-only documents allow selecting and copying images');
+      await request('editor-copy',{html:'<p>Replace this clipboard fixture</p>',text:'fixture'});
+      await realClick(document.querySelector('[data-image-action=copy]'));
+      await wait(async()=>(await request('editor-paste'))?.image?.startsWith('data:image/png;base64,'));
+      check(window.editor.html()===beforeCopy,'Copy Image from a read-only document leaves its content unchanged');
+    }finally{window.editor.setReadOnly(false);}
+    selectedImage.click();
     await realClick(document.querySelector('[data-image-action=fullscreen]'));
     await wait(()=>document.fullscreenElement?.classList.contains('media-fullscreen'));
     const layout=await request('test-annotation-layout');

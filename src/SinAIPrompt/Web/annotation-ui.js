@@ -5,12 +5,14 @@ import {captureTemplate,parseTemplate,templateJson,instantiate} from './template
 import {copyObjects} from './annotation-clipboard.js';
 import {connectAnnotationColors} from './annotation-colors.js';
 import {connectCanvasPan} from './annotation-pan.js';
-import {cropControls,resetCrop,setCropInsets,setCornerRadii,applyCrop} from './annotation-crop.js';
+import {cropControls,resetCrop,applyCrop} from './annotation-crop.js';
+import {createAnnotationInspector} from './annotation-inspector.js';
+import {connectAnnotationMenu} from './annotation-menu.js';
 
 export async function annotate(initial,{crop=false}={}) {
   const dialog=document.createElement('dialog'); dialog.className='annotation'; dialog.setAttribute('aria-label','Image Annotation');
   dialog.innerHTML=`<div class="annotation-layout"><header><div><h2>Image Annotation <small>Shapes, images &amp; reusable objects</small></h2></div><div><button data-action="undo" title="Undo (Ctrl+Z)">↶ Undo</button> <button data-action="redo" title="Redo (Ctrl+Y)">↷ Redo</button> <button data-action="resetAllCrops">Reset All Crops</button> <select id="canvasZoom" aria-label="Canvas Zoom"><option value="fit">Fit</option>${[25,50,75,100,150,200].map(n=>`<option value="${n}">${n}%</option>`).join('')}</select></div></header>
-  <div class="annotation-body"><aside class="left"><h3>Draw</h3><div class="tools">${[['select','↖ Select'],['pan','✋ Pan'],['arrow','↗ Arrow'],['line','╱ Line'],['rectangle','▭ Rectangle'],['circle','◯ Circle'],['text','T Text']].map(([tool,label])=>`<button data-tool="${tool}">${label}</button>`).join('')}</div><button data-action="addImage" class="wide">＋ Add Image…</button><button data-action="screenCapture" class="wide">Screen Capture…</button><button data-action="regionCapture" class="wide">Region Capture…</button><p class="hint">Paste images with Ctrl+V.<br>Drag empty canvas to select touching objects.<br>Shift adds to the selection.</p><hr><h3>Layers</h3><div id="layers"></div><div class="small-actions"><button data-action="front">To Front</button><button data-action="back">To Back</button><button data-action="copy" title="Copy Selected Objects (Ctrl+C)">Copy…</button><button data-action="paste" title="Paste Objects Or An Image (Ctrl+V)">Paste</button><button data-action="duplicate">Duplicate</button><button data-action="delete">Delete</button></div><hr><h3>Object Templates</h3><button data-action="saveTemplate" class="wide">Save Selected As Template</button><button data-action="importTemplate" class="wide">Import PMT Template…</button><div id="templates"></div></aside>
+  <div class="annotation-body"><aside class="left"><h3>Draw</h3><div class="tools">${[['select','↖ Select'],['pan','✋ Pan'],['arrow','↗ Arrow'],['line','╱ Line'],['rectangle','▭ Rectangle'],['circle','◯ Circle'],['text','T Text']].map(([tool,label])=>`<button data-tool="${tool}">${label}</button>`).join('')}</div><button data-action="addImage" class="wide">＋ Add Image…</button><button data-action="screenCapture" class="wide">Screen Capture…</button><button data-action="regionCapture" class="wide">Region Capture…</button><p class="hint">Paste images with Ctrl+V.<br>Drag empty canvas to select touching objects.<br>Shift adds to the selection.</p><hr><h3>Layers</h3><div id="layers"></div><div class="small-actions"><button data-action="front">To Front</button><button data-action="back">To Back</button><button data-action="copy" title="Copy Selected Objects (Ctrl+C)">Copy…</button><button data-action="paste" title="Paste Objects Or An Image (Ctrl+V)">Paste</button><button data-action="duplicate">Duplicate</button><button data-action="delete">Delete</button><button data-action="lock">Lock</button><button data-action="unlock">Unlock</button></div><hr><h3>Object Templates</h3><button data-action="saveTemplate" class="wide">Save Selected As Template</button><button data-action="importTemplate" class="wide">Import PMT Template…</button><div id="templates"></div></aside>
   <main class="canvas-viewport"><div class="canvas-stage"><svg id="canvas" tabindex="0" xmlns="http://www.w3.org/2000/svg" aria-label="Annotation Canvas"></svg></div></main>
   <aside class="right"><h3>Appearance</h3><label class="field">Outline <button id="stroke" type="button" aria-label="Outline Color" value="#dc3939"></button></label><label class="field"><span>Transparent Outline</span><input id="noStroke" type="checkbox"></label><label class="field">Fill <button id="fill" type="button" aria-label="Fill Color" value="#fff2a6"></button></label><label class="field"><span>Transparent Fill</span><input id="noFill" type="checkbox" checked></label><label class="field">Thickness <input id="strokeWidth" type="number" min="1" max="80" value="4"></label><label class="field">Arrow Head <input id="arrowSize" type="number" min="4" max="160" value="20"></label><label class="field">Opacity % <input id="opacity" type="number" min="0" max="100" value="100"></label>
   <div id="geometry"><hr><h3>Position &amp; Size (px)</h3><div class="pair">${['x','y','width','height'].map(k=>`<label>${k[0].toUpperCase()+k.slice(1)}<input data-geometry="${k}" type="number" step="1"></label>`).join('')}</div></div>
@@ -24,6 +26,7 @@ export async function annotate(initial,{crop=false}={}) {
   document.body.append(dialog);dialog.showModal();
   const $=s=>dialog.querySelector(s),$$=s=>[...dialog.querySelectorAll(s)];
   const colors=connectAnnotationColors(dialog);
+  const inspector=createAnnotationInspector(dialog);
   const svg=$('#canvas'),viewport=$('.canvas-viewport');
   let state=clone(initial),selected=[],tool='select',cropMode=crop,gesture=null,zoom=1,viewBox,templates=[];
   connectCanvasPan(viewport,svg,()=>tool==='pan');
@@ -31,12 +34,14 @@ export async function annotate(initial,{crop=false}={}) {
   if(initialImage)selected=[initialImage.id];
   let history=[clone(state)],historyIndex=0,finished=false;
   const selectedObjects=()=>state.objects.filter(o=>selected.includes(o.id));
+  const editableObjects=()=>selectedObjects().filter(o=>!o.locked);
   const one=()=>selectedObjects().length===1?selectedObjects()[0]:null;
   const error=e=>{$('.annotation-error').textContent=e?.message||String(e||'');};
   const historySave=()=>{if(JSON.stringify(history[historyIndex])===JSON.stringify(state))return;history=history.slice(0,historyIndex+1);history.push(clone(state));if(history.length>100)history.shift();historyIndex=history.length-1;};
   const change=fn=>{fn();historySave();render();};
   const historyMove=delta=>{historyIndex=clamp(historyIndex+delta,0,history.length-1);state=clone(history[historyIndex]);selected=selected.filter(key=>state.objects.some(o=>o.id===key));render();};
-  const style=()=>({stroke:$('#noStroke').checked?'none':$('#stroke').value,fill:$('#noFill').checked?'none':$('#fill').value,strokeWidth:clamp($('#strokeWidth').value,1,80),arrowSize:clamp($('#arrowSize').value,4,160),opacity:clamp($('#opacity').value,0,100)/100,outlineVisible:!$('#noStroke').checked});
+  const setLocked=locked=>change(()=>selectedObjects().forEach(o=>o.locked=locked));
+  connectAnnotationMenu(dialog,{getSelection:selectedObjects,selectObject(key){if(!selected.includes(key)){selected=[key];render();}},copy:format=>copyObjects(selectedObjects(),format),setLocked,onError:error});
   function workspace() {
     const b=outputBounds(state),padding=24/zoom;
     return {x:b.x-padding,y:b.y-padding,width:b.width+padding*2,height:b.height+padding*2};
@@ -56,6 +61,7 @@ export async function annotate(initial,{crop=false}={}) {
     const size=8/zoom;
     for(const o of selectedObjects().filter(o=>o.visible!==false)) {
       const b=bounds(o,false);content+=`<rect x="${b.x}" y="${b.y}" width="${b.width}" height="${b.height}" fill="none" stroke="#0874c9" stroke-width="${1/zoom}" stroke-dasharray="${4/zoom}" pointer-events="none"/>`;
+      if(o.locked||tool!=='select')continue;
       const handle=(x,y,attrs)=>`<rect x="${x-size/2}" y="${y-size/2}" width="${size}" height="${size}" ${attrs} data-id="${o.id}"/>`;
       if(isLine(o)) content+=handle(o.x1,o.y1,'data-handle="end" data-end="1"')+handle(o.x2,o.y2,'data-handle="end" data-end="2"');
       else if(selected.length===1){const c=cropMode&&o.type==='embedded-image'?imageClip(o):b;for(const [key,x,y] of [['nw',c.x,c.y],['ne',c.x+c.width,c.y],['se',c.x+c.width,c.y+c.height],['sw',c.x,c.y+c.height],['n',c.x+c.width/2,c.y],['e',c.x+c.width,c.y+c.height/2],['s',c.x+c.width/2,c.y+c.height],['w',c.x,c.y+c.height/2]])content+=handle(x,y,`${cropMode&&o.type==='embedded-image'?'data-crop':'data-handle'}="${key}"`);}
@@ -63,22 +69,14 @@ export async function annotate(initial,{crop=false}={}) {
     if(gesture?.kind==='marquee')content+='<rect data-marquee fill="#0874c922" stroke="#0874c9" stroke-width="'+1/zoom+'" pointer-events="none"/>';
     svg.innerHTML=content;svg.style.cursor=tool==='select'?'default':'crosshair';
     if(previous&&!gesture&&!fit){viewport.scrollLeft+=(previous.x-viewBox.x)*zoom;viewport.scrollTop+=(previous.y-viewBox.y)*zoom;}
-    $$('#layers .layer').length;$('#layers').innerHTML=[...state.objects].reverse().map(o=>`<button class="layer ${selected.includes(o.id)?'selected':''}" data-layer="${o.id}" title="${escapeHtml(o.name||o.type)}"><input type="checkbox" data-visible="${o.id}" aria-label="Show ${escapeHtml(o.name||o.type)}" ${o.visible!==false?'checked':''}><span>${escapeHtml(o.name||o.type)}</span></button>`).join('');
+    $('#layers').innerHTML=[...state.objects].reverse().map(o=>`<button class="layer ${selected.includes(o.id)?'selected':''}" data-layer="${o.id}" title="${escapeHtml(o.name||o.type)}${o.locked?' (Locked)':''}"><input type="checkbox" data-visible="${o.id}" aria-label="Show ${escapeHtml(o.name||o.type)}" ${o.visible!==false?'checked':''} ${o.locked?'disabled':''}><span>${o.locked?'🔒 ':''}${escapeHtml(o.name||o.type)}</span></button>`).join('');
     $$('[data-tool]').forEach(b=>b.classList.toggle('active',b.dataset.tool===tool));
     $('[data-action=undo]').disabled=historyIndex===0;$('[data-action=redo]').disabled=historyIndex===history.length-1;
+    $('[data-action=lock]').disabled=!editableObjects().length;$('[data-action=unlock]').disabled=!selectedObjects().some(o=>o.locked);
+    for(const action of ['delete','front','back'])$(`[data-action=${action}]`).disabled=!editableObjects().length;
     const b=outputBounds(state);$('#dimensions').textContent=`Output: ${Math.ceil(b.width)} × ${Math.ceil(b.height)} px. The canvas expands as you add or move objects.`;
-    if(!keepInspector) syncInspector();
+    if(!keepInspector) inspector.sync(selectedObjects(),cropMode);
     colors.sync();
-  }
-  function syncInspector() {
-    const o=one();$('#geometry').hidden=!o||isLine(o);$('#endpoints').hidden=!o||!isLine(o);$('#imageCrop').hidden=o?.type!=='embedded-image';$('#textFields').hidden=o?.type!=='textbox';
-    if(!o)return;
-    if(o.stroke && o.stroke!=='none')$('#stroke').value=o.stroke;if(o.fill && o.fill!=='none')$('#fill').value=o.fill;
-    $('#noStroke').checked=o.stroke==='none'||o.outlineVisible===false;$('#noFill').checked=!o.fill||o.fill==='none';$('#strokeWidth').value=o.strokeWidth||4;$('#arrowSize').value=o.arrowSize||20;$('#opacity').value=Math.round((o.opacity??1)*100);
-    $$('[data-geometry]').forEach(el=>el.value=Math.round(o[el.dataset.geometry]||0));$$('[data-endpoint]').forEach(el=>el.value=Math.round(o[el.dataset.endpoint]||0));
-    if(o.type==='embedded-image') {const c=imageClip(o),insets={top:c.y-o.y,left:c.x-o.x,right:o.x+o.width-c.x-c.width,bottom:o.y+o.height-c.y-c.height};$$('[data-crop-value]').forEach(el=>el.value=Math.round(insets[el.dataset.cropValue]));$$('[data-radius]').forEach(el=>el.value=o.cropCornerRadii?.[el.dataset.radius]??o.cropCornerRadius??0);}
-    if(o.type==='textbox'){$('#shapeText').value=o.text||'';$('#shapeFontSize').value=o.fontSize||20;$('#textColor').value=o.textColor||'#20252c';}
-    $('[data-action=crop]').classList.toggle('active',cropMode);
   }
   function point(event){const p=new DOMPoint(event.clientX,event.clientY).matrixTransform(svg.getScreenCTM().inverse());return {x:p.x,y:p.y};}
   viewport.addEventListener('wheel',event=>{
@@ -93,11 +91,11 @@ export async function annotate(initial,{crop=false}={}) {
   viewport.addEventListener('pointerdown',event=>{
     if(event.button!==0)return;event.preventDefault();svg.focus({preventScroll:true});error('');const p=point(event),target=event.target,objectId=target.closest('[data-object]')?.dataset.object;
     const handle=target.dataset.handle,crop=target.dataset.crop,end=target.dataset.end;
-    if(tool==='select' && (handle||crop)){gesture={kind:end?'endpoint':crop?'crop':'resize',point:p,objects:clone(selectedObjects()),handle:crop||handle,end};}
-    else if(tool==='select' && objectId){if(event.shiftKey)selected=selected.includes(objectId)?selected.filter(x=>x!==objectId):[...selected,objectId];else if(!selected.includes(objectId))selected=[objectId];gesture={kind:'move',point:p,objects:clone(selectedObjects())};}
+    if(tool==='select' && (handle||crop)){gesture={kind:end?'endpoint':crop?'crop':'resize',point:p,objects:clone(editableObjects()),handle:crop||handle,end};}
+    else if(tool==='select' && objectId){if(event.shiftKey)selected=selected.includes(objectId)?selected.filter(x=>x!==objectId):[...selected,objectId];else if(!selected.includes(objectId))selected=[objectId];gesture={kind:'move',point:p,objects:clone(editableObjects())};}
     else if(tool==='select'){gesture={kind:'marquee',point:p,end:p,previous:[...selected],add:event.shiftKey};if(!event.shiftKey)selected=[];cropMode=false;}
     else {
-      const type=tool==='text'?'textbox':tool; const o={id:id(),type,name:type==='embedded-image'?'Image':type[0].toUpperCase()+type.slice(1),visible:true,...style()};
+      const type=tool==='text'?'textbox':tool; const o={id:id(),type,name:type==='embedded-image'?'Image':type[0].toUpperCase()+type.slice(1),visible:true,...inspector.style()};
       if(isLine(o))Object.assign(o,{x1:p.x,y1:p.y,x2:p.x+1,y2:p.y+1});else Object.assign(o,{x:p.x,y:p.y,width:1,height:1});
       if(type==='textbox')Object.assign(o,{text:'Text',fontSize:20,textColor:'#20252c',fontFamily:'Segoe UI'});
       state.objects.push(o);selected=[o.id];gesture={kind:'draw',point:p,objects:[clone(o)]};
@@ -112,7 +110,7 @@ export async function annotate(initial,{crop=false}={}) {
       for(const [key,value] of Object.entries({x:Math.min(p.x,gesture.point.x),y:Math.min(p.y,gesture.point.y),width:Math.abs(dx),height:Math.abs(dy)}))rect.setAttribute(key,value);
       return;
     }
-    for(const original of gesture.objects){const o=state.objects.find(o=>o.id===original.id);if(!o)continue;Object.assign(o,clone(original));
+    for(const original of gesture.objects){const o=state.objects.find(o=>o.id===original.id);if(!o||o.locked)continue;Object.assign(o,clone(original));
       if(gesture.kind==='move')move(o,dx,dy);
       else if(gesture.kind==='endpoint'){o['x'+gesture.end]=p.x;o['y'+gesture.end]=p.y;}
       else if(gesture.kind==='draw'){if(isLine(o)){o.x2=p.x;o.y2=p.y;}else{const w=Math.abs(dx),h=event.shiftKey?w:Math.abs(dy);Object.assign(o,{x:Math.min(p.x,gesture.point.x),y:Math.min(p.y,gesture.point.y),width:Math.max(1,w),height:Math.max(1,h)});}}
@@ -138,13 +136,13 @@ export async function annotate(initial,{crop=false}={}) {
       const hits=right-left<2/zoom&&bottom-top<2/zoom?[]:state.objects.filter(o=>{const r=bounds(o);return o.visible!==false&&r.x<=right&&r.x+r.width>=left&&r.y<=bottom&&r.y+r.height>=top;}).map(o=>o.id);
       selected=[...new Set([...(gesture.add?gesture.previous:[]),...hits])];
     }else{
-      if(gesture.kind==='draw'){const o=one();if(o&&!isLine(o)&&o.width<5&&o.height<5){o.width=o.type==='textbox'?240:120;o.height=o.type==='textbox'?70:90;}tool='select';}
+      if(gesture.kind==='draw'){const o=one();if(o&&!o.locked&&!isLine(o)&&o.width<5&&o.height<5){o.width=o.type==='textbox'?240:120;o.height=o.type==='textbox'?70:90;}}
       historySave();
     }
     gesture=null;if(viewport.hasPointerCapture(event.pointerId))viewport.releasePointerCapture(event.pointerId);render();
   });
   viewport.addEventListener('pointercancel',()=>{if(gesture?.kind==='marquee')selected=gesture.previous;else state=clone(history[historyIndex]);gesture=null;render();});
-  svg.addEventListener('dblclick',event=>{const o=state.objects.find(o=>o.id===event.target.closest('[data-object]')?.dataset.object);if(o?.type==='textbox'){$('#shapeText').focus();$('#shapeText').select();}});
+  svg.addEventListener('dblclick',event=>{const o=state.objects.find(o=>o.id===event.target.closest('[data-object]')?.dataset.object);if(o?.type==='textbox'&&!o.locked){$('#shapeText').focus();$('#shapeText').select();}});
   async function addImage(file){const png=await toPng(await blobData(file));const b=outputBounds(state);change(()=>{const o={id:id(),type:'embedded-image',name:file.name||'Pasted Image',source:png.data,x:state.objects.length?b.x+b.width+24:0,y:0,width:png.width,height:png.height,visible:true};state.objects.push(o);selected=[o.id];});}
   async function captureImage(region=false){
     const result=await request(region?'region-capture':'screen-capture'),source=region?result?.source:result;if(!source)return;
@@ -171,8 +169,13 @@ export async function annotate(initial,{crop=false}={}) {
   function chooseFile(accept,action){const input=document.createElement('input');input.type='file';input.accept=accept;input.onchange=()=>{if(input.files[0])action(input.files[0]).catch(error);};input.click();}
   async function persistTemplates(){await request('templates-save',{templates});renderTemplates();}
   function renderTemplates(){$('#templates').innerHTML=templates.map((t,i)=>`<div class="template-row"><button data-template="${i}">${escapeHtml(t.name)}</button><button data-export="${i}" title="Export PMT Template">↓</button><button data-remove-template="${i}" title="Delete Template">×</button></div>`).join('');}
-  function remove(){change(()=>{state.objects=state.objects.filter(o=>!selected.includes(o.id));selected=[];});}
-  function duplicate(){change(()=>{const copies=clone(selectedObjects());copies.forEach(o=>{o.id=id();move(o,24,24);});state.objects.push(...copies);selected=copies.map(o=>o.id);});}
+  function remove(){change(()=>{state.objects=state.objects.filter(o=>o.locked||!selected.includes(o.id));selected=selected.filter(key=>state.objects.some(o=>o.id===key));});}
+  function duplicate(){change(()=>{const copies=clone(selectedObjects());copies.forEach(o=>{o.id=id();o.locked=false;move(o,24,24);});state.objects.push(...copies);selected=copies.map(o=>o.id);});}
+  function reorder(front){change(()=>{
+    const remaining=state.objects.filter(o=>!o.locked&&!selected.includes(o.id)),chosen=editableObjects();
+    const ordered=front?[...remaining,...chosen]:[...chosen,...remaining];let index=0;
+    state.objects=state.objects.map(o=>o.locked?o:ordered[index++]);
+  });}
   dialog.addEventListener('click',async event=>{
     const target=event.target.closest('button');if(!target)return;
     try{
@@ -184,18 +187,19 @@ export async function annotate(initial,{crop=false}={}) {
       switch(target.dataset.action){
         case 'undo':historyMove(-1);break;case 'redo':historyMove(1);break;
         case 'delete':remove();break;case 'duplicate':duplicate();break;
+        case 'lock':setLocked(true);break;case 'unlock':setLocked(false);break;
         case 'copy':await copyObjects(selectedObjects());break;
         case 'paste':if(!await pasteObjects())error('Copy objects or an image first.');break;
-        case 'front':change(()=>{state.objects=[...state.objects.filter(o=>!selected.includes(o.id)),...selectedObjects()];});break;
-        case 'back':change(()=>{state.objects=[...selectedObjects(),...state.objects.filter(o=>!selected.includes(o.id))];});break;
-        case 'crop':cropMode=!cropMode;tool='select';render();break;
-        case 'resetCrop':change(()=>{if(one())resetCrop(one());});break;
-        case 'resetAllCrops':change(()=>state.objects.filter(o=>o.type==='embedded-image').forEach(resetCrop));break;
+        case 'front':reorder(true);break;case 'back':reorder(false);break;
+        case 'crop':if(one()?.locked)break;cropMode=!cropMode;tool='select';render();break;
+        case 'resetCrop':change(()=>{if(one()&&!one().locked)resetCrop(one());});break;
+        case 'resetAllCrops':change(()=>state.objects.filter(o=>o.type==='embedded-image'&&!o.locked).forEach(resetCrop));break;
         case 'applyCrop':{
-          const object=one();if(!object)break;
+          const object=one();if(!object||object.locked)break;
           target.disabled=true;error('Applying image crop…');
-          try{const cropped=await applyCrop(object);change(()=>Object.assign(object,cropped));cropMode=false;render();error('');}
-          finally{target.disabled=false;}
+          const snapshot=JSON.stringify(object);
+          try{const cropped=await applyCrop(clone(object));if(state.objects.includes(object)&&JSON.stringify(object)===snapshot&&!object.locked){change(()=>Object.assign(object,cropped));cropMode=false;render();}error('');}
+          finally{inspector.sync(selectedObjects(),cropMode);}
           break;
         }
         case 'addImage':chooseFile('image/*',addImage);break;
@@ -209,19 +213,11 @@ export async function annotate(initial,{crop=false}={}) {
     }catch(e){error(e);}
   });
   dialog.addEventListener('change',event=>{
-    const el=event.target,o=one();
-    if(el.dataset.visible){change(()=>{state.objects.find(o=>o.id===el.dataset.visible).visible=el.checked;});return;}
+    const el=event.target;
+    if(el.dataset.visible){change(()=>{const object=state.objects.find(o=>o.id===el.dataset.visible);if(object&&!object.locked)object.visible=el.checked;});return;}
     if(el.id==='canvasZoom'){render(false,true);return;}
-    if(['stroke','fill','noStroke','noFill','strokeWidth','arrowSize','opacity'].includes(el.id)){change(()=>selectedObjects().forEach(o=>Object.assign(o,style())));return;}
     if(['canvasColor','canvasTransparent'].includes(el.id)){change(()=>state.background=$('#canvasTransparent').checked?'none':$('#canvasColor').value);return;}
-    if(!o)return;
-    change(()=>{
-      if(el.dataset.geometry){const b={x:o.x,y:o.y,width:o.width,height:o.height};b[el.dataset.geometry]=Number(el.value)||0;b.width=Math.max(1,b.width);b.height=Math.max(1,b.height);resize(o,b);}
-      if(el.dataset.endpoint)o[el.dataset.endpoint]=Number(el.value)||0;
-      if(el.dataset.cropValue)setCropInsets(o,Object.fromEntries($$('[data-crop-value]').map(el=>[el.dataset.cropValue,Number(el.value)||0])));
-      if(el.dataset.radius)setCornerRadii(o,el.dataset.radius,el.value,$('#syncCorners').checked);
-      if(el.id==='shapeText')o.text=el.value;if(el.id==='shapeFontSize')o.fontSize=clamp(el.value,6,200);if(el.id==='textColor')o.textColor=el.value;
-    });
+    change(()=>inspector.edit(selectedObjects(),el));
   });
   dialog.addEventListener('keydown',event=>{
     event.stopPropagation();if(event.target.matches('input,textarea,select'))return;
@@ -232,7 +228,7 @@ export async function annotate(initial,{crop=false}={}) {
     if(event.ctrlKey&&event.key.toLowerCase()==='y'){event.preventDefault();historyMove(1);}
     if(event.ctrlKey&&event.key.toLowerCase()==='d'){event.preventDefault();duplicate();}
     if(event.ctrlKey&&event.key.toLowerCase()==='a'){event.preventDefault();selected=state.objects.map(o=>o.id);render();}
-    if(['ArrowLeft','ArrowRight','ArrowUp','ArrowDown'].includes(event.key)){event.preventDefault();const step=event.shiftKey?10:1;change(()=>selectedObjects().forEach(o=>move(o,event.key==='ArrowLeft'?-step:event.key==='ArrowRight'?step:0,event.key==='ArrowUp'?-step:event.key==='ArrowDown'?step:0)));}
+    if(['ArrowLeft','ArrowRight','ArrowUp','ArrowDown'].includes(event.key)){event.preventDefault();const step=event.shiftKey?10:1;change(()=>editableObjects().forEach(o=>move(o,event.key==='ArrowLeft'?-step:event.key==='ArrowRight'?step:0,event.key==='ArrowUp'?-step:event.key==='ArrowDown'?step:0)));}
   });
   dialog.addEventListener('paste',event=>{if(event.target.matches('input,textarea'))return;const files=[...event.clipboardData.items].filter(i=>i.type.startsWith('image/')).map(i=>i.getAsFile());event.preventDefault();event.stopPropagation();(async()=>{if(event.isTrusted&&await pasteObjects())return;for(const file of files)await addImage(file);})().catch(error);});
   request('templates-load').then(values=>{templates=values||[];renderTemplates();}).catch(error);
