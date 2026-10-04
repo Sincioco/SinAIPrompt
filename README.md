@@ -165,6 +165,12 @@ After code, CSS, or image changes, rebuild/package and restart the desktop appli
 
 Startup registers Windows file associations in the background, streams recovery JSON without an extra full-file text copy, and creates only the last active editor. Other documents remain in the list; their editors and saved files load when first selected. Hidden source editors are populated when you switch to HTML source.
 
+## License
+
+Sin - AI Prompt is licensed under the GNU Affero General Public License v3.0
+(AGPL-3.0), matching [PMT](https://github.com/Sincioco/PMT). See [LICENSE](LICENSE)
+for the full license text.
+
 ## Source origins
 
 - Application artwork: the original supplied PNG is preserved at `src/SinAIPrompt/Assets/SinAIPrompt.png`; `SinAIPrompt.ico` beside it contains transparent 16–256 pixel Windows icon sizes and is embedded in the executable and WPF window.
