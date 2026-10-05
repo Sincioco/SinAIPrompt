@@ -10,10 +10,25 @@ namespace SinAIPrompt;
 // A short naming dialog and project choices; the caller owns document moves.
 internal static class PromptProjectUi
 {
+    sealed class ProjectMenuItem : MenuItem
+    {
+        public override void OnApplyTemplate()
+        {
+            base.OnApplyTemplate();
+            // Fluent's submenu header omits the shared checkmark column used by
+            // ordinary items. Reuse that column so menus without checks stay compact.
+            const string checkColumn = "MenuItemCheckBoxIconColumnGroup";
+            if (Role != MenuItemRole.SubmenuHeader || Template.FindName("MenuItemContent", this) is not Grid grid ||
+                grid.ColumnDefinitions.FirstOrDefault()?.SharedSizeGroup == checkColumn) return;
+            grid.ColumnDefinitions.Insert(0, new ColumnDefinition { Width = GridLength.Auto, SharedSizeGroup = checkColumn });
+            foreach (UIElement child in grid.Children) Grid.SetColumn(child, Grid.GetColumn(child) + 1);
+        }
+    }
+
     internal static MenuItem Menu(Window owner, Settings settings, IReadOnlyList<object> selection, string defaultFolder,
         Func<IReadOnlyList<object>, string, Task> move, Action changed)
     {
-        var menu = new MenuItem { Header = "Move to Project", IsEnabled = selection.Count > 0 };
+        var menu = new ProjectMenuItem { Header = "Move to Project", IsEnabled = selection.Count > 0 };
         var selected = selection.ToArray();
         foreach (string folder in PromptProjects.Known(settings))
         {

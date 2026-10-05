@@ -1038,3 +1038,24 @@ checks, 16 architecture fixtures and whitespace checks passed. The build had no
 compiler warnings/errors; the two existing MainWindow architecture review
 warnings remain. The packaged app was gracefully relaunched and restored the
 user's document session, including its unsaved draft.
+
+The project-menu alignment follow-up keeps its presentation repair inside
+`PromptProjectUi`: a small `MenuItem` subclass adds Fluent's missing shared
+checkmark column to its submenu-header grid during template application. It
+reuses the theme's shared width, so Document List labels align at 40 px while
+Explorer menus without checkmarks stay at 14 px. Existing icons, submenu arrows
+and destinations retain their theme behavior; no fixed indentation or layout
+state is added to the window. The rendered native regression reproduced the
+original 14/40 px mismatch and verifies alignment plus opening both submenus.
+Production growth is confined to `PromptProjectUi` (110→125 lines); the existing
+project integration checks grow 172→213 lines, including menu captures. MainWindow
+stays at 562 lines. There are no new files, dependencies, global state, guardrail
+exceptions or baseline changes. The repair targets the installed Fluent template;
+other menu roles and templates retain their existing behavior.
+The final offline package passed 982 native/browser checks, 16 architecture
+fixtures, 52 JavaScript syntax checks and whitespace checks. Both captured menus
+were visually reviewed. Builds had no compiler warnings/errors; the two existing
+architecture warnings remain. The development suite finished after its launcher's
+60-second limit. Packaged validation required fixing focus sensitivity in the new
+test popup and an unchanged rerun after an unrelated Copy Image clipboard check
+failed. The final packaged run passed without those failures.

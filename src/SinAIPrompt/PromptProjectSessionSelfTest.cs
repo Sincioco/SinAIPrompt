@@ -54,10 +54,23 @@ internal static class PromptProjectSessionSelfTest
             var single = window.CreateProjectMenu([visible]);
             check(Destination(single, project).IsEnabled && Destination(window.CreateProjectMenu([locked]), project).IsEnabled,
                 "Single saved and read-only prompts offer registered projects as move destinations");
-            var documentMenu = window.CreateDocumentMenu(visible, true).Items.OfType<MenuItem>().Single(item => Equals(item.Header, "Move to Project"));
-            var explorerMenu = explorer.CreateFileMenu(closedEntry).Items.OfType<MenuItem>().Single(item => Equals(item.Header, "Move to Project"));
+            var documentContext = window.CreateDocumentMenu(visible, true); var explorerContext = explorer.CreateFileMenu(closedEntry);
+            var documentMenu = documentContext.Items.OfType<MenuItem>().Single(item => Equals(item.Header, "Move to Project"));
+            var explorerMenu = explorerContext.Items.OfType<MenuItem>().Single(item => Equals(item.Header, "Move to Project"));
             check(Destination(documentMenu, project).IsEnabled && Destination(explorerMenu, project).IsEnabled,
                 "Document List and Prompt Explorer context menus offer project moves for their checked prompt batches");
+            var documentLayout = await ContextLayout(documentContext, documentMenu, window.DocumentList, project, "document-list");
+            explorer.SetMode(true);
+            var explorerLayout = await ContextLayout(explorerContext, explorerMenu, explorer.Tree, project, "prompt-explorer");
+            explorer.SetMode(false);
+            File.WriteAllText(Path.Combine(folder, "project-context-layout.json"), JsonSerializer.Serialize(new
+            {
+                DocumentList = new { documentLayout.ProjectX, documentLayout.RenameX, documentLayout.DestinationVisible },
+                PromptExplorer = new { explorerLayout.ProjectX, explorerLayout.RenameX, explorerLayout.DestinationVisible }
+            }));
+            check(documentLayout.DestinationVisible && explorerLayout.DestinationVisible, "Both project context submenus visibly open their enabled known-project destinations");
+            check(Math.Abs(documentLayout.ProjectX - documentLayout.RenameX) < .5 && Math.Abs(explorerLayout.ProjectX - explorerLayout.RenameX) < .5,
+                $"Move to Project headers align with Rename in both rendered context menus (Document List: {documentLayout.ProjectX}/{documentLayout.RenameX}; Explorer: {explorerLayout.ProjectX}/{explorerLayout.RenameX})");
             bool draftRejected = false, mixedRejected = false;
             try { await window.MovePromptsToProject([new Document()], project); } catch (IOException) { draftRejected = true; }
             try { await window.MovePromptsToProject([visible, new PromptEntry(Path.Combine(root, "reference.txt"), false)], project); } catch (IOException) { mixedRejected = true; }
@@ -133,6 +146,34 @@ internal static class PromptProjectSessionSelfTest
     }
 
     static MenuItem Destination(MenuItem menu, string path) => menu.Items.OfType<MenuItem>().Single(item => Equals(item.Tag, path));
+    static async Task<(double ProjectX, double RenameX, bool DestinationVisible)> ContextLayout(ContextMenu context, MenuItem projectMenu, UIElement target, string project, string name)
+    {
+        context.PlacementTarget = target; context.StaysOpen = true; context.IsOpen = true;
+        try
+        {
+            await Until(() => context.IsLoaded && projectMenu.ActualWidth > 0); context.UpdateLayout();
+            var rename = context.Items.OfType<MenuItem>().First(item => item.Header.ToString()!.Replace("_", "").StartsWith("Rename", StringComparison.Ordinal));
+            double HeaderX(MenuItem item) => Visuals(item).OfType<ContentPresenter>().First(presenter => Equals(presenter.Content, item.Header)).TranslatePoint(new Point(), context).X;
+            double projectX = HeaderX(projectMenu), renameX = HeaderX(rename);
+            var dpi = VisualTreeHelper.GetDpi(context);
+            var capture = new RenderTargetBitmap((int)Math.Ceiling(context.ActualWidth * dpi.DpiScaleX), (int)Math.Ceiling(context.ActualHeight * dpi.DpiScaleY), dpi.PixelsPerInchX, dpi.PixelsPerInchY, PixelFormats.Pbgra32);
+            var visual = new DrawingVisual();
+            using (var drawing = visual.RenderOpen())
+                drawing.DrawRectangle(new VisualBrush(context) { Stretch = Stretch.Fill }, null, new Rect(0, 0, context.ActualWidth, context.ActualHeight));
+            capture.Render(visual);
+            File.WriteAllBytes(Path.Combine(App.Current.Store.DirectoryPath, "project-context-" + name + ".png"), Convert.FromBase64String(ScreenCapture.Png(capture).Split(',')[1]));
+            projectMenu.IsSubmenuOpen = true; var destination = Destination(projectMenu, project);
+            await Until(() => destination.IsVisible && destination.ActualWidth > 0);
+            return (projectX, renameX, destination.IsEnabled);
+        }
+        finally { projectMenu.IsSubmenuOpen = false; context.IsOpen = false; }
+    }
+    static IEnumerable<DependencyObject> Visuals(DependencyObject parent)
+    {
+        yield return parent;
+        for (int i = 0; i < VisualTreeHelper.GetChildrenCount(parent); i++)
+            foreach (var descendant in Visuals(VisualTreeHelper.GetChild(parent, i))) yield return descendant;
+    }
     static async Task Until(Func<bool> predicate)
     {
         for (int i = 0; i < 200; i++) { if (predicate()) return; await Task.Delay(50); }
