@@ -36,7 +36,9 @@ label{display:flex;align-items:center;gap:6px}
 .video-toolbar>span{padding:0 8px}.video-toolbar>button{border:0;padding:4px 9px;font-size:18px}
 .video-menu{position:absolute;bottom:100%;right:0;margin-bottom:4px;padding:5px;background:var(--surface);border:1px solid var(--line);border-radius:5px;box-shadow:0 5px 12px #0002;min-width:155px}
 .video-menu button{display:block;text-align:left;width:100%;border:0}
-#notice{padding:10px 16px;background:#fff1d6;color:#774500;border-bottom:1px solid #e6c98d}
+#notice{display:flex;flex:none;align-items:flex-start;gap:12px;min-width:0;padding:10px 16px;background:#fff1d6;color:#774500;border-bottom:1px solid #e6c98d}
+#notice .notice-message{flex:1;min-width:0;max-height:30vh;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.5}
+#dismissNotice{flex:none;padding:0 8px;font-size:20px;line-height:1.25;background:transparent;border-color:currentColor}
 [hidden]{display:none!important}
 dialog{color:var(--text);background:var(--surface);border:1px solid var(--line);border-radius:9px;padding:0;box-shadow:0 15px 60px #0004}
 dialog::backdrop{background:transparent}

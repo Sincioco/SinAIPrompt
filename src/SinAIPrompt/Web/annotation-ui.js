@@ -8,6 +8,7 @@ import {connectCanvasPan} from './annotation-pan.js';
 import {cropControls,resetCrop,applyCrop} from './annotation-crop.js';
 import {createAnnotationInspector} from './annotation-inspector.js';
 import {connectAnnotationMenu} from './annotation-menu.js';
+import {slicingControls,setSliceCount,moveSliceDivider,sliceOverlay,updateSliceOverlay,syncSliceControls,copySlice} from './image-slicing.js';
 
 export async function annotate(initial,{crop=false}={}) {
   const dialog=document.createElement('dialog'); dialog.className='annotation'; dialog.setAttribute('aria-label','Image Annotation');
@@ -17,7 +18,7 @@ export async function annotate(initial,{crop=false}={}) {
   <aside class="right"><h3>Appearance</h3><label class="field">Outline <button id="stroke" type="button" aria-label="Outline Color" value="#dc3939"></button></label><label class="field"><span>Transparent Outline</span><input id="noStroke" type="checkbox"></label><label class="field">Fill <button id="fill" type="button" aria-label="Fill Color" value="#fff2a6"></button></label><label class="field"><span>Transparent Fill</span><input id="noFill" type="checkbox" checked></label><label class="field">Thickness <input id="strokeWidth" type="number" min="1" max="80" value="4"></label><label class="field">Arrow Head <input id="arrowSize" type="number" min="4" max="160" value="20"></label><label class="field">Opacity % <input id="opacity" type="number" min="0" max="100" value="100"></label>
   <div id="geometry"><hr><h3>Position &amp; Size (px)</h3><div class="pair">${['x','y','width','height'].map(k=>`<label>${k[0].toUpperCase()+k.slice(1)}<input data-geometry="${k}" type="number" step="1"></label>`).join('')}</div></div>
   <div id="endpoints" hidden><hr><h3>Endpoints (px)</h3><div class="pair">${['x1','y1','x2','y2'].map(k=>`<label>${k}<input data-endpoint="${k}" type="number"></label>`).join('')}</div></div>
-  ${cropControls}
+  ${slicingControls}${cropControls}
   <div id="textFields" hidden><hr><h3>Text</h3><textarea id="shapeText" rows="4" style="width:100%"></textarea><label class="field">Font Size <input id="shapeFontSize" type="number" min="6" max="200" value="20"></label><label class="field">Text Color <button id="textColor" type="button" aria-label="Text Color" value="#20252c"></button></label></div>
   <hr><h3>Canvas</h3><label class="field">Background <button id="canvasColor" type="button" aria-label="Canvas Background" value="#ffffff"></button></label><label class="field"><span>Transparent</span><input id="canvasTransparent" type="checkbox" checked></label><p id="dimensions" class="hint"></p></aside></div>
   <footer><span class="annotation-error" role="alert"></span><span class="hint">Corners keep proportions · Sides stretch · Wheel zooms · Del removes · Esc cancels</span><div class="actions"><button data-action="cancel">Cancel</button><button data-action="apply" class="primary">Apply To Document</button></div></footer></div>`;
@@ -28,7 +29,7 @@ export async function annotate(initial,{crop=false}={}) {
   const colors=connectAnnotationColors(dialog);
   const inspector=createAnnotationInspector(dialog);
   const svg=$('#canvas'),viewport=$('.canvas-viewport');
-  let state=clone(initial),selected=[],tool='select',cropMode=crop,gesture=null,zoom=1,viewBox,templates=[];
+  let state=clone(initial),selected=[],tool='select',cropMode=crop,sliceMode=false,sliceCell=0,sliceCopying=false,gesture=null,zoom=1,viewBox,templates=[];
   connectCanvasPan(viewport,svg,()=>tool==='pan');
   const initialImage=state.objects.find(o=>o.type==='embedded-image'&&o.visible!==false);
   if(initialImage)selected=[initialImage.id];
@@ -60,12 +61,15 @@ export async function annotate(initial,{crop=false}={}) {
     content+=state.objects.filter(o=>o.visible!==false).map(o=>objectSvg(o,true)).join('');
     const size=8/zoom;
     for(const o of selectedObjects().filter(o=>o.visible!==false)) {
-      const b=bounds(o,false);content+=`<rect x="${b.x}" y="${b.y}" width="${b.width}" height="${b.height}" fill="none" stroke="#0874c9" stroke-width="${1/zoom}" stroke-dasharray="${4/zoom}" pointer-events="none"/>`;
+      if(['line','arrow','circle'].includes(tool)&&(isLine(o)||o.type==='circle'))continue;
+      const b=bounds(o,false);content+=`<rect data-selection-frame x="${b.x}" y="${b.y}" width="${b.width}" height="${b.height}" fill="none" stroke="#0874c9" stroke-width="${1/zoom}" stroke-dasharray="${4/zoom}" pointer-events="none"/>`;
+      if(sliceMode&&one()?.type==='embedded-image')continue;
       if(o.locked||tool!=='select')continue;
       const handle=(x,y,attrs)=>`<rect x="${x-size/2}" y="${y-size/2}" width="${size}" height="${size}" ${attrs} data-id="${o.id}"/>`;
       if(isLine(o)) content+=handle(o.x1,o.y1,'data-handle="end" data-end="1"')+handle(o.x2,o.y2,'data-handle="end" data-end="2"');
       else if(selected.length===1){const c=cropMode&&o.type==='embedded-image'?imageClip(o):b;for(const [key,x,y] of [['nw',c.x,c.y],['ne',c.x+c.width,c.y],['se',c.x+c.width,c.y+c.height],['sw',c.x,c.y+c.height],['n',c.x+c.width/2,c.y],['e',c.x+c.width,c.y+c.height/2],['s',c.x+c.width/2,c.y+c.height],['w',c.x,c.y+c.height/2]])content+=handle(x,y,`${cropMode&&o.type==='embedded-image'?'data-crop':'data-handle'}="${key}"`);}
     }
+    if(sliceMode&&one()?.type==='embedded-image'&&one().visible!==false)content+=sliceOverlay(one(),sliceCell,zoom);
     if(gesture?.kind==='marquee')content+='<rect data-marquee fill="#0874c922" stroke="#0874c9" stroke-width="'+1/zoom+'" pointer-events="none"/>';
     svg.innerHTML=content;svg.style.cursor=tool==='select'?'default':'crosshair';
     if(previous&&!gesture&&!fit){viewport.scrollLeft+=(previous.x-viewBox.x)*zoom;viewport.scrollTop+=(previous.y-viewBox.y)*zoom;}
@@ -76,6 +80,7 @@ export async function annotate(initial,{crop=false}={}) {
     for(const action of ['delete','front','back'])$(`[data-action=${action}]`).disabled=!editableObjects().length;
     const b=outputBounds(state);$('#dimensions').textContent=`Output: ${Math.ceil(b.width)} × ${Math.ceil(b.height)} px. The canvas expands as you add or move objects.`;
     if(!keepInspector) inspector.sync(selectedObjects(),cropMode);
+    syncSliceControls(dialog,one(),sliceMode,sliceCell,sliceCopying);
     colors.sync();
   }
   function point(event){const p=new DOMPoint(event.clientX,event.clientY).matrixTransform(svg.getScreenCTM().inverse());return {x:p.x,y:p.y};}
@@ -90,6 +95,12 @@ export async function annotate(initial,{crop=false}={}) {
   },{passive:false});
   viewport.addEventListener('pointerdown',event=>{
     if(event.button!==0)return;event.preventDefault();svg.focus({preventScroll:true});error('');const p=point(event),target=event.target,objectId=target.closest('[data-object]')?.dataset.object;
+    if(sliceMode&&one()?.type==='embedded-image'){
+      const divider=target.closest('[data-slice-divider]'),cell=target.closest('[data-slice-cell]');
+      if(divider){if(!one().locked){gesture={kind:'slice',point:p,objectId:one().id,index:Number(divider.dataset.sliceDivider)};viewport.setPointerCapture(event.pointerId);}return;}
+      if(cell){sliceCell=Number(cell.dataset.sliceCell);updateSliceOverlay(svg,one(),sliceCell,zoom);syncSliceControls(dialog,one(),true,sliceCell,sliceCopying);return;}
+      sliceMode=false;
+    }
     const handle=target.dataset.handle,crop=target.dataset.crop,end=target.dataset.end;
     if(tool==='select' && (handle||crop)){gesture={kind:end?'endpoint':crop?'crop':'resize',point:p,objects:clone(editableObjects()),handle:crop||handle,end};}
     else if(tool==='select' && objectId){if(event.shiftKey)selected=selected.includes(objectId)?selected.filter(x=>x!==objectId):[...selected,objectId];else if(!selected.includes(objectId))selected=[objectId];gesture={kind:'move',point:p,objects:clone(editableObjects())};}
@@ -104,6 +115,9 @@ export async function annotate(initial,{crop=false}={}) {
   });
   viewport.addEventListener('pointermove',event=>{
     if(!gesture)return;const p=point(event),dx=p.x-gesture.point.x,dy=p.y-gesture.point.y;
+    if(gesture.kind==='slice'){
+      const image=state.objects.find(o=>o.id===gesture.objectId);if(image&&!image.locked){moveSliceDivider(image,gesture.index,p.x);updateSliceOverlay(svg,image,sliceCell,zoom);syncSliceControls(dialog,image,true,sliceCell,sliceCopying);}return;
+    }
     if(gesture.kind==='marquee'){
       gesture.end=p;
       const rect=$('[data-marquee]');
@@ -113,7 +127,7 @@ export async function annotate(initial,{crop=false}={}) {
     for(const original of gesture.objects){const o=state.objects.find(o=>o.id===original.id);if(!o||o.locked)continue;Object.assign(o,clone(original));
       if(gesture.kind==='move')move(o,dx,dy);
       else if(gesture.kind==='endpoint'){o['x'+gesture.end]=p.x;o['y'+gesture.end]=p.y;}
-      else if(gesture.kind==='draw'){if(isLine(o)){o.x2=p.x;o.y2=p.y;}else{const w=Math.abs(dx),h=event.shiftKey?w:Math.abs(dy);Object.assign(o,{x:Math.min(p.x,gesture.point.x),y:Math.min(p.y,gesture.point.y),width:Math.max(1,w),height:Math.max(1,h)});}}
+      else if(gesture.kind==='draw'){if(isLine(o)){o.x2=p.x;o.y2=p.y;if(o.type==='line'&&event.shiftKey){if(Math.abs(dx)>=Math.abs(dy))o.y2=o.y1;else o.x2=o.x1;}}else{const w=Math.abs(dx),h=event.shiftKey?w:Math.abs(dy);Object.assign(o,{x:Math.min(p.x,gesture.point.x),y:Math.min(p.y,gesture.point.y),width:Math.max(1,w),height:Math.max(1,h)});}}
       else {const b=gesture.kind==='crop'?imageClip(original):bounds(original,false);let left=b.x,top=b.y,right=b.x+b.width,bottom=b.y+b.height;const key=gesture.handle;
         if(key.includes('w'))left=Math.min(right-1,b.x+dx);if(key.includes('e'))right=Math.max(left+1,b.x+b.width+dx);if(key.includes('n'))top=Math.min(bottom-1,b.y+dy);if(key.includes('s'))bottom=Math.max(top+1,b.y+b.height+dy);
         if(gesture.kind==='crop'){left=clamp(left,o.x,o.x+o.width-1);top=clamp(top,o.y,o.y+o.height-1);right=clamp(right,left+1,o.x+o.width);bottom=clamp(bottom,top+1,o.y+o.height);o.imageClip={x:left,y:top,width:right-left,height:bottom-top};o.cropVisible=true;}
@@ -176,11 +190,18 @@ export async function annotate(initial,{crop=false}={}) {
     const ordered=front?[...remaining,...chosen]:[...chosen,...remaining];let index=0;
     state.objects=state.objects.map(o=>o.locked?o:ordered[index++]);
   });}
+  async function copySelectedCell(){
+    const image=one();if(!sliceMode||image?.type!=='embedded-image'||image.visible===false||sliceCopying)return;
+    const snapshot=clone(image),cell=sliceCell;
+    sliceCopying=true;syncSliceControls(dialog,image,true,sliceCell,true);error('Copying selected cell…');
+    try{await new Promise(resolve=>requestAnimationFrame(()=>setTimeout(resolve,0)));await copySlice(snapshot,cell);error('');}
+    finally{sliceCopying=false;syncSliceControls(dialog,one(),sliceMode,sliceCell);}
+  }
   dialog.addEventListener('click',async event=>{
     const target=event.target.closest('button');if(!target)return;
     try{
-      if(target.dataset.tool){tool=target.dataset.tool;cropMode=false;render();return;}
-      if(target.dataset.layer){if(event.target.matches('input'))return;const key=target.dataset.layer;selected=event.shiftKey?(selected.includes(key)?selected.filter(x=>x!==key):[...selected,key]):[key];cropMode=false;tool='select';render();return;}
+      if(target.dataset.tool){tool=target.dataset.tool;cropMode=false;sliceMode=false;render();return;}
+      if(target.dataset.layer){if(event.target.matches('input'))return;const key=target.dataset.layer;selected=event.shiftKey?(selected.includes(key)?selected.filter(x=>x!==key):[...selected,key]):[key];cropMode=false;sliceMode=false;tool='select';render();return;}
       if(target.dataset.template!=null){const t=templates[Number(target.dataset.template)];change(()=>{const objects=instantiate(t,{x:viewBox.x+viewBox.width/2,y:viewBox.y+viewBox.height/2});state.objects.push(...objects);selected=objects.map(o=>o.id);});return;}
       if(target.dataset.export!=null){await request('export-template',{contents:templateJson(templates[Number(target.dataset.export)])});return;}
       if(target.dataset.removeTemplate!=null){templates.splice(Number(target.dataset.removeTemplate),1);await persistTemplates();return;}
@@ -191,7 +212,9 @@ export async function annotate(initial,{crop=false}={}) {
         case 'copy':await copyObjects(selectedObjects());break;
         case 'paste':if(!await pasteObjects())error('Copy objects or an image first.');break;
         case 'front':reorder(true);break;case 'back':reorder(false);break;
-        case 'crop':if(one()?.locked)break;cropMode=!cropMode;tool='select';render();break;
+        case 'slice':if(one()?.type!=='embedded-image')break;sliceMode=!sliceMode;cropMode=false;tool='select';sliceCell=0;change(()=>{if(sliceMode&&!one().locked&&!Array.isArray(one().sliceDividers))setSliceCount(one(),3);});break;
+        case 'copySlice':await copySelectedCell();break;
+        case 'crop':if(one()?.locked)break;cropMode=!cropMode;sliceMode=false;tool='select';render();break;
         case 'resetCrop':change(()=>{if(one()&&!one().locked)resetCrop(one());});break;
         case 'resetAllCrops':change(()=>state.objects.filter(o=>o.type==='embedded-image'&&!o.locked).forEach(resetCrop));break;
         case 'applyCrop':{
@@ -216,13 +239,15 @@ export async function annotate(initial,{crop=false}={}) {
     const el=event.target;
     if(el.dataset.visible){change(()=>{const object=state.objects.find(o=>o.id===el.dataset.visible);if(object&&!object.locked)object.visible=el.checked;});return;}
     if(el.id==='canvasZoom'){render(false,true);return;}
+    if(el.id==='sliceDividerCount'){change(()=>{setSliceCount(one(),el.value);sliceCell=0;});return;}
+    if(el.id==='sliceCell'){sliceCell=Number(el.value);if(sliceMode&&one()?.type==='embedded-image')updateSliceOverlay(svg,one(),sliceCell,zoom);return;}
     if(['canvasColor','canvasTransparent'].includes(el.id)){change(()=>state.background=$('#canvasTransparent').checked?'none':$('#canvasColor').value);return;}
     change(()=>inspector.edit(selectedObjects(),el));
   });
   dialog.addEventListener('keydown',event=>{
     event.stopPropagation();if(event.target.matches('input,textarea,select'))return;
     if(event.key==='Delete'||event.key==='Backspace'){event.preventDefault();remove();}
-    if(event.ctrlKey&&event.key.toLowerCase()==='c'){event.preventDefault();copyObjects(selectedObjects()).catch(error);}
+    if(event.ctrlKey&&event.key.toLowerCase()==='c'){event.preventDefault();(sliceMode&&one()?.type==='embedded-image'?copySelectedCell():copyObjects(selectedObjects())).catch(error);}
     if(event.ctrlKey&&event.key.toLowerCase()==='v'){event.preventDefault();pasteObjects().catch(error);}
     if(event.ctrlKey&&event.key.toLowerCase()==='z'){event.preventDefault();historyMove(event.shiftKey?1:-1);}
     if(event.ctrlKey&&event.key.toLowerCase()==='y'){event.preventDefault();historyMove(1);}

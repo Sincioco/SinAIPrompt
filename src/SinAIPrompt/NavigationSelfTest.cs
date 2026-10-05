@@ -61,13 +61,18 @@ internal static class NavigationSelfTest
             double originalWidth = window.Width;
             try
             {
+                await window.CurrentView.Browser.ExecuteScriptAsync("import('./bridge.js').then(({report})=>report(new Error('Image unavailable: screenshot filename.png')))");
                 foreach (double width in new[] { 1000d, 1500d, 1100d })
                 {
                     window.Width = width; window.SetDocumentList(true); window.UpdateLayout(); await Task.Delay(40);
                     check(await window.CurrentView.Browser.ExecuteScriptAsync("document.querySelector('#document').getBoundingClientRect().left>100") == "true", "Navigation reserves document width after resizing to " + width);
+                    check(await window.CurrentView.Browser.ExecuteScriptAsync("(()=>{const notice=document.querySelector('#notice').getBoundingClientRect(),doc=document.querySelector('#document').getBoundingClientRect();return notice.left>100&&Math.abs(notice.left-doc.left)<1&&Math.abs(notice.width-doc.width)<1})()") == "true",
+                        "The error notice remains wholly beside native navigation after resizing to " + width);
                     window.SetDocumentList(false); window.UpdateLayout(); await Task.Delay(40);
                     check(window.ListColumn.ActualWidth == 0 && window.SplitterColumn.ActualWidth == 0 && await window.CurrentView.Browser.ExecuteScriptAsync("document.querySelector('#document').getBoundingClientRect().left===0") == "true",
                         "Hiding navigation removes both native and browser space after resizing to " + width);
+                    check(await window.CurrentView.Browser.ExecuteScriptAsync("document.querySelector('#notice').getBoundingClientRect().left===0") == "true",
+                        "The error notice uses the full editor width when native navigation is hidden at " + width);
                 }
                 window.SetDocumentList(true);
                 bool previousMode = window.Explorer.ExplorerMode;
@@ -79,7 +84,7 @@ internal static class NavigationSelfTest
                     "A second navigation click restores the previous mode and keeps the folder chooser visible");
                 await PopupNavigation(window, check);
             }
-            finally { window.Width = originalWidth; }
+            finally { await window.CurrentView.Browser.ExecuteScriptAsync("document.querySelector('#dismissNotice').click()"); window.Width = originalWidth; }
         }
         finally { ShowTabs(originalTabs); window.SetDocumentList(originalList); }
     }

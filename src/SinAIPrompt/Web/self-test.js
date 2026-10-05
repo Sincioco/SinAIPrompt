@@ -2,7 +2,7 @@ import {normalizeIndent,parseHtml,portableHtml,renameImageFolder} from './docume
 import {prepareRichSourceHighlight} from './source-highlighting.js';
 import {captureTemplate,parseTemplate,templateJson} from './templates.js';
 import {renderPng,outputBounds,move,id} from './annotation-model.js';
-import {request} from './bridge.js';
+import {request,report} from './bridge.js';
 import {runRibbonTests} from './ribbon-self-test.js';
 import {runDocumentToolsTests} from './document-tools-self-test.js';
 import {runNumberingTests} from './numbering-self-test.js';
@@ -10,6 +10,7 @@ import {runCodeBlockTests} from './code-block-self-test.js';
 import {runMediaTests} from './media-self-test.js';
 import {runContentTests} from './content-self-test.js';
 import {runAnnotationEnhancementTests} from './annotation-enhancements-self-test.js';
+import {runImageSlicingTests} from './image-slicing-self-test.js';
 
 export async function run(){
   const results=[];const check=(value,name)=>{if(!value)throw Error(name);results.push(name);};
@@ -26,6 +27,17 @@ export async function run(){
   await runCodeBlockTests(check);
   await runMediaTests(check);
   await runContentTests(check);
+  const notice=document.querySelector('#notice'),message=notice.querySelector('.notice-message');
+  const longError='Image unavailable: '+('Long screenshot filename with spaces '.repeat(15))+'\n'+('x'.repeat(600))+'.png';
+  report(new Error(longError));await delay(30);
+  const noticeRect=notice.getBoundingClientRect(),documentRect=document.querySelector('#document').getBoundingClientRect();
+  check(!notice.hidden&&Math.abs(noticeRect.left-documentRect.left)<1&&Math.abs(noticeRect.width-documentRect.width)<1,'Error notice stays beside native navigation instead of clipping its leading text');
+  check(message.textContent===longError&&message.scrollWidth<=message.clientWidth+1&&message.getBoundingClientRect().height>30,'Long error messages wrap completely, preserve line breaks and remain scrollable');
+  await request('test-capture',{name:'error-notice'});
+  message.click();check(!notice.hidden,'Error text can be selected and copied without dismissing the message');
+  click('#dismissNotice');check(notice.hidden,'An explicit accessible close button dismisses the error notice');
+  report(new Error('A later error'));check(message.textContent==='A later error'&&!notice.hidden,'A later error reopens the notice without losing its dismiss control');
+  click('#dismissNotice');
   check(doc().body.isContentEditable,'Visual HTML is editable');
   const renamed=parseHtml(renameImageFolder('<p>Old folder/photo.png</p><img src="./Old%20folder/photo.png?size=1#preview"><img src="https://example.invalid/Old%20folder/photo.png"><img src="Other/photo.png">','Old folder','New # folder'));
   check(renamed.images[0].getAttribute('src')==='New%20%23%20folder/photo.png?size=1#preview'&&renamed.images[1].getAttribute('src').startsWith('https://example.invalid/')&&renamed.images[2].getAttribute('src')==='Other/photo.png'&&renamed.querySelector('p').textContent==='Old folder/photo.png','Folder rename updates encoded local image references without replacing other text or URLs');
@@ -279,6 +291,7 @@ export async function run(){
   await window.editor.load(beforeCapture);
   const savedHtml=window.editor.html();
   await runAnnotationEnhancementTests(check,png);
+  await runImageSlicingTests(check);
   await runRibbonTests(check);
   await window.editor.load('<p id="typing">Typing:</p>');
   const largeImage=doc().createElement('img');largeImage.src=png;

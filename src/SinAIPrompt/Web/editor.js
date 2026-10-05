@@ -176,12 +176,12 @@ $('#regionCapture').onclick=async()=>{
   finally{$('#regionCapture').disabled=false;}
 };
 $('#link').onclick=()=>insertLink({getDocument:()=>doc,saveSelection,command}).catch(report);
-$('#notice').onclick=()=>$('#notice').hidden=true;
+$('#dismissNotice').onclick=()=>$('#notice').hidden=true;
 window.editor={load,html,setBase,focus,command,insertImage,openAnnotation,pasteCode,renameImageFolder,setImageStorage:imageInsertion.setStorage,ready:()=>loading,
   stopMedia:videos.close,setToolbarWrap:ribbon.setWrap,
   setReadOnly:value=>{access.set(value);images.select(null);imageActions.close();videoSelection.select(null);},
   outline:createDocumentOutline(()=>doc),
-  setNavigationInset:width=>{frame.style.marginLeft=width+'px';frame.style.width=`calc(100% - ${width}px)`;},
+  setNavigationInset:width=>{for(const area of [frame,$('#notice')]){area.style.marginLeft=width+'px';area.style.width=`calc(100% - ${width}px)`;}},
   renameImageFile,
   async renameOpenImageFile(documentUrl,oldUrl,newUrl){await loading;const updated=renameImageFile(html(true),documentUrl,oldUrl,newUrl);await load(updated);return updated;},
   search:options=>search.run(options),

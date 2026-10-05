@@ -27,7 +27,7 @@ export function request(type, data = {}) {
 export function blobData(blob) { return new Promise((resolve, reject) => { const reader = new FileReader(); reader.onload = () => resolve(reader.result); reader.onerror = reject; reader.readAsDataURL(blob); }); }
 export function download(name, contents, type) { const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([contents], {type})); a.download = name; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 1000); }
 export const escapeHtml = text => String(text).replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;');
-export function report(error) { const bar = document.querySelector('#notice'); bar.textContent = error?.message || String(error); bar.hidden = false; }
+export function report(error) { const bar = document.querySelector('#notice'); bar.querySelector('.notice-message').textContent = error?.message || String(error); bar.hidden = false; }
 export function ask(title, contents, buttons = [{value:'ok', label:'Apply'}], setup=null) {
   return new Promise(resolve => {
     const dialog = document.createElement('dialog'); dialog.className = 'form-dialog';

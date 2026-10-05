@@ -33,6 +33,7 @@ Paths below are relative to `src/`; unqualified native filenames are under
 | YouTube playback and fullscreen | `Web/youtube.js` owns static card markup and one runtime player per editor; `LinkPreview.cs` retrieves bounded metadata/optional local thumbnails. `EditorFullscreen.cs` owns one window-layout memento and an explicit expand callback | Runtime player iframe lives in the trusted outer page; the editable document keeps its script-disabled sandbox. Native host closes playback when hidden. Existing annotation host is reused solely to expand the browser; no new MainWindow state or algorithms. Offline metadata tests plus browser/native fullscreen and live YouTube playback checks. |
 | Color palettes | `Web/color-picker.js` owns each temporary popup; callers own color values. `annotation-colors.js` adapts existing inspector values/events | Annotation retains scene/history ownership. Native color inputs replaced without moving annotation state. Browser palette/transparency checks. |
 | Annotation crops | `Web/annotation-crop.js` owns crop controls, inset/radius calculations and baking one image layer; `annotation-ui.js` retains scene, selection and undo history | Explicit object arguments; no import back into the UI or editor. Existing crop behavior passed before extraction; browser checks cover synchronized/independent radii, reset, baked pixels, positioning and undo. |
+| Image cells | `Web/image-slicing.js` owns divider geometry, SVG guides, controls and explicit PNG export; `annotation-ui.js` retains mode, selected cell, gesture, copy progress and undo state | Normalized dividers persist on an image layer. Drags update only lightweight guides. Existing native image clipboard is reused. Checks cover unequal cells, exact PNG pixels, Ctrl+C, history, locks, cancellation, persistence and tiny cropped/resized images. |
 | Settings and editor chrome | `SettingsDialog.cs` owns tabbed settings controls; `Settings.ShowToolbar` persists visibility. `ToolbarVisibility` filters blank-menu double clicks with an explicit settings object and apply callback. `EditorPathStatus` owns one editor's hovered/selected image source and displayed path | The native host binds the status text and receives image-status messages. Browser/native checks cover settings save, toolbar visibility, local image paths and document fallback. No new state in MainWindow. |
 | Document copies and revert | `DocumentCopies.cs` owns duplicate naming and copy creation, using the existing browser export/asset relocation path. `FileActions.cs` coordinates selected document, paused autosaves, progress and revert confirmation | Saved copies own their own image folders; drafts embed image copies. Native checks cover current unsaved text, names, collisions, separate/inline images, original-file preservation, cancel and confirmed revert. |
 | Text clipboard and Office fonts | `EditorClipboard.cs` owns Windows HTML/text exchange and isolated test clipboard; `EditorFonts.cs` owns an immutable cached catalog of existing local Aptos faces | `Web/editor-clipboard.js` operates on an explicit document selection. Font catalog reads run off the UI thread; a local WebView mapping serves existing Office fonts without copying, downloading or exporting them. Actual local-font loads and Unicode clipboard round trips tested. |
@@ -888,3 +889,44 @@ one line, the editor by one line, and its existing browser test by four lines. T
 final offline package passed 810 native/browser checks, 16 architecture-checker
 fixtures and syntax checks for all 48 JavaScript modules. The architecture checker
 retains its two existing MainWindow size/reduction review warnings.
+
+## Image slicing and readable errors (October 6)
+
+`image-slicing.js` adds non-destructive vertical cells to a selected image layer.
+Three default dividers create four cells; the divider count and individual positions
+remain editable. Normalized positions persist with existing annotation metadata,
+without duplicating image pixels or changing the full document image. Current pixel
+bounds constrain effective dividers after crop/resize so cells cannot overlap or
+collapse below one pixel. Copy renders only the selected layer's visible cell, keeping
+its crop, rounded corners and opacity; guides never enter exported pixels. Button and
+Ctrl+C reuse the native PNG/Bitmap clipboard path. Copy shows progress and uses async
+PNG encoding; division and selection perform no image encoding. Apply preserves the
+layout for reopening; Cancel leaves the original untouched.
+
+The existing annotation dialog owns scene/history and its small slice interaction
+state. It delegates geometry, controls and export to the focused helper. Divider
+movement updates only the SVG overlay and cell controls; one history entry is recorded
+on release. On the supplied 1717 by 916 character sheet, 60 DevTools pointer moves
+measured 8.82 ms p95 and 9.79 ms maximum round trip; these are automation timings,
+not physical end-to-end input latency. The original image element is not rebuilt on
+pointer movement. Shift constrains the Line tool to its nearest horizontal/vertical
+axis. Line, Arrow and Circle tools suppress rectangular selection frames until Select
+is chosen; ordinary selection handles and marquee selection remain available.
+
+The error notice shares the iframe's native navigation inset below the full-width
+ribbon. Its message span wraps long paths and scrolls long content; its explicit,
+accessible dismiss button remains intact when subsequent errors replace the text.
+No native clipping-region change is necessary. Browser regressions and native tests
+with navigation shown/hidden at three window widths cover the original clipping bug.
+
+Annotation UI grew from 239 to 264 lines; the slicing helper is 83 lines and its focused
+test module is 143. Navigation tests grew by six lines, browser suite integration by
+thirteen, and editor CSS by two; the bridge, editor and HTML shell are size-neutral.
+MainWindow and App are unchanged. No dependencies, guardrail exceptions, baseline
+changes or reverse dependencies were introduced. Existing annotation dialog size and
+native-host coupling remain review triggers; this change does not broaden their roles.
+
+The final offline package passed 862 native/browser checks, including exact cell PNG
+pixels, Ctrl+C, undo/redo, lock protection, persistence and small-image geometry. All
+16 architecture-checker fixtures and 50 JavaScript syntax checks passed, as did
+`git diff --check`. The two existing MainWindow size/reduction warnings remain.
