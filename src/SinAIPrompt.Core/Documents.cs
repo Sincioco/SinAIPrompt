@@ -10,7 +10,14 @@ namespace SinAIPrompt.Core;
 public sealed class Document : INotifyPropertyChanged
 {
     public Guid Id { get; set; } = Guid.NewGuid();
-    public string? Path { get; set; }
+    string? path;
+    public string? Path
+    {
+        get => path;
+        set { path = value; ProjectSuffix = PromptProjects.DisplaySuffix(value); }
+    }
+    [System.Text.Json.Serialization.JsonIgnore]
+    public string ProjectSuffix { get; private set; } = "";
     public string? DraftName { get; set; }
     public string Text { get; set; } = "";
     public string SavedText { get; set; } = "";
@@ -36,7 +43,7 @@ public sealed class Document : INotifyPropertyChanged
     public int Zoom { get; set; } = 100;
     public bool Dirty => Text != SavedText || EncodingName != SavedEncoding || NewLine != SavedNewLine;
     public string Name => Path != null ? System.IO.Path.GetFileName(Path) : DraftName ?? $"Prompt {UntitledNumber}";
-    public string AccessibleName => $"{(Emoji.Length > 0 ? Emoji + " " : "")}{Name}. {(Pinned ? "Pinned. " : "")}{(Dirty ? "Modified" : "Unmodified")}.";
+    public string AccessibleName => $"{(Emoji.Length > 0 ? Emoji + " " : "")}{Name}{ProjectSuffix}. {(Pinned ? "Pinned. " : "")}{(Dirty ? "Modified" : "Unmodified")}.";
     public string Tooltip => (Path ?? Name) + (IsPrivate ? "\nPrivate document" : "") + (Dirty ? "\nUnsaved changes" : "");
     public string Marker => (Pinned ? "📌" : "") + (Dirty ? "•" : "");
     public event PropertyChangedEventHandler? PropertyChanged;
@@ -45,7 +52,7 @@ public sealed class Document : INotifyPropertyChanged
         if (Text == text) return;
         Text = text; ModifiedUtc = DateTime.UtcNow; Notify();
     }
-    public void Notify() { foreach (var name in new[] { nameof(Name), nameof(Emoji), nameof(Dirty), nameof(Marker), nameof(Tooltip), nameof(AccessibleName), nameof(IsReadOnly), nameof(LockMarker) }) PropertyChanged?.Invoke(this, new(name)); }
+    public void Notify() { foreach (var name in new[] { nameof(Name), nameof(ProjectSuffix), nameof(Emoji), nameof(Dirty), nameof(Marker), nameof(Tooltip), nameof(AccessibleName), nameof(IsReadOnly), nameof(LockMarker) }) PropertyChanged?.Invoke(this, new(name)); }
 }
 
 public static class TextFiles

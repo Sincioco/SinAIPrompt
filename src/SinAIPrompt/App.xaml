@@ -63,7 +63,7 @@
      <Image Grid.Column="1" Source="{Binding Emoji, Converter={StaticResource ColorEmoji}}" Width="20" Height="20" VerticalAlignment="Center" Margin="0,0,6,0" AutomationProperties.Name="{Binding Emoji}">
       <Image.Style><Style TargetType="Image"><Style.Triggers><DataTrigger Binding="{Binding Emoji}" Value=""><Setter Property="Visibility" Value="Collapsed"/></DataTrigger></Style.Triggers></Style></Image.Style>
      </Image>
-     <TextBlock Grid.Column="2" Text="{Binding Name}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" FontSize="12" Foreground="{DynamicResource TextBrush}"/>
+     <TextBlock Grid.Column="2" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" FontSize="12" Foreground="{DynamicResource TextBrush}"><Run Text="{Binding Name, Mode=OneWay}"/><Run Text="{Binding ProjectSuffix, Mode=OneWay}" Foreground="{DynamicResource MutedBrush}"/></TextBlock>
      <StackPanel Grid.Column="3" Orientation="Horizontal"><TextBlock Text="{Binding LockMarker}" FontFamily="Segoe Fluent Icons" FontSize="11" Opacity="0.55" VerticalAlignment="Center"/><TextBlock Text="{Binding Marker}" Margin="6,0,2,0" FontFamily="Segoe UI Emoji" VerticalAlignment="Center" Foreground="{DynamicResource MutedBrush}"/></StackPanel>
     </Grid>
    </DataTemplate>

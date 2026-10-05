@@ -19,6 +19,11 @@ internal static class PromptProjectMoveSelfTest
             "Project creation uses a physical prefixed Unicode folder and its deduplicated registry survives settings serialization");
         check(Rejected(() => PromptProjects.Create(root, "人物與世界 🌌")) && Rejected(() => PromptProjects.Create(root, "../escape")),
             "Project creation rejects existing names and names containing folder traversal");
+        check(PromptProjects.DisplaySuffix(Path.Combine(project, "Notes", "Prompt.HTML")) == " (人物與世界 🌌)" &&
+            PromptProjects.DisplaySuffix(Path.Combine(project, "project - Inner", "Prompt.html")) == " (Inner)" &&
+            PromptProjects.DisplaySuffix(null) == "" && PromptProjects.DisplaySuffix(Path.Combine(root, "Prompt.html")) == "" &&
+            PromptProjects.DisplaySuffix(Path.Combine(project, "picture.png")) == "",
+            "Project labels use the nearest project ancestor for HTML only, without requiring a saved file or directory lookup");
 
         string source = Path.Combine(root, "Sources"); Directory.CreateDirectory(source);
         string first = Path.Combine(source, "角色 #1.html"), second = Path.Combine(source, "Mixed.html");

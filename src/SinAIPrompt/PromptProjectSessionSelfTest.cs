@@ -2,6 +2,7 @@ using System.IO;
 using System.Text.Json;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Documents;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using System.Windows.Automation;
@@ -68,6 +69,13 @@ internal static class PromptProjectSessionSelfTest
                 "Native project integration moves a mixed open/closed HTML batch and every corresponding image folder");
             check(visible.Path == destinations[0] && lazy.Path == destinations[1] && locked.Path == destinations[3] && window.ActiveDocument == visible && window.CurrentView == view,
                 "Project moves update existing open models while keeping the active document and editor instance");
+            var label = (Grid)((DataTemplate)window.FindResource("DocumentTemplate")).LoadContent(); label.DataContext = visible;
+            label.Measure(new Size(600, 40)); label.Arrange(new Rect(0, 0, 600, 40));
+            await Dispatcher.Yield(DispatcherPriority.DataBind);
+            var runs = label.Children.OfType<TextBlock>().Single().Inlines.OfType<Run>().ToArray();
+            check(runs[0].Text == visible.Name && runs[1].Text == " (故事 #1)" && runs[1].Foreground == window.FindResource("MutedBrush") &&
+                visible.AccessibleName.Contains(visible.Name + visible.ProjectSuffix) && !JsonSerializer.Serialize(visible).Contains("ProjectSuffix"),
+                "Tabs and Document List append a muted project suffix without changing the filename or persisted document format");
             check(visible.Dirty && visible.Text.Contains("unsaved visible project text") && lazy.Dirty && lazy.Text.Contains("Unsaved lazy project text") &&
                 !File.ReadAllText(destinations[0]).Contains("unsaved visible project text") && !File.ReadAllText(destinations[1]).Contains("Unsaved lazy project text"),
                 "Project integration preserves live and unopened unsaved buffers without writing them into the moved saved files");
@@ -88,11 +96,18 @@ internal static class PromptProjectSessionSelfTest
             await explorer.SetFolderAsync(project); explorer.SetMode(true); await explorer.RefreshAsync();
             check(destinations.All(path => explorer.Entries.Any(entry => entry.Path == path && entry.ImageFolder == Path.Combine(project, Path.GetFileNameWithoutExtension(path)))),
                 "Prompt Explorer refresh exposes moved HTML entries with their paired image folders");
+            var row = explorer.Tree.Items.OfType<TreeViewItem>().Single(item => item.Tag is PromptEntry entry && entry.Path == destinations[0]);
+            var explorerSuffix = ((StackPanel)row.Header).Children.OfType<TextBlock>().Single().Inlines.OfType<Run>().Last();
+            check(explorerSuffix.Text == " (故事 #1)" && explorerSuffix.Foreground == window.FindResource("MutedBrush") && AutomationProperties.GetName(row) == visible.Name + visible.ProjectSuffix,
+                "Prompt Explorer appends the same muted project name and includes it in its accessible label");
             await view.SetSourceAsync(true); view.Editor.AppendText("\n<p>Unsaved source-view project text</p>");
             explorer.DocumentSelection.Set(visible, true); explorer.DocumentSelection.Set(lazy, true);
             var selectedMove = window.CreateDocumentMenu(visible, true).Items.OfType<MenuItem>().Single(item => Equals(item.Header, "Move to Project"));
             Destination(selectedMove, later).RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
             await Until(() => visible.Path == Path.Combine(later, Path.GetFileName(paths[0])) && lazy.Path == Path.Combine(later, Path.GetFileName(paths[1])) && window.OpenProgress.Visibility == Visibility.Collapsed);
+            await Dispatcher.Yield(DispatcherPriority.DataBind);
+            check(runs[1].Text == " (Second destination)" && lazy.ProjectSuffix == visible.ProjectSuffix,
+                "Existing project labels update immediately when prompts move to a different project");
             check(!view.IsVisual && visible.Dirty && visible.Text.Contains("Unsaved source-view project text") && TextFiles.Normalize(view.Editor.Text) == visible.Text && lazy.Text.Contains("Unsaved lazy project text"),
                 "The actual checked Document List menu moves its whole batch while preserving active source-view and unopened unsaved edits");
             await view.SetSourceAsync(false); await view.ExportAsync();

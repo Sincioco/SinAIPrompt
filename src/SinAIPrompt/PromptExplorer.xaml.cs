@@ -2,6 +2,7 @@ using System.Collections.ObjectModel;
 using System.IO;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Documents;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Threading;
@@ -125,10 +126,16 @@ public partial class PromptExplorer : UserControl, IDisposable
             System.Windows.Automation.AutomationProperties.SetName(icon, emoji); label.Children.Add(icon);
         }
         var text = new TextBlock { Text = entry.Name, VerticalAlignment = VerticalAlignment.Center };
+        string projectSuffix = entry.IsHtml ? PromptProjects.DisplaySuffix(entry.Path) : "";
+        if (projectSuffix.Length > 0)
+        {
+            var suffix = new Run(projectSuffix); suffix.SetResourceReference(TextElement.ForegroundProperty, "MutedBrush");
+            text.Inlines.Add(suffix);
+        }
         if (entry.IsUnused) text.Foreground = Brushes.Red;
         label.Children.Add(text);
         var row = new TreeViewItem { Tag = entry, Header = label, ToolTip = entry.Path + (entry.IsUnused ? "\nNot used in the parent document" : ""), Padding = new Thickness(2, 5, 2, 5) };
-        System.Windows.Automation.AutomationProperties.SetName(row, entry.Name);
+        System.Windows.Automation.AutomationProperties.SetName(row, entry.Name + projectSuffix);
         if (entry.IsFolder || entry.ImageFolder != null) row.Items.Add(new TreeViewItem { Header = "Loading…", IsEnabled = false });
         row.Expanded += async (_, e) => { if (e.OriginalSource == row) { await ExpandAsync(row); e.Handled = true; } };
         row.PreviewMouseDoubleClick += (_, e) =>

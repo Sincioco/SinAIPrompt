@@ -986,3 +986,19 @@ passed. The two existing MainWindow review warnings remain; there were no compil
 warnings/errors or guardrail exceptions. Cross-volume fixtures ran between the
 profile drive and TEMP. Project registry persistence uses the existing settings
 serializer; no project documents or generated test files are committed.
+
+The project-label follow-up derives a display suffix from the nearest physical
+`Project - <Name>` ancestor using path strings only. `Document` caches that suffix
+when its path changes and excludes it from JSON. The shared tab/Document List
+template and Explorer row use a separate `MutedBrush` text run after the unchanged
+filename; accessibility includes the project. Existing ellipsis and full-path
+tooltips remain. No registry scans, filesystem reads, new owner, dependency or
+entry-point changes are needed. Production growth: Documents +7 lines, project
+registry/helper +13, Explorer +7, and shared XAML size-neutral. Existing project
+integration checks cover muted rendering, path changes, non-project/non-HTML
+labels, nearest-ancestor handling and the unchanged serialized format.
+The offline build and packaged suite passed 939 checks; 52 JavaScript syntax
+checks, 16 architecture fixtures and whitespace checks also passed. One packaged
+run failed the unchanged mixed-selection annotation drag test; an unchanged rerun
+passed it and the complete suite. The existing two architecture review warnings
+remain, with no exceptions or changes to MainWindow's 562-line implementation.

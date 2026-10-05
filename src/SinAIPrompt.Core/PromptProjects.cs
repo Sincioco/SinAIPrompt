@@ -5,6 +5,19 @@ public static class PromptProjects
 {
     public const string Prefix = "Project - ";
 
+    public static string DisplaySuffix(string? documentPath)
+    {
+        if (documentPath == null || !Path.GetExtension(documentPath).Equals(".html", StringComparison.OrdinalIgnoreCase)) return "";
+        for (string? folder = Path.GetDirectoryName(documentPath); !string.IsNullOrEmpty(folder); folder = Path.GetDirectoryName(folder))
+        {
+            string name = Path.GetFileName(folder);
+            if (!name.StartsWith(Prefix, StringComparison.OrdinalIgnoreCase)) continue;
+            string project = name[Prefix.Length..].Trim();
+            if (project.Length > 0) return " (" + project + ")";
+        }
+        return "";
+    }
+
     public static string Create(string parentFolder, string name)
     {
         name = name.Trim();
