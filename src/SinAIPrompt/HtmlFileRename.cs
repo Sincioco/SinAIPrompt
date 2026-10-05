@@ -10,6 +10,7 @@ public partial class MainWindow
 
     internal async Task RenameExplorerImage(PromptEntry entry, string name)
     {
+        if (projectMoveInProgress) throw new IOException("Wait for the project move to finish before renaming files.");
         string destination = ImageFileRename.Destination(entry.Path, name);
         if (entry.Path == destination) return;
         var references = entry.ParentHtml == null ? [] : OpenReferences(entry.ParentHtml);
@@ -48,6 +49,7 @@ public partial class MainWindow
 
     internal async Task RenameDocumentFile(Document doc, string name)
     {
+        if (projectMoveInProgress) throw new IOException("Wait for the project move to finish before renaming files.");
         if (doc.IsReadOnly) throw new IOException("Unlock the document before renaming it.");
         if (!Documents.Contains(doc)) throw new IOException("The document is no longer open.");
         if (doc.Path == null)

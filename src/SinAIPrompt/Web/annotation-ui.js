@@ -8,7 +8,7 @@ import {connectCanvasPan} from './annotation-pan.js';
 import {cropControls,resetCrop,applyCrop} from './annotation-crop.js';
 import {createAnnotationInspector} from './annotation-inspector.js';
 import {connectAnnotationMenu} from './annotation-menu.js';
-import {slicingControls,setSliceCount,moveSliceDivider,sliceOverlay,updateSliceOverlay,syncSliceControls,copySlice} from './image-slicing.js';
+import {slicingControls,setSliceCount,moveSliceDivider,sliceOverlay,updateSliceOverlay,syncSliceControls,copySlice,saveAllSlices} from './image-slicing.js';
 
 export async function annotate(initial,{crop=false}={}) {
   const dialog=document.createElement('dialog'); dialog.className='annotation'; dialog.setAttribute('aria-label','Image Annotation');
@@ -29,7 +29,7 @@ export async function annotate(initial,{crop=false}={}) {
   const colors=connectAnnotationColors(dialog);
   const inspector=createAnnotationInspector(dialog);
   const svg=$('#canvas'),viewport=$('.canvas-viewport');
-  let state=clone(initial),selected=[],tool='select',cropMode=crop,sliceMode=false,sliceCell=0,sliceCopying=false,gesture=null,zoom=1,viewBox,templates=[];
+  let state=clone(initial),selected=[],tool='select',cropMode=crop,sliceMode=false,sliceCell=0,sliceCopying=false,sliceExport=null,gesture=null,zoom=1,viewBox,templates=[];
   connectCanvasPan(viewport,svg,()=>tool==='pan');
   const initialImage=state.objects.find(o=>o.type==='embedded-image'&&o.visible!==false);
   if(initialImage)selected=[initialImage.id];
@@ -190,12 +190,21 @@ export async function annotate(initial,{crop=false}={}) {
     const ordered=front?[...remaining,...chosen]:[...chosen,...remaining];let index=0;
     state.objects=state.objects.map(o=>o.locked?o:ordered[index++]);
   });}
-  async function copySelectedCell(){
+  async function copySelectedCell(saveAll=false){
     const image=one();if(!sliceMode||image?.type!=='embedded-image'||image.visible===false||sliceCopying)return;
     const snapshot=clone(image),cell=sliceCell;
-    sliceCopying=true;syncSliceControls(dialog,image,true,sliceCell,true);error('Copying selected cell…');
-    try{await new Promise(resolve=>requestAnimationFrame(()=>setTimeout(resolve,0)));await copySlice(snapshot,cell);error('');}
-    finally{sliceCopying=false;syncSliceControls(dialog,one(),sliceMode,sliceCell);}
+    sliceCopying=true;syncSliceControls(dialog,image,true,sliceCell,true);error('');
+    const progress=$('#sliceProgress'),status=$('#sliceStatus'),stop=$('[data-action=cancelSliceExport]');
+    progress.hidden=false;progress.removeAttribute('value');status.textContent=saveAll?'Choose a folder for all image cells…':'Copying selected cell…';
+    sliceExport=saveAll?new AbortController():null;stop.hidden=!saveAll;
+    try{
+      await new Promise(resolve=>setTimeout(resolve,0));
+      if(saveAll){
+        const result=await saveAllSlices(snapshot,(saved,total)=>{progress.max=total;progress.value=saved;status.textContent=`Saving cells: ${saved} of ${total}…`;},sliceExport.signal);
+        status.textContent=result?`${result.saved===result.total?'Saved':'Stopped: saved'} ${result.saved} of ${result.total} cells in ${result.folder}`:'Save canceled.';
+      }else{await copySlice(snapshot,cell);status.textContent='Selected cell copied.';}
+    } catch(e){status.textContent=e.message;throw e;}
+    finally{sliceCopying=false;sliceExport=null;stop.hidden=true;progress.hidden=true;syncSliceControls(dialog,one(),sliceMode,sliceCell);}
   }
   dialog.addEventListener('click',async event=>{
     const target=event.target.closest('button');if(!target)return;
@@ -214,6 +223,8 @@ export async function annotate(initial,{crop=false}={}) {
         case 'front':reorder(true);break;case 'back':reorder(false);break;
         case 'slice':if(one()?.type!=='embedded-image')break;sliceMode=!sliceMode;cropMode=false;tool='select';sliceCell=0;change(()=>{if(sliceMode&&!one().locked&&!Array.isArray(one().sliceDividers))setSliceCount(one(),3);});break;
         case 'copySlice':await copySelectedCell();break;
+        case 'saveAllSlices':await copySelectedCell(true);break;
+        case 'cancelSliceExport':sliceExport?.abort();break;
         case 'crop':if(one()?.locked)break;cropMode=!cropMode;sliceMode=false;tool='select';render();break;
         case 'resetCrop':change(()=>{if(one()&&!one().locked)resetCrop(one());});break;
         case 'resetAllCrops':change(()=>state.objects.filter(o=>o.type==='embedded-image'&&!o.locked).forEach(resetCrop));break;
@@ -259,6 +270,6 @@ export async function annotate(initial,{crop=false}={}) {
   request('templates-load').then(values=>{templates=values||[];renderTemplates();}).catch(error);
   $('#canvasTransparent').checked=!state.background||state.background==='none';if(!$('#canvasTransparent').checked)$('#canvasColor').value=state.background;
   const observer=new ResizeObserver(()=>{if(!gesture)render(false,true);});observer.observe(viewport,{box:'border-box'});render();
-  return await new Promise(resolve=>dialog.addEventListener('close',()=>{if(finished)return;finished=true;observer.disconnect();resolve(dialog.result||null);},{once:true}));
+  return await new Promise(resolve=>dialog.addEventListener('close',()=>{if(finished)return;finished=true;sliceExport?.abort();observer.disconnect();resolve(dialog.result||null);},{once:true}));
   } finally {dialog.remove();await request('annotation-mode',{open:false});}
 }

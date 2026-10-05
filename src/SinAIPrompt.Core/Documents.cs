@@ -180,6 +180,7 @@ public sealed class Settings
     public double ContentWidth { get; set; } = 220;
     public bool ExplorerShowFolders { get; set; } = true;
     public string ExplorerDirectory { get; set; } = "";
+    public List<string> ProjectFolders { get; set; } = [];
     public string DocumentSort { get; set; } = "newest";
     public double ListWidth { get; set; } = 250;
     public int DateTimeFormat { get; set; } = DateTimeFormats.Default;

@@ -9,6 +9,7 @@ public partial class MainWindow
 {
     async Task<bool> FlushDocument(Document doc)
     {
+        if (projectMoveInProgress) { PositionStatus.Text = "Moving prompts to project…"; return false; }
         fileOperationDepth++;
         try { if (editors.TryGetValue(doc.Id, out var view)) await view.FlushAsync(); return true; }
         catch (Exception ex) { MessageBox.Show(this, "Could not synchronize the editor. The document remains open.\n\n" + ex.Message); return false; }

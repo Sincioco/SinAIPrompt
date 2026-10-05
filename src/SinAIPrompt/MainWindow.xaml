@@ -11,6 +11,8 @@
    <MenuItem Header="_File" Template="{StaticResource CompactMenuHeader}">
     <MenuItem Header="_New" InputGestureText="Ctrl+N" Click="NewTabClick"/>
     <MenuItem Header="New _Window" InputGestureText="Ctrl+Shift+N" Click="NewWindowClick"/>
+    <MenuItem Header="New _Project…" Click="CreateProjectClick"/>
+    <MenuItem Header="Move to Pro_ject" SubmenuOpened="ProjectMenuOpened"><MenuItem Header="Choose a project"/></MenuItem>
     <MenuItem Header="_Open" InputGestureText="Ctrl+O" Click="OpenClick"/>
     <MenuItem x:Name="RecentMenu" Header="_Recently Opened" SubmenuOpened="RecentOpened">
      <MenuItem Header="No Recently Opened Files" IsEnabled="False"/>

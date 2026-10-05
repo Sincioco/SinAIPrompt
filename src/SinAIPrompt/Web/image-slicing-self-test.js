@@ -19,7 +19,7 @@ export async function runImageSlicingTests(check) {
   const $=selector=>document.querySelector('dialog.annotation '+selector);
   const $$=selector=>[...document.querySelectorAll('dialog.annotation '+selector)];
   const click=selector=>$(selector).click();
-  async function until(predicate,name){for(let i=0;i<100;i++){if(await predicate())return;await delay(30);}throw Error('Timed out: '+name);}
+  async function until(predicate,name,timeout=3000){const deadline=Date.now()+timeout;while(Date.now()<deadline){if(await predicate())return;await delay(30);}throw Error('Timed out: '+name+'; '+($('#sliceStatus')?.textContent||''));}
   async function open(state){
     const result=annotate(state);await until(()=>$('[data-tool=select]'),'image slicing dialog');
     $('#canvasZoom').value='100';$('#canvasZoom').dispatchEvent(new Event('change',{bubbles:true}));await delay(30);
@@ -85,6 +85,40 @@ export async function runImageSlicingTests(check) {
     const shortcutCopy=await copyCell(3,true);
     check(shortcutCopy.width===80&&shortcutCopy.height===80&&colorMatches(shortcutCopy,()=>palette[3])&&!document.querySelector('dialog.form-dialog'),
       'Ctrl+C copies only the selected image cell as PNG without opening the object-format dialog');
+
+    const beforeExport=await request('test-slice-export-files'),progressValues=new Set();let responsiveTicks=0;
+    const progressObserver=new MutationObserver(()=>progressValues.add($('#sliceProgress').value));
+    progressObserver.observe($('#sliceProgress'),{attributes:true,attributeFilter:['value']});
+    const tick=setInterval(()=>responsiveTicks++,1);
+    try {
+      click('[data-action=saveAllSlices]');
+      check(!$('#sliceProgress').hidden&&$('[data-action=saveAllSlices]').disabled&&$('[data-action=copySlice]').disabled,
+        'Save All Slices shows progress and prevents overlapping image exports');
+      await until(()=>$('#sliceStatus').textContent.startsWith('Saved 4 of 4 cells in ')&&$('#sliceProgress').hidden,'saving all image cells',15000);
+    } finally {clearInterval(tick);progressObserver.disconnect();}
+    let saved=await request('test-slice-export-files');
+    const newCells=saved.filter(file=>!beforeExport.some(old=>old.folder===file.folder));
+    const renderedCells=await Promise.all(newCells.map(file=>pixels(file.data)));
+    check(newCells.length===4&&newCells.every((file,index)=>file.name===`Four colors - Cell 0${index+1}.png`)&&
+      renderedCells.every((image,index)=>image.width===[40,120,80,80][index]&&image.height===80&&colorMatches(image,x=>palette[index===1?(x<40?0:1):index])),
+      'Save All Slices creates correctly numbered PNGs with the exact unequal-width pixels and no guides');
+    check(progressValues.has(0)&&progressValues.has(4)&&responsiveTicks>0&&document.querySelector('dialog.annotation').open,
+      'Saving every slice advances visible progress while browser callbacks continue and keeps the image editor open');
+    const previousFiles=JSON.stringify(saved);
+    click('[data-action=saveAllSlices]');
+    await until(()=>$('#sliceStatus').textContent.startsWith('Saved 4 of 4 cells in ')&&$('#sliceProgress').hidden,'saving all cells again',15000);
+    saved=await request('test-slice-export-files');
+    check(saved.length===beforeExport.length+8&&new Set(saved.map(file=>file.folder)).size===new Set(beforeExport.map(file=>file.folder)).size+2&&
+      JSON.stringify(saved.filter(file=>newCells.some(old=>old.folder===file.folder)||beforeExport.some(old=>old.folder===file.folder)))===previousFiles,
+      'Saving all slices again uses a new folder and leaves all previous PNG files unchanged');
+    const cancelObserver=new MutationObserver(()=>{if($('#sliceProgress').value>=1)click('[data-action=cancelSliceExport]');});
+    cancelObserver.observe($('#sliceProgress'),{attributes:true,attributeFilter:['value']});
+    try {
+      click('[data-action=saveAllSlices]');
+      await until(()=>$('#sliceStatus').textContent.startsWith('Stopped: saved 1 of 4 cells in ')&&$('#sliceProgress').hidden,'stopping a slice export',15000);
+    } finally {cancelObserver.disconnect();}
+    check((await request('test-slice-export-files')).length===saved.length+1&&Math.abs(dividerX(0)-40)<1&&$('#canvas image').getAttribute('href')===png,
+      'Stopping Save All Slices retains completed PNGs and preserves the source image and divider layout');
     change('#sliceDividerCount',2);
     check($$('[data-slice-divider]').length===2&&$$('[data-slice-cell]').length===3,
       'Changing the divider count rebuilds the requested number of image cells');

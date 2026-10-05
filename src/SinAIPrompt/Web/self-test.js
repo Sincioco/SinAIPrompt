@@ -11,6 +11,7 @@ import {runMediaTests} from './media-self-test.js';
 import {runContentTests} from './content-self-test.js';
 import {runAnnotationEnhancementTests} from './annotation-enhancements-self-test.js';
 import {runImageSlicingTests} from './image-slicing-self-test.js';
+import {runProjectReferenceTests} from './project-references-self-test.js';
 
 export async function run(){
   const results=[];const check=(value,name)=>{if(!value)throw Error(name);results.push(name);};
@@ -22,6 +23,7 @@ export async function run(){
   const pointer=async(type,x,y,modifiers=0)=>request('test-mouse',{parameters:{type,x,y,modifiers,button:type==='mouseMoved'?'none':'left',buttons:type==='mouseReleased'?0:1,clickCount:1}});
   const drag=async(from,to,modifiers=0)=>{await pointer('mousePressed',from.x,from.y,modifiers);await pointer('mouseMoved',to.x,to.y,modifiers);await pointer('mouseReleased',to.x,to.y,modifiers);};
   await window.editor.ready();
+  runProjectReferenceTests(check);
   await runDocumentToolsTests(check);
   await runNumberingTests(check);
   await runCodeBlockTests(check);

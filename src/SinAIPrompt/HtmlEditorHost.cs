@@ -49,6 +49,7 @@ public sealed partial class EditorView
     static string Json(object? value) => JsonSerializer.Serialize(value);
     internal MainWindow? HostWindow { get; set; }
     readonly OriginalImages originalImages = new(App.Current.Store.DirectoryPath);
+    readonly SliceExport sliceExport = new();
     MainWindow Owner => HostWindow ?? (MainWindow)Window.GetWindow(this);
 
     void InitializeHtmlEditor()
@@ -181,6 +182,13 @@ public sealed partial class EditorView
                 case "editor-copy": EditorClipboard.Copy(message.GetProperty("html").GetString()!, message.GetProperty("text").GetString()!, message.TryGetProperty("internalHtml", out var internalHtml) ? internalHtml.GetString() : null, Document.Id.ToString()); break;
                 case "editor-paste": result = await EditorClipboard.ReadAsync(Document.Id.ToString()); break;
                 case "copy-image": EditorClipboard.CopyImage(message.GetProperty("data").GetString()!); break;
+                case "slice-export-begin":
+                    string? sliceFolder = App.Current.TestMode ? Path.Combine(App.Current.Store.DirectoryPath, "Slice exports") : SliceExport.ChooseFolder(Owner);
+                    if (sliceFolder != null) result = await sliceExport.BeginAsync(sliceFolder, message.GetProperty("name").GetString()!, message.GetProperty("count").GetInt32());
+                    break;
+                case "slice-export-write": await sliceExport.WriteAsync(message.GetProperty("token").GetString()!, message.GetProperty("index").GetInt32(), message.GetProperty("data").GetString()!); break;
+                case "slice-export-end": result = sliceExport.End(message.GetProperty("token").GetString()!); break;
+                case "test-slice-export-files" when App.Current.TestMode: result = await SliceExportSelfTest.ReadFilesAsync(Path.Combine(App.Current.Store.DirectoryPath, "Slice exports")); break;
                 case "editor-fonts": result = await EditorFonts.StyleSheetAsync(Browser.CoreWebView2); break;
                 case "link-preview": result = await LinkPreview.FetchAsync(message.GetProperty("url").GetString()!); break;
                 case "youtube-preview": result = await LinkPreview.FetchVideoAsync(message.GetProperty("url").GetString()!, message.GetProperty("saveThumbnail").GetBoolean()); break;
@@ -315,6 +323,34 @@ public sealed partial class EditorView
         finally { saveAsPath = null; }
     }
     public void ReloadSavedHtml() { if (ready) LoadHtml(); }
+    internal async Task<string> RewriteProjectReferencesAsync(string html, string source, string destination,
+        IReadOnlyList<ProjectReferenceMove> moves, bool live = false)
+    {
+        await initialized.Task;
+        string args = $"{Json(new Uri(source).AbsoluteUri)},{Json(new Uri(destination).AbsoluteUri)},{Json(moves)}";
+        string expression = live ? $"window.editor.moveProjectReferences({args})" : $"window.editor.rewriteProjectReferences({Json(html)},{args})";
+        string response = await Browser.CoreWebView2.CallDevToolsProtocolMethodAsync("Runtime.evaluate", Json(new { expression, awaitPromise = true, returnByValue = true }));
+        using var result = JsonDocument.Parse(response);
+        if (!result.RootElement.GetProperty("result").TryGetProperty("value", out var value) || value.ValueKind != JsonValueKind.String)
+            throw new IOException("Could not update the project references.");
+        return value.GetString()!;
+    }
+    internal async Task MoveProjectReferencesAsync(string source, string destination, IReadOnlyList<ProjectReferenceMove> moves, bool cleanLocked)
+    {
+        await RefreshBase(reloadDocument: false);
+        string updated;
+        if (IsVisual) updated = await RewriteProjectReferencesAsync("", source, destination, moves, live: true);
+        else
+        {
+            string original;
+            do { original = Editor.Text; updated = await RewriteProjectReferencesAsync(original, source, destination, moves); } while (Editor.Text != original);
+            int caret = Editor.SelectionStart, length = Editor.SelectionLength;
+            receiving = true;
+            try { Editor.Text = updated; Editor.Select(Math.Min(caret, Editor.Text.Length), Math.Min(length, Math.Max(0, Editor.Text.Length - caret))); }
+            finally { receiving = false; }
+        }
+        Document.Text = cleanLocked ? Document.SavedText : TextFiles.Normalize(updated); App.Current.MarkChanged();
+    }
     internal async Task<string> RenameImageFileAsync(string html, string parent, string oldPath, string destination, bool live = false)
     {
         await initialized.Task;

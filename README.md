@@ -61,6 +61,22 @@ Dragging keeps the current canvas scale while the scrollable workspace expands. 
 
 An annotated image is displayed as a lossless PNG. Editable original image sources and objects are retained in the HTML image's `data-sin-annotation` metadata, so copying the HTML also preserves its editing state. Cropping does not discard original pixels. Large annotated files can contain both source images and the rendered PNG.
 
+## Projects and image slices
+
+Use **File → New Project…** to choose a name and parent folder. A project is an
+ordinary folder named `Project - <Name>`; known project paths are remembered in
+application settings. Right-click a saved HTML prompt and choose **Move to Project**.
+With **View → Multi File Selection** enabled, right-click a checked prompt to move
+all checked HTML prompts in either Document List or Prompt Explorer. The File menu
+also offers the current selection's project destinations. Each move carries its
+matching image folder and updates local HTML references. Unsaved edits stay open,
+locks remain intact, and existing destination files are never overwritten.
+
+In the Image Editor, select an image and choose **Divide Into Cells**, then
+**Save All Slices**. Choose one destination folder; numbered PNG cells are saved in
+a new image-named subfolder. Progress and **Stop Saving** remain available during
+export. Stopping keeps cells already saved, and later exports use a fresh folder.
+
 ## Bundled reference documents
 
 The two original pinned references are permanently included under

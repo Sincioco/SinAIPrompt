@@ -11,6 +11,78 @@ public partial class MainWindow
 {
     int fileOperationDepth;
     int documentLoads;
+    bool projectMoveInProgress;
+    string ProjectParent => Explorer.ExplorerMode && Directory.Exists(Explorer.WorkingFolder) ? Explorer.WorkingFolder
+        : ActiveDocument?.Path is string path ? Path.GetDirectoryName(path)! : Preferences.AutoSaveDirectory;
+    internal MenuItem CreateProjectMenu(IReadOnlyList<object> selection) => PromptProjectUi.Menu(this, Preferences, selection,
+        ProjectParent, MoveProjectsFromUi, ProjectsChanged);
+    void ProjectsChanged()
+    {
+        foreach (var window in Application.Current.Windows.OfType<MainWindow>()) window.Explorer.QueueRefresh();
+        App.Current.MarkChanged();
+    }
+    async void CreateProjectClick(object sender, RoutedEventArgs e)
+    {
+        if (await PromptProjectUi.CreateAsync(this, Preferences, ProjectParent) != null) ProjectsChanged();
+    }
+    void ProjectMenuOpened(object sender, RoutedEventArgs e)
+    {
+        if (e.Source != sender) return;
+        var target = (MenuItem)sender;
+        var selection = Explorer.CombineSelection.Enabled && Explorer.CombineSelection.Items.Count > 0
+            ? Explorer.CombineSelection.Items : ActiveDocument is { } document ? new object[] { document } : [];
+        var menu = CreateProjectMenu(selection); target.Items.Clear();
+        while (menu.Items.Count > 0) { var item = menu.Items[0]; menu.Items.RemoveAt(0); target.Items.Add(item); }
+    }
+    async Task MoveProjectsFromUi(IReadOnlyList<object> selection, string destination)
+    {
+        try { await MovePromptsToProject(selection, destination); }
+        catch (Exception ex) { MessageBox.Show(this, ex.Message, "Move to Project", MessageBoxButton.OK, MessageBoxImage.Error); }
+    }
+    internal async Task MovePromptsToProject(IReadOnlyList<object> selection, string destination)
+    {
+        var windows = Application.Current.Windows.OfType<MainWindow>().ToArray();
+        if (windows.Any(window => window.projectMoveInProgress || window.IsAnnotating)) throw new IOException("Finish the current image edit or project move first.");
+        var paths = selection.Select(item => item switch { Document document => document.Path, PromptEntry { IsHtml: true } entry => entry.Path, _ => null }).ToArray();
+        if (paths.Length == 0 || paths.Any(path => path == null)) throw new IOException("Select saved HTML prompts. Save new documents and uncheck other file types first.");
+        var sources = paths.Select(path => Path.GetFullPath(path!)).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+        if (sources.Any(path => OpenReferences(Path.Combine(destination, Path.GetFileName(path))).Count > 0))
+            throw new IOException("A destination file is already open. Choose another project or close that file first.");
+        var references = sources.SelectMany(OpenReferences).ToArray();
+        foreach (var window in windows) { window.fileOperationDepth++; window.projectMoveInProgress = true; }
+        documentLoads++; OpenProgress.Visibility = Visibility.Visible; OpenProgress.IsIndeterminate = true;
+        try
+        {
+            var progress = new Progress<(int Done, int Total)>(value =>
+            {
+                OpenProgress.IsIndeterminate = false; OpenProgress.Maximum = value.Total; OpenProgress.Value = value.Done;
+                PositionStatus.Text = $"Moving to project: {value.Done}/{value.Total}";
+            });
+            var outcome = await PromptProjectSession.MoveAsync(sources, destination,
+                references.Select(reference => new PromptProjectSession.OpenDocument(reference.Doc, () => reference.Window.editors.GetValueOrDefault(reference.Doc.Id))).ToArray(),
+                CurrentView ?? GetEditor(ActiveDocument!), progress, App.Current.MarkChanged);
+            foreach (var result in outcome.Files)
+            {
+                Preferences.Recent.RemoveAll(path => string.Equals(path, result.SourcePath, StringComparison.OrdinalIgnoreCase));
+                DocumentEmojis.Rename(Preferences, result.SourcePath, result.DestinationPath); AddRecent(result.DestinationPath);
+            }
+            foreach (var (window, document) in references) { window.noticedVersions.Remove(document.Id); window.autoSaveErrors.Remove(document.Id); }
+            foreach (var window in windows)
+            {
+                window.Explorer.DocumentSelection.Clear(); window.Explorer.ExplorerSelection.Clear();
+                window.ExternalNotice.Visibility = Visibility.Collapsed; window.UpdateStatus();
+            }
+            ProjectsChanged();
+            var warnings = outcome.Files.Where(result => result.CleanupWarning != null).Select(result => "Recovery copy: " + result.CleanupWarning).Concat(outcome.RefreshWarnings).ToArray();
+            if (warnings.Length > 0) MessageBox.Show(this, "The prompt files moved. Follow-up is needed:\n\n" + string.Join("\n", warnings), "Move to Project");
+        }
+        finally
+        {
+            foreach (var window in windows) { window.fileOperationDepth--; window.projectMoveInProgress = false; }
+            OpenProgress.IsIndeterminate = true; if (--documentLoads == 0) OpenProgress.Visibility = Visibility.Collapsed;
+            UpdateStatus();
+        }
+    }
     async void AddBundledDocumentClick(object sender, RoutedEventArgs e)
     {
         if (IsAnnotating) return;
@@ -33,6 +105,7 @@ public partial class MainWindow
     public void OpenPaths(IEnumerable<string> paths) => _ = OpenPathsAsync(paths);
     internal async Task OpenPathsAsync(IEnumerable<string> paths)
     {
+        if (projectMoveInProgress) { PositionStatus.Text = "Wait for the project move to finish before opening another file."; return; }
         foreach (string rawPath in paths)
         {
             try
@@ -81,6 +154,7 @@ public partial class MainWindow
 
     internal async Task OpenExplorerFile(string path, CancellationToken token)
     {
+        if (projectMoveInProgress) { PositionStatus.Text = "Wait for the project move to finish before opening another file."; return; }
         if (IsAnnotating) return;
         if (Path.GetExtension(path).Equals(".html", StringComparison.OrdinalIgnoreCase))
         {
@@ -130,6 +204,7 @@ public partial class MainWindow
 
     internal async Task<bool> DeleteExplorerEntry(PromptEntry entry, Func<string, bool, bool>? confirm = null)
     {
+        if (projectMoveInProgress) throw new IOException("Wait for the project move to finish before deleting files.");
         if (IsAnnotating) return false;
         var windows = Application.Current.Windows.OfType<MainWindow>().ToArray();
         foreach (var window in windows) window.fileOperationDepth++;
@@ -212,6 +287,7 @@ public partial class MainWindow
         if (Explorer.DocumentSelection.Enabled && Explorer.DocumentSelection.Order(doc) > 0 && Explorer.DocumentSelection.Items.Count > 1)
             Add("_Combine Selected Documents…", () => _ = CombineFilesFromUi(Explorer.DocumentSelection), false, needsPath: false);
         bool multiple = documentList && Explorer.DocumentSelection.Enabled && Explorer.DocumentSelection.Order(doc) > 0;
+        menu.Items.Add(CreateProjectMenu(multiple ? Explorer.DocumentSelection.Items : [doc]));
         Add(multiple ? "_Delete Selected Files…" : "_Delete…", () => _ = DeleteFilesFromUi(multiple ? Explorer.DocumentSelection.Items : [doc]), false, needsPath: false);
         menu.Items.Add(new Separator());
         Add("Copy Full _Path", () => Clipboard.SetText(FullPathText(doc.Path!)), false);
@@ -282,6 +358,7 @@ public partial class MainWindow
 
     internal async Task<Document> DuplicateDocument(Document doc)
     {
+        if (projectMoveInProgress) throw new IOException("Wait for the project move to finish before duplicating documents.");
         fileOperationDepth++;
         try
         {
@@ -297,6 +374,7 @@ public partial class MainWindow
 
     internal async Task<bool> RevertDocument(Document doc, Func<bool>? confirm = null)
     {
+        if (projectMoveInProgress) throw new IOException("Wait for the project move to finish before reverting documents.");
         if (doc.Path == null) return false;
         fileOperationDepth++;
         try
@@ -337,6 +415,7 @@ public partial class MainWindow
 
     internal async Task<int> DeleteFiles(IReadOnlyList<object> items, Func<IReadOnlyList<string>, IReadOnlyList<string>, bool, bool>? confirm = null)
     {
+        if (projectMoveInProgress) throw new IOException("Wait for the project move to finish before deleting files.");
         if (IsAnnotating) return 0;
         if (items.Count == 0) throw new ArgumentException("Check the files or unsaved documents you want to delete first.");
         if (items.OfType<Document>().Any(doc => !Documents.Contains(doc))) throw new IOException("A selected document has closed. Select the files again.");

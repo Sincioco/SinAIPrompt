@@ -20,6 +20,8 @@ internal static class UiSelfTest
             await SessionPersistenceSelfTest.Run(folder, Check);
             await LinkPreviewSelfTest.Run(Check);
             await HtmlAssetsSelfTest.Run(folder, Check);
+            await SliceExportSelfTest.Run(folder, Check);
+            await PromptProjectMoveSelfTest.Run(folder, Check);
             string documents = Path.Combine(folder, "documents"); Directory.CreateDirectory(documents);
             var settings = new Settings { AutoSaveDirectory = documents };
             var first = DocumentFactory.Create(settings); settings.NextDocumentNumber = 1;
@@ -116,6 +118,7 @@ internal static class UiSelfTest
             await FileSelectionSelfTest.Run(window, Check);
             await DocumentPrivacySelfTest.Run(window, Check);
             await PromptExplorerSelfTest.Run(window, Check);
+            await PromptProjectSessionSelfTest.Run(window, folder, Check);
             string saved = File.ReadAllText(first.Path!); File.AppendAllText(first.Path!, "<!-- external -->");
             bool conflict = false;try { TextFiles.Save(first, first.Path!); } catch (IOException) { conflict = true; }
             Check(conflict, "External file conflict prevents silent overwrite");

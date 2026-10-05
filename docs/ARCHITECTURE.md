@@ -930,3 +930,59 @@ The final offline package passed 862 native/browser checks, including exact cell
 pixels, Ctrl+C, undo/redo, lock protection, persistence and small-image geometry. All
 16 architecture-checker fixtures and 50 JavaScript syntax checks passed, as did
 `git diff --check`. The two existing MainWindow size/reduction warnings remain.
+
+## October 6: slice export and physical projects
+
+`SliceExport` owns one editor's temporary output batch and native folder picker.
+The existing slicing module renders one detached cell at a time, yields between
+cells, and reports progress/cancellation through annotation controls. PNG writes
+run on workers, use temporary files and never replace existing destinations.
+Each export creates a numbered image-named folder; cancellation keeps completed
+cells. No export work runs during ordinary typing or divider movement.
+
+Core `PromptProjects` owns project naming and the known-path list in Settings.
+Core `PromptProjectMove` owns preflight, verified staging, source reservation,
+publication, rollback and cleanup. It accepts detached snapshots and returns disk
+results, with no window or mutable Document dependency. It supports cross-volume
+copies and preserves encodings, line endings, attributes and matching asset trees.
+Collisions reject the batch. Rollback retains externally changed published copies
+instead of deleting newer work. Linked/reparse-point HTML and asset trees are
+explicitly rejected. Project folders contain only the user's prompt files/assets;
+the registry remains in application storage.
+
+`PromptProjectUi` owns the small naming dialog and destination menus.
+`PromptProjectSession` coordinates explicit open models and dynamically resolved
+editor instances; `FileActions` remains the existing window adapter for selection,
+progress, autosave suspension and navigation metadata. The window stays enabled
+during worker I/O. Saving/closing or conflicting file operations wait for the move.
+Unsaved source and visual text remain open without being silently saved. Published
+paths are recorded before editor refresh; a failed refresh preserves the tab and
+disables its autosave with an explicit warning. MainWindow gains only one callback
+assignment, not project algorithms or persistence logic.
+
+`project-references.js` owns inert HTML/CSS URL rebasing from explicit old/new file
+URLs and batch mappings. It covers encoded references, srcset, bases, styles,
+templates and original-image metadata without executing document scripts. Local
+references outside the destination use file URIs. `original-images.js` gives those
+images transient native display mappings and restores authored srcset values on
+serialization; saved storage modes and image sources are unchanged.
+
+Reviewed changed-file growth: FileActions 369→448; HtmlEditorHost 372→408;
+MainWindow 561→562 (below its unchanged 564 ceiling); PromptExplorer 292→300;
+annotation UI 264→275; slicing 83→105; editor 205→208; original-image mapping
+23→38. New production owners: project disk transaction 220, registry 34, session
+80, UI 110, reference rewriting 138, and slice output 90 lines. Other integration
+changes add 0–3 lines per file. Focused transaction, session, reference and export
+checks are separate from their production owners. No dependencies, exceptions,
+baseline resets, reverse dependencies or entry-point feature algorithms were added.
+Existing window-partial and editor-host coupling remain recorded debt.
+
+Validation: the offline package passed 935 native/browser checks, including
+actual project naming/menu interaction, source and visual edits, lazy tabs, clean
+locked prompts, image rendering in the destination frame, exact exported PNGs,
+cancellation, collision rollback and preservation of concurrent destination edits.
+All 16 architecture fixtures, 52 JavaScript syntax checks and whitespace checks
+passed. The two existing MainWindow review warnings remain; there were no compiler
+warnings/errors or guardrail exceptions. Cross-volume fixtures ran between the
+profile drive and TEMP. Project registry persistence uses the existing settings
+serializer; no project documents or generated test files are committed.

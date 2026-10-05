@@ -35,7 +35,12 @@ internal static class HtmlAssetsSelfTest
             data.SetData(DataFormats.FileDrop, new[] { path }); data.SetImage(encoder.Frames[0]);
             EditorClipboard.TestData = data;
         }
-        async Task Evaluate(string expression) => await browser.CoreWebView2.CallDevToolsProtocolMethodAsync("Runtime.evaluate", JsonSerializer.Serialize(new { expression, awaitPromise = true }));
+        async Task Evaluate(string expression)
+        {
+            string response = await browser.CoreWebView2.CallDevToolsProtocolMethodAsync("Runtime.evaluate", JsonSerializer.Serialize(new { expression, awaitPromise = true }));
+            using var result = JsonDocument.Parse(response);
+            if (result.RootElement.TryGetProperty("exceptionDetails", out var failure)) throw new Exception(failure.ToString());
+        }
         try
         {
             view.FocusEditing();
@@ -62,8 +67,14 @@ internal static class HtmlAssetsSelfTest
             check(await browser.ExecuteScriptAsync("(()=>{const images=document.querySelector('#document').contentDocument.images;return images.length===2&&images[0].getAttribute('src')===images[1].getAttribute('src')&&images[0].dataset.sinStorage==='separate';})()") == "true",
                 "Repeated Photos-style pastes reuse the same separately stored PNG through image hashing");
             await Evaluate("window.editor.load(" + JsonSerializer.Serialize(fragment) + ")");
+            await Evaluate("document.querySelector('#document').contentDocument.images[0].decode()");
+            check(await browser.ExecuteScriptAsync("(()=>{const image=document.querySelector('#document').contentDocument.images[0];return image.naturalWidth===320&&image.naturalHeight===180&&image.currentSrc.includes('sin-original.local');})()") == "true",
+                "An existing local-file image now displays at its decoded dimensions through the transient mapping");
+            // Keep the earlier repair regression meaningful: deliberately remove
+            // the runtime display mapping to reproduce a legacy broken image.
+            await Evaluate("(async()=>{const image=document.querySelector('#document').contentDocument.images[0];image.removeAttribute('srcset');await image.decode().catch(()=>{});})()");
             check(await browser.ExecuteScriptAsync("document.querySelector('#document').contentDocument.images[0].naturalWidth===0") == "true",
-                "Existing local-file image fixture reproduces the broken browser image");
+                "Removing only the runtime mapping reproduces a legacy broken local-file image");
             await browser.ExecuteScriptAsync("window.photoEdit=window.editor.openAnnotation(document.querySelector('#document').contentDocument.images[0]);void 0");
             bool shown = false;
             for (int i = 0; i < 100 && !shown; i++) { await Task.Delay(20); shown = await browser.ExecuteScriptAsync("!!document.querySelector('dialog.annotation [data-action=apply]')") == "true"; }
@@ -193,6 +204,30 @@ internal static class HtmlAssetsSelfTest
             await Evaluate("window.referenceEdit");
             check(File.ReadAllBytes(path).SequenceEqual(originalBytes) && await view.Browser.ExecuteScriptAsync("document.querySelector('#document').contentDocument.images[0].dataset.sinStorage==='inline'") == "true",
                 "Annotating a referenced image creates an independent edited image and leaves the original file unchanged");
+
+            string fileUrl = new Uri(path).AbsoluteUri;
+            foreach (string? srcset in new string?[] { null, "", fileUrl + " 1x,  " + fileUrl + " 2x" })
+            {
+                string plain = "<p><img src=\"" + System.Net.WebUtility.HtmlEncode(fileUrl) + "\"" +
+                    (srcset == null ? "" : " srcset=\"" + System.Net.WebUtility.HtmlEncode(srcset) + "\"") + "></p>";
+                await Evaluate("window.editor.load(" + JsonSerializer.Serialize(plain) + ")");
+                await Evaluate("(async()=>{const doc=document.querySelector('#document').contentDocument;await (await import('./original-images.js')).prepareOriginalImages(doc);await doc.images[0].decode();})()");
+                check(await view.Browser.ExecuteScriptAsync("(()=>{const img=document.querySelector('#document').contentDocument.images[0];return img.naturalWidth===16&&img.naturalHeight===8&&img.currentSrc.includes('sin-original.local')&&!img.hasAttribute('data-sin-storage');})()") == "true",
+                    "A plain external file image displays through a transient mapping without changing storage mode (srcset " + (srcset == null ? "absent" : srcset.Length == 0 ? "empty" : "authored") + ")");
+                check(await view.Browser.ExecuteScriptAsync("(()=>{const html=window.editor.html(),img=new DOMParser().parseFromString(html,'text/html').images[0];return img.getAttribute('src')===" + JsonSerializer.Serialize(fileUrl) +
+                    "&&img.getAttribute('srcset')===" + JsonSerializer.Serialize(srcset) + "&&!html.includes('sin-original.local')&&!html.includes('data-sin-original-srcset')&&!img.hasAttribute('data-sin-storage');})()") == "true",
+                    "Saving a mapped plain image restores its exact authored src and srcset without runtime metadata");
+            }
+            await Evaluate("window.editor.load('<p><br></p>').then(()=>window.editor.focus())");
+            string inserted = "<img src=\"" + System.Net.WebUtility.HtmlEncode(fileUrl) + "\" srcset=\"\">";
+            await Evaluate("window.editor.command('insertHTML'," + JsonSerializer.Serialize(inserted) + ")");
+            bool displayed = false;
+            for (int i = 0; i < 150 && !displayed; i++)
+            {
+                displayed = await view.Browser.ExecuteScriptAsync("(()=>{const img=document.querySelector('#document').contentDocument.images[0];return img?.naturalWidth===16&&img.currentSrc.includes('sin-original.local');})()") == "true";
+                if (!displayed) await Task.Delay(20);
+            }
+            check(displayed, "Newly inserted plain file images receive a display mapping through the image observer");
         }
         finally
         {

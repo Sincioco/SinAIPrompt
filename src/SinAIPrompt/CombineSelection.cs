@@ -57,7 +57,7 @@ public sealed class CombineSelectionBox : CheckBox
     public CombineSelectionBox()
     {
         Margin = new Thickness(0, 0, 6, 0); VerticalAlignment = VerticalAlignment.Center;
-        FontSize = 10; ToolTip = "Select for Combine or Delete. Numbers show selection order.";
+        FontSize = 10; ToolTip = "Select for Combine, Move to Project, or Delete. Numbers show selection order.";
         Checked += Pick; Unchecked += Pick;
         Loaded += (_, _) => { if (Selection != null) { Selection.Changed -= Refresh; Selection.Changed += Refresh; } Refresh(); };
         Unloaded += (_, _) => { if (Selection != null) Selection.Changed -= Refresh; };

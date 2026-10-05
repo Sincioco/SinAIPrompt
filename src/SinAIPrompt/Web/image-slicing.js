@@ -1,15 +1,15 @@
-import {blobData,request} from './bridge.js';
+import {blobData,request,native} from './bridge.js';
 import {loadImage} from './document.js';
-import {clamp,clone,imageClip,sceneSvg} from './annotation-model.js';
+import {clamp,imageClip,sceneSvg} from './annotation-model.js';
 
 // Divider fractions are image-layer metadata; the dialog owns their history.
-// All previews are SVG chrome. Only an explicit Copy operation renders pixels.
+// All previews are SVG chrome. Only explicit copy/save operations render pixels.
 export const slicingControls=`<style>
 .annotation [data-slice-cell]{cursor:pointer}
 .annotation [data-slice-divider]{cursor:ew-resize}
 .annotation [data-slice-overlay][data-slice-locked=true] [data-slice-divider]{cursor:default}
 .annotation #sliceCell{max-width:130px}.annotation #sliceProgress{width:100%}
-</style><div id="imageSlices" hidden><hr><h3>Image Cells</h3><button data-action="slice" class="wide">Divide Into Cells</button><div data-slice-options hidden><label class="field">Dividers <input id="sliceDividerCount" type="number" min="0" max="32" value="3" step="1"></label><label class="field">Selected Cell <select id="sliceCell"></select></label><button data-action="copySlice" class="wide" title="Copy Selected Cell As PNG (Ctrl+C)">Copy Selected Cell (PNG)</button><progress id="sliceProgress" aria-label="Copying selected cell" hidden></progress><p class="hint">Drag the red handles to set unequal widths. Click a cell, then copy it. Dividers stay editable and never appear in copied images.</p></div></div>`;
+</style><div id="imageSlices" hidden><hr><h3>Image Cells</h3><button data-action="slice" class="wide">Divide Into Cells</button><div data-slice-options hidden><label class="field">Dividers <input id="sliceDividerCount" type="number" min="0" max="32" value="3" step="1"></label><label class="field">Selected Cell <select id="sliceCell"></select></label><button data-action="copySlice" class="wide" title="Copy Selected Cell As PNG (Ctrl+C)">Copy Selected Cell (PNG)</button><button data-action="saveAllSlices" class="wide">Save All Slices…</button><p class="hint">Drag the red handles to set unequal widths. Copy a selected cell or save all cells as numbered PNGs. Guides never appear in the exported images.</p></div><progress id="sliceProgress" aria-label="Exporting image cells" hidden></progress><button data-action="cancelSliceExport" class="wide" hidden>Stop Saving</button><p id="sliceStatus" class="hint" role="status"></p></div>`;
 
 const pixelWidth=object=>Math.max(1,Math.round(imageClip(object).width));
 const maximum=object=>Math.min(32,pixelWidth(object)-1);
@@ -59,7 +59,7 @@ export function updateSliceOverlay(svg,object,cell,zoom) {
   if(overlay)overlay.outerHTML=sliceOverlay(object,cell,zoom);
 }
 export function syncSliceControls(dialog,object,enabled,cell,busy=false) {
-  const panel=dialog.querySelector('#imageSlices'),image=object?.type==='embedded-image';panel.hidden=!image;
+  const panel=dialog.querySelector('#imageSlices'),image=object?.type==='embedded-image';panel.hidden=!image&&!busy;
   if(!image)return;
   panel.querySelector('[data-action=slice]').classList.toggle('active',enabled);
   panel.querySelector('[data-action=slice]').textContent=enabled?'Hide Cell Dividers':'Divide Into Cells';
@@ -67,17 +67,39 @@ export function syncSliceControls(dialog,object,enabled,cell,busy=false) {
   const dividers=sliceDividers(object),count=panel.querySelector('#sliceDividerCount');count.value=dividers.length;count.max=maximum(object);count.disabled=!!object.locked;
   const select=panel.querySelector('#sliceCell');select.innerHTML=Array.from({length:dividers.length+1},(_,index)=>`<option value="${index}">Cell ${index+1} (${sliceBounds(object,index).width} px)</option>`).join('');select.value=clamp(cell,0,dividers.length);
   panel.querySelector('[data-action=copySlice]').disabled=busy||object.visible===false;
-  panel.querySelector('#sliceProgress').hidden=!busy;
+  panel.querySelector('[data-action=saveAllSlices]').disabled=busy||object.visible===false;
 }
-export async function copySlice(object,index) {
-  const snapshot=clone(object),bounds=sliceBounds(snapshot,index);
-  if(bounds.width*bounds.height>100000000)throw Error('This cell exceeds 100 megapixels. Reduce its dimensions before copying.');
-  const url=URL.createObjectURL(new Blob([sceneSvg({objects:[snapshot],background:'none'},bounds)],{type:'image/svg+xml'}));
+// Callers provide one detached snapshot for the operation, including all cells.
+async function renderCell(object,index) {
+  const bounds=sliceBounds(object,index);
+  if(bounds.width*bounds.height>100000000)throw Error('This cell exceeds 100 megapixels. Reduce its dimensions before exporting.');
+  const url=URL.createObjectURL(new Blob([sceneSvg({objects:[object],background:'none'},bounds)],{type:'image/svg+xml'}));
   try {
     const image=await loadImage(url),canvas=document.createElement('canvas');canvas.width=bounds.width;canvas.height=bounds.height;
     canvas.getContext('2d').drawImage(image,0,0);
     const blob=await new Promise(resolve=>canvas.toBlob(resolve,'image/png'));
     if(!blob)throw Error('The selected cell could not be rendered.');
-    await request('copy-image',{data:await blobData(blob)});
+    return await blobData(blob);
   } finally {URL.revokeObjectURL(url);}
+}
+export async function copySlice(object,index) {await request('copy-image',{data:await renderCell(object,index)});}
+export async function saveAllSlices(object,onProgress,signal) {
+  if(!native)throw Error('Saving image cells is available in the desktop application.');
+  const count=sliceDividers(object).length+1,token=await request('slice-export-begin',{name:object.name||'Image',count});
+  if(!token)return null;
+  let failure,result;
+  try {
+    for(let index=0;index<count&&!signal.aborted;index++){
+      onProgress(index,count);
+      await new Promise(resolve=>setTimeout(resolve,0));
+      if(signal.aborted)break;
+      const data=await renderCell(object,index);
+      if(signal.aborted)break;
+      await request('slice-export-write',{token,index,data});
+      onProgress(index+1,count);
+    }
+  } catch(error) {failure=error;}
+  finally {result=await request('slice-export-end',{token});}
+  if(failure)throw Error(`${failure.message} ${result.saved} of ${result.total} cells saved in ${result.folder}.`);
+  return result;
 }

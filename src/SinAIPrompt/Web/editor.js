@@ -1,6 +1,7 @@
 import {send,request,native,blobData,escapeHtml,ask,report} from './bridge.js';
 import {parseHtml,ensureStyle,editingStyles,serialize,toPng,portableHtml,pasteSafeHtml,renameImageFolder} from './document.js';
 import {renameImageFile} from './asset-references.js';
+import {rewriteProjectReferences} from './project-references.js';
 import {createDocumentSearch} from './document-search.js';
 import {createDocumentOutline} from './document-outline.js';
 import {createDocumentAccess} from './document-access.js';
@@ -91,14 +92,14 @@ async function load(raw,newBase=base){
   };frame.srcdoc='<!DOCTYPE html>'+input.documentElement.outerHTML;});});
   return loading;
 }
-async function setBase(newBase){
+async function setBase(newBase,updated=null){
   saveSelection();
   const path=node=>{const indexes=[];while(node&&node!==doc.body){indexes.unshift([...node.parentNode.childNodes].indexOf(node));node=node.parentNode;}return indexes;};
   const saved=selection?{start:path(selection.startContainer),end:path(selection.endContainer),startOffset:selection.startOffset,endOffset:selection.endOffset}:null;
   const scroll={x:doc.defaultView.scrollX,y:doc.defaultView.scrollY};
   // WebView2 applies changed folder mappings to newly loaded documents.
   // Reload only the sandboxed document, keeping the pending paste and its caret.
-  await load(html(),newBase);
+  await load(updated??html(),newBase);
   if(saved){const node=indexes=>indexes.reduce((parent,index)=>parent.childNodes[index],doc.body);selection=doc.createRange();selection.setStart(node(saved.start),saved.startOffset);selection.setEnd(node(saved.end),saved.endOffset);}
   restoreSelection();doc.defaultView.scrollTo(scroll.x,scroll.y);
 }
@@ -183,6 +184,8 @@ window.editor={load,html,setBase,focus,command,insertImage,openAnnotation,pasteC
   outline:createDocumentOutline(()=>doc),
   setNavigationInset:width=>{for(const area of [frame,$('#notice')]){area.style.marginLeft=width+'px';area.style.width=`calc(100% - ${width}px)`;}},
   renameImageFile,
+  rewriteProjectReferences,
+  async moveProjectReferences(oldUrl,newUrl,moves){await loading;const updated=rewriteProjectReferences(html(true),oldUrl,newUrl,moves);await setBase(base,updated);return updated;},
   async renameOpenImageFile(documentUrl,oldUrl,newUrl){await loading;const updated=renameImageFile(html(true),documentUrl,oldUrl,newUrl);await load(updated);return updated;},
   search:options=>search.run(options),
   beginMarkdown(folder=null){const key=id();(async()=>{await loading;return await htmlToMarkdown(doc,async png=>{const path=await request('save-image-as',{data:png});return folder?new URL(path,folder).href:path;});})().then(html=>exports.set(key,{html})).catch(error=>exports.set(key,{error:error.message}));return key;},

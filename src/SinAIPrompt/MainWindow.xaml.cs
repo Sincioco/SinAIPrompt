@@ -98,6 +98,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         Explorer.EmojiForPath = path => Documents.FirstOrDefault(doc => string.Equals(doc.Path, path, StringComparison.OrdinalIgnoreCase))?.Emoji ?? DocumentEmojis.Read(Preferences, path);
         ContentsView.Initialize(ContentViewMenu, Preferences, App.Current.MarkChanged);
         Explorer.OpenDocuments = () => Documents.Where(d => d.Path != null).Select(d => (d.Path!, d.Text)).ToArray();
+        Explorer.CreateProjectMenu = CreateProjectMenu;
         SourceInitialized += (_, _) => ApplyTheme();
         StateChanged += (_, _) => App.Current.MarkChanged();
         SizeChanged += (_, _) => { UpdateTabWidths(); navigation.Clamp(); App.Current.MarkChanged(); };

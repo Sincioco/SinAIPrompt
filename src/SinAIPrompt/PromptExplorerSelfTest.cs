@@ -195,7 +195,7 @@ internal static class PromptExplorerSelfTest
         File.WriteAllText(path, $"<img src='{reference}'>");
         var assetEntry = new PromptEntry(assets, true, path);
         var items = explorer.CreateFileMenu(new(path, false)).Items.OfType<MenuItem>().Select(i => i.Header.ToString()).ToArray();
-        check(items.SequenceEqual(["Rename…", "Delete to Recycle Bin…", "Show in File Explorer", "Open Containing Folder"]), "Explorer file menu exposes rename, recycle and both Windows Explorer actions");
+        check(items.SequenceEqual(["Rename…", "Move to Project", "Delete to Recycle Bin…", "Show in File Explorer", "Open Containing Folder"]), "Explorer file menu exposes rename, project moves, recycle and both Windows Explorer actions");
         check(explorer.CreateFileMenu(assetEntry).Items.OfType<MenuItem>().Any(i => i.Header.ToString() == "Delete to Recycle Bin…") &&
             !explorer.CreateFileMenu(new(folder, true)).Items.OfType<MenuItem>().Any(i => i.Header.ToString() == "Delete to Recycle Bin…"), "Folder deletion is offered only within a document's asset tree");
         check(ExplorerFileOperations.LocationCommand(path, true).Arguments == $"/select,\"{path}\"" &&

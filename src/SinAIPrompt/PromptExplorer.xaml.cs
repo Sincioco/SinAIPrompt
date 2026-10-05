@@ -24,6 +24,7 @@ public partial class PromptExplorer : UserControl, IDisposable
     internal Func<Document, bool> DocumentVisible { get; set; } = _ => true;
     internal Func<PromptEntry, bool> EntryVisible { get; set; } = _ => true;
     internal Func<string, string> EmojiForPath { get; set; } = _ => "";
+    internal Func<IReadOnlyList<object>, MenuItem>? CreateProjectMenu { get; set; }
     internal void RefreshPrivacy()
     {
         foreach (var item in DocumentSelection.Items.OfType<Document>()) if (!DocumentVisible(item)) DocumentSelection.Set(item, false);
@@ -44,6 +45,7 @@ public partial class PromptExplorer : UserControl, IDisposable
     int revision, busy;
     bool refreshing, disposed, changingFolder;
     string root = "";
+    public string WorkingFolder => root;
     public bool ExplorerMode => settings.ExplorerMode;
     internal Func<IReadOnlyList<(string Path, string Html)>> OpenDocuments { get; set; } = () => [];
     internal IReadOnlyList<PromptEntry> Entries => roots.Select(r => (PromptEntry)r.Tag).ToArray();
@@ -192,6 +194,12 @@ public partial class PromptExplorer : UserControl, IDisposable
         if (entry.IsImage || entry.IsHtml) Add("Rename…", () => Rename(entry), "F2");
         if (ExplorerSelection.Enabled && ExplorerSelection.Order(entry) > 0 && ExplorerSelection.Items.Count > 1)
             Add("Combine Selected Documents…", async () => await combineSelected());
+        if (entry.IsHtml && CreateProjectMenu != null)
+        {
+            IReadOnlyList<object> chosen = ExplorerSelection.Enabled && ExplorerSelection.Order(entry) > 0
+                ? ExplorerSelection.Items.ToArray() : [entry];
+            menu.Items.Add(CreateProjectMenu(chosen));
+        }
         if (ExplorerSelection.Enabled && ExplorerSelection.Order(entry) > 0) Add("Delete Selected Files…", () => Delete(entry), "Delete");
         else if (!entry.IsFolder || entry.ParentHtml != null) Add("Delete to Recycle Bin…", () => Delete(entry), "Delete");
         if (menu.Items.Count > 0) menu.Items.Add(new Separator());
