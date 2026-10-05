@@ -37,6 +37,11 @@ internal static class SliceExportSelfTest
         check(await Rejected(() => export.WriteAsync(token, 0, png)) && await File.ReadAllTextAsync(collision) == "Existing file" && Directory.GetFiles(reservedFolder, "*.tmp").Length == 0,
             "Slice export never overwrites a destination created during export and removes its unfinished temporary file");
         check(export.End(token).saved == 0, "A failed slice is not reported as saved and its batch can be closed");
+        token = await export.BeginAsync(parent, "Grid", 1089);
+        await export.WriteAsync(token, 0, png);
+        var grid = export.End(token);
+        check(grid.total == 1089 && grid.saved == 1 && File.Exists(Path.Combine(grid.folder, "Grid - Cell 0001.png")),
+            "Row-and-column export supports the full grid and pads cell numbers to keep file ordering stable");
     }
 
     internal static Task<object[]> ReadFilesAsync(string folder) => Task.Run(() => !Directory.Exists(folder) ? Array.Empty<object>() :

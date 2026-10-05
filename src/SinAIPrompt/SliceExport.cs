@@ -25,7 +25,7 @@ internal sealed class SliceExport
     internal async Task<string> BeginAsync(string parent, string imageName, int count)
     {
         if (busy || batch != null) throw new IOException("An image-cell export is already running.");
-        if (count is < 1 or > 33) throw new ArgumentOutOfRangeException(nameof(count));
+        if (count is < 1 or > 1089) throw new ArgumentOutOfRangeException(nameof(count)); // Up to 33 columns × 33 rows.
         busy = true;
         try
         {
@@ -58,7 +58,8 @@ internal sealed class SliceExport
                 byte[] bytes = Convert.FromBase64String(data[prefix.Length..]);
                 if (!bytes.AsSpan().StartsWith(new byte[] { 137, 80, 78, 71, 13, 10, 26, 10 }))
                     throw new IOException("The image cell is not a PNG.");
-                string path = Path.Combine(current.Folder, $"{current.Name} - Cell {index + 1:D2}.png");
+                string number = (index + 1).ToString("D" + Math.Max(2, current.Count.ToString().Length));
+                string path = Path.Combine(current.Folder, $"{current.Name} - Cell {number}.png");
                 string temporary = Path.Combine(current.Folder, "." + Guid.NewGuid().ToString("N") + ".tmp");
                 try
                 {

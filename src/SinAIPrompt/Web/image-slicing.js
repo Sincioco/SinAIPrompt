@@ -3,54 +3,68 @@ import {loadImage} from './document.js';
 import {clamp,imageClip,sceneSvg} from './annotation-model.js';
 
 // Divider fractions are image-layer metadata; the dialog owns their history.
-// All previews are SVG chrome. Only explicit copy/save operations render pixels.
+// All previews are SVG chrome. Only explicit copy/save/create operations render pixels.
 export const slicingControls=`<style>
 .annotation [data-slice-cell]{cursor:pointer}
 .annotation [data-slice-divider]{cursor:ew-resize}
+.annotation [data-slice-divider][data-slice-axis=y]{cursor:ns-resize}
 .annotation [data-slice-overlay][data-slice-locked=true] [data-slice-divider]{cursor:default}
-.annotation #sliceCell{max-width:130px}.annotation #sliceProgress{width:100%}
-</style><div id="imageSlices" hidden><hr><h3>Image Cells</h3><button data-action="slice" class="wide">Divide Into Cells</button><div data-slice-options hidden><label class="field">Dividers <input id="sliceDividerCount" type="number" min="0" max="32" value="3" step="1"></label><label class="field">Selected Cell <select id="sliceCell"></select></label><button data-action="copySlice" class="wide" title="Copy Selected Cell As PNG (Ctrl+C)">Copy Selected Cell (PNG)</button><button data-action="saveAllSlices" class="wide">Save All Slices…</button><p class="hint">Drag the red handles to set unequal widths. Copy a selected cell or save all cells as numbered PNGs. Guides never appear in the exported images.</p></div><progress id="sliceProgress" aria-label="Exporting image cells" hidden></progress><button data-action="cancelSliceExport" class="wide" hidden>Stop Saving</button><p id="sliceStatus" class="hint" role="status"></p></div>`;
+.annotation #imageSlices .field:has(#sliceCell){display:block}.annotation #sliceCell{width:100%;margin-top:4px}.annotation #sliceProgress{width:100%}
+</style><div id="imageSlices" hidden><hr><h3>Image Cells</h3><button data-action="slice" class="wide">Divide Into Cells</button><div data-slice-options hidden><label class="field">Vertical dividers <input id="sliceDividerCount" type="number" min="0" max="32" value="3" step="1"></label><label class="field">Horizontal dividers <input id="sliceRowDividerCount" type="number" min="0" max="32" value="1" step="1"></label><label class="field">Selected Cell <select id="sliceCell"></select></label><button data-action="createSliceImages" class="wide" title="Create movable copies of every cell and keep the original image">Create Separate Images</button><button data-action="copySlice" class="wide" title="Copy Selected Cell As PNG (Ctrl+C)">Copy Selected Cell (PNG)</button><button data-action="saveAllSlices" class="wide">Save All Slices…</button><p class="hint">Drag the red handles to set unequal widths and heights. Create movable cell images while keeping the original, copy one cell, or save all cells as numbered PNGs, left to right then top to bottom. Guides never appear in the cell images.</p></div><progress id="sliceProgress" aria-label="Processing image cells" hidden></progress><button data-action="cancelSliceExport" class="wide" hidden>Stop Saving</button><p id="sliceStatus" class="hint" role="status"></p></div>`;
 
-const pixelWidth=object=>Math.max(1,Math.round(imageClip(object).width));
-const maximum=object=>Math.min(32,pixelWidth(object)-1);
-export function sliceDividers(object) {
-  if(Array.isArray(object.sliceDividers)){
-    const values=object.sliceDividers.filter(value=>Number.isFinite(value)&&value>0&&value<1).sort((a,b)=>a-b).slice(0,maximum(object)),result=[],gap=1/pixelWidth(object);
+const dividerKey=axis=>axis==='y'?'sliceRowDividers':'sliceDividers';
+const pixelSize=(clip,axis)=>Math.max(1,Math.round(clip[axis==='y'?'height':'width']));
+const maximum=size=>Math.min(32,size-1);
+function axisDividers(object,axis,size) {
+  const saved=object[dividerKey(axis)];
+  if(Array.isArray(saved)){
+    const values=saved.filter(value=>Number.isFinite(value)&&value>0&&value<1).sort((a,b)=>a-b).slice(0,maximum(size)),result=[],gap=1/size;
     // A later crop/resize can leave too many cells or subpixel gaps. Project a
     // valid current layout without changing stored metadata merely by viewing it.
     values.forEach((value,index)=>result.push(clamp(value,(result.at(-1)??0)+gap,1-gap*(values.length-index))));
     return result;
   }
-  const count=Math.min(3,maximum(object));return Array.from({length:count},(_,index)=>(index+1)/(count+1));
+  const count=Math.min(axis==='y'?1:3,maximum(size));return Array.from({length:count},(_,index)=>(index+1)/(count+1));
 }
-export function setSliceCount(object,value) {
+export function sliceDividers(object,axis='x') {return axisDividers(object,axis,pixelSize(imageClip(object),axis));}
+export function setSliceCount(object,value,axis='x') {
   if(!object||object.type!=='embedded-image'||object.locked)return;
-  const count=clamp(Math.round(Number(value)||0),0,maximum(object));
-  object.sliceDividers=Array.from({length:count},(_,index)=>(index+1)/(count+1));
+  const count=clamp(Math.round(Number(value)||0),0,maximum(pixelSize(imageClip(object),axis)));
+  object[dividerKey(axis)]=Array.from({length:count},(_,index)=>(index+1)/(count+1));
 }
-export function moveSliceDivider(object,index,x) {
+export function moveSliceDivider(object,index,position,axis='x') {
   if(!object||object.locked)return;
-  const dividers=sliceDividers(object),clip=imageClip(object),gap=1/pixelWidth(object);
+  const clip=imageClip(object),size=pixelSize(clip,axis),dividers=axisDividers(object,axis,size),gap=1/size;
   if(index<0||index>=dividers.length)return;
-  dividers[index]=clamp((x-clip.x)/clip.width,(dividers[index-1]??0)+gap,(dividers[index+1]??1)-gap);
-  object.sliceDividers=dividers;
+  dividers[index]=clamp((position-clip[axis])/clip[axis==='y'?'height':'width'],(dividers[index-1]??0)+gap,(dividers[index+1]??1)-gap);
+  object[dividerKey(axis)]=dividers;
 }
-export function sliceBounds(object,index) {
-  const clip=imageClip(object),edges=[0,...sliceDividers(object),1],width=pixelWidth(object);
-  index=clamp(index,0,edges.length-2);
-  const left=Math.round(edges[index]*width),right=Math.round(edges[index+1]*width);
-  return {x:clip.x+left,y:clip.y,width:Math.max(1,right-left),height:Math.max(1,Math.round(clip.height))};
+function sliceGrid(object) {
+  const clip=imageClip(object),width=pixelSize(clip,'x'),height=pixelSize(clip,'y');
+  const x=axisDividers(object,'x',width),y=axisDividers(object,'y',height);
+  return {clip,x,y,columns:x.length+1,rows:y.length+1,
+    xEdges:[0,...x,1].map(fraction=>Math.round(fraction*width)),yEdges:[0,...y,1].map(fraction=>Math.round(fraction*height))};
 }
+const gridCellCount=grid=>grid.columns*grid.rows;
+function cellBounds(grid,index) {
+  index=clamp(Math.trunc(Number(index)||0),0,gridCellCount(grid)-1);
+  const column=index%grid.columns,row=Math.floor(index/grid.columns),left=grid.xEdges[column],top=grid.yEdges[row];
+  return {x:grid.clip.x+left,y:grid.clip.y+top,width:Math.max(1,grid.xEdges[column+1]-left),height:Math.max(1,grid.yEdges[row+1]-top)};
+}
+export function sliceCellCount(object) {return gridCellCount(sliceGrid(object));}
+export function sliceBounds(object,index) {return cellBounds(sliceGrid(object),index);}
 export function sliceOverlay(object,cell,zoom) {
-  const clip=imageClip(object),dividers=sliceDividers(object),size=12/zoom;
+  const grid=sliceGrid(object),clip=grid.clip,size=12/zoom,count=gridCellCount(grid);
   let content='';
-  for(let index=0;index<=dividers.length;index++){
-    const b=sliceBounds(object,index),selected=index===clamp(cell,0,dividers.length);
+  for(let index=0;index<count;index++){
+    const b=cellBounds(grid,index),selected=index===clamp(cell,0,count-1);
     content+=`<rect data-slice-cell="${index}" x="${b.x}" y="${b.y}" width="${b.width}" height="${b.height}" fill="${selected?'#0874c91c':'transparent'}" stroke="${selected?'#0874c9':'none'}" stroke-width="${1/zoom}"/><text x="${b.x+8/zoom}" y="${b.y+20/zoom}" fill="#ffffff" stroke="#273746" stroke-width="${3/zoom}" paint-order="stroke" font-size="${14/zoom}" font-family="Segoe UI" pointer-events="none">${index+1}</text>`;
   }
-  dividers.forEach((fraction,index)=>{
-    const x=clip.x+fraction*clip.width;
-    content+=`<g data-slice-divider="${index}"><line x1="${x}" x2="${x}" y1="${clip.y}" y2="${clip.y+clip.height}" stroke="transparent" stroke-width="${14/zoom}"/><line x1="${x}" x2="${x}" y1="${clip.y}" y2="${clip.y+clip.height}" stroke="#d52f32" stroke-width="${2/zoom}"/>${object.locked?'':`<rect x="${x-size/2}" y="${clip.y-size/2}" width="${size}" height="${size}" rx="${2/zoom}" fill="#ffffff" stroke="#d52f32" stroke-width="${2/zoom}"/><rect x="${x-size/2}" y="${clip.y+clip.height-size/2}" width="${size}" height="${size}" rx="${2/zoom}" fill="#ffffff" stroke="#d52f32" stroke-width="${2/zoom}"/>`}</g>`;
+  for(const axis of ['x','y'])grid[axis].forEach((fraction,index)=>{
+    const vertical=axis==='x',position=clip[axis]+fraction*clip[vertical?'width':'height'];
+    const x1=vertical?position:clip.x,x2=vertical?position:clip.x+clip.width,y1=vertical?clip.y:position,y2=vertical?clip.y+clip.height:position;
+    const handles=object.locked?'':[[x1,y1],[x2,y2]].map(([x,y])=>`<rect x="${x-size/2}" y="${y-size/2}" width="${size}" height="${size}" rx="${2/zoom}" fill="#ffffff" stroke="#d52f32" stroke-width="${2/zoom}"/>`).join('');
+    content+=`<g data-slice-divider="${index}" data-slice-axis="${axis}"><line x1="${x1}" x2="${x2}" y1="${y1}" y2="${y2}" stroke="transparent" stroke-width="${14/zoom}"/><line x1="${x1}" x2="${x2}" y1="${y1}" y2="${y2}" stroke="#d52f32" stroke-width="${2/zoom}"/>${handles}</g>`;
   });
   return `<g data-slice-overlay data-slice-locked="${!!object.locked}">${content}</g>`;
 }
@@ -64,10 +78,14 @@ export function syncSliceControls(dialog,object,enabled,cell,busy=false) {
   panel.querySelector('[data-action=slice]').classList.toggle('active',enabled);
   panel.querySelector('[data-action=slice]').textContent=enabled?'Hide Cell Dividers':'Divide Into Cells';
   panel.querySelector('[data-slice-options]').hidden=!enabled;
-  const dividers=sliceDividers(object),count=panel.querySelector('#sliceDividerCount');count.value=dividers.length;count.max=maximum(object);count.disabled=!!object.locked;
-  const select=panel.querySelector('#sliceCell');select.innerHTML=Array.from({length:dividers.length+1},(_,index)=>`<option value="${index}">Cell ${index+1} (${sliceBounds(object,index).width} px)</option>`).join('');select.value=clamp(cell,0,dividers.length);
-  panel.querySelector('[data-action=copySlice]').disabled=busy||object.visible===false;
-  panel.querySelector('[data-action=saveAllSlices]').disabled=busy||object.visible===false;
+  const grid=sliceGrid(object),count=gridCellCount(grid);
+  for(const axis of ['x','y']){
+    const input=panel.querySelector(axis==='x'?'#sliceDividerCount':'#sliceRowDividerCount');input.value=grid[axis].length;input.max=maximum(pixelSize(grid.clip,axis));input.disabled=!!object.locked;
+  }
+  const select=panel.querySelector('#sliceCell');select.innerHTML=Array.from({length:count},(_,index)=>{
+    const bounds=cellBounds(grid,index);return `<option value="${index}">Cell ${index+1}: Row ${Math.floor(index/grid.columns)+1}, Col ${index%grid.columns+1} (${bounds.width} × ${bounds.height} px)</option>`;
+  }).join('');select.value=clamp(cell,0,count-1);
+  for(const action of ['copySlice','saveAllSlices','createSliceImages'])panel.querySelector(`[data-action=${action}]`).disabled=busy||object.visible===false;
 }
 // Callers provide one detached snapshot for the operation, including all cells.
 async function renderCell(object,index) {
@@ -83,9 +101,23 @@ async function renderCell(object,index) {
   } finally {URL.revokeObjectURL(url);}
 }
 export async function copySlice(object,index) {await request('copy-image',{data:await renderCell(object,index)});}
+export async function createSliceImages(object,onProgress,signal) {
+  const grid=sliceGrid(object),count=gridCellCount(grid),images=[];
+  for(let index=0;index<count;index++){
+    if(signal?.aborted)return null;
+    onProgress(index,count);
+    await new Promise(resolve=>setTimeout(resolve,0));
+    if(signal?.aborted)return null;
+    const source=await renderCell(object,index);
+    if(signal?.aborted)return null;
+    images.push({source,...cellBounds(grid,index),row:Math.floor(index/grid.columns),column:index%grid.columns});
+    onProgress(index+1,count);
+  }
+  return images;
+}
 export async function saveAllSlices(object,onProgress,signal) {
   if(!native)throw Error('Saving image cells is available in the desktop application.');
-  const count=sliceDividers(object).length+1,token=await request('slice-export-begin',{name:object.name||'Image',count});
+  const count=sliceCellCount(object),token=await request('slice-export-begin',{name:object.name||'Image',count});
   if(!token)return null;
   let failure,result;
   try {

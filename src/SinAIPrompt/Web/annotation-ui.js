@@ -8,7 +8,7 @@ import {connectCanvasPan} from './annotation-pan.js';
 import {cropControls,resetCrop,applyCrop} from './annotation-crop.js';
 import {createAnnotationInspector} from './annotation-inspector.js';
 import {connectAnnotationMenu} from './annotation-menu.js';
-import {slicingControls,setSliceCount,moveSliceDivider,sliceOverlay,updateSliceOverlay,syncSliceControls,copySlice,saveAllSlices} from './image-slicing.js';
+import {slicingControls,setSliceCount,moveSliceDivider,sliceOverlay,updateSliceOverlay,syncSliceControls,copySlice,saveAllSlices,createSliceImages} from './image-slicing.js';
 
 export async function annotate(initial,{crop=false}={}) {
   const dialog=document.createElement('dialog'); dialog.className='annotation'; dialog.setAttribute('aria-label','Image Annotation');
@@ -39,7 +39,7 @@ export async function annotate(initial,{crop=false}={}) {
   const one=()=>selectedObjects().length===1?selectedObjects()[0]:null;
   const error=e=>{$('.annotation-error').textContent=e?.message||String(e||'');};
   const historySave=()=>{if(JSON.stringify(history[historyIndex])===JSON.stringify(state))return;history=history.slice(0,historyIndex+1);history.push(clone(state));if(history.length>100)history.shift();historyIndex=history.length-1;};
-  const change=fn=>{fn();historySave();render();};
+  const change=(fn,fit=false)=>{fn();historySave();render(false,fit);};
   const historyMove=delta=>{historyIndex=clamp(historyIndex+delta,0,history.length-1);state=clone(history[historyIndex]);selected=selected.filter(key=>state.objects.some(o=>o.id===key));render();};
   const setLocked=locked=>change(()=>selectedObjects().forEach(o=>o.locked=locked));
   connectAnnotationMenu(dialog,{getSelection:selectedObjects,selectObject(key){if(!selected.includes(key)){selected=[key];render();}},copy:format=>copyObjects(selectedObjects(),format),setLocked,onError:error});
@@ -97,7 +97,7 @@ export async function annotate(initial,{crop=false}={}) {
     if(event.button!==0)return;event.preventDefault();svg.focus({preventScroll:true});error('');const p=point(event),target=event.target,objectId=target.closest('[data-object]')?.dataset.object;
     if(sliceMode&&one()?.type==='embedded-image'){
       const divider=target.closest('[data-slice-divider]'),cell=target.closest('[data-slice-cell]');
-      if(divider){if(!one().locked){gesture={kind:'slice',point:p,objectId:one().id,index:Number(divider.dataset.sliceDivider)};viewport.setPointerCapture(event.pointerId);}return;}
+      if(divider){if(!one().locked){gesture={kind:'slice',point:p,objectId:one().id,index:Number(divider.dataset.sliceDivider),axis:divider.dataset.sliceAxis||'x'};viewport.setPointerCapture(event.pointerId);}return;}
       if(cell){sliceCell=Number(cell.dataset.sliceCell);updateSliceOverlay(svg,one(),sliceCell,zoom);syncSliceControls(dialog,one(),true,sliceCell,sliceCopying);return;}
       sliceMode=false;
     }
@@ -116,7 +116,7 @@ export async function annotate(initial,{crop=false}={}) {
   viewport.addEventListener('pointermove',event=>{
     if(!gesture)return;const p=point(event),dx=p.x-gesture.point.x,dy=p.y-gesture.point.y;
     if(gesture.kind==='slice'){
-      const image=state.objects.find(o=>o.id===gesture.objectId);if(image&&!image.locked){moveSliceDivider(image,gesture.index,p.x);updateSliceOverlay(svg,image,sliceCell,zoom);syncSliceControls(dialog,image,true,sliceCell,sliceCopying);}return;
+      const image=state.objects.find(o=>o.id===gesture.objectId);if(image&&!image.locked){moveSliceDivider(image,gesture.index,gesture.axis==='y'?p.y:p.x,gesture.axis);updateSliceOverlay(svg,image,sliceCell,zoom);syncSliceControls(dialog,image,true,sliceCell,sliceCopying);}return;
     }
     if(gesture.kind==='marquee'){
       gesture.end=p;
@@ -190,21 +190,33 @@ export async function annotate(initial,{crop=false}={}) {
     const ordered=front?[...remaining,...chosen]:[...chosen,...remaining];let index=0;
     state.objects=state.objects.map(o=>o.locked?o:ordered[index++]);
   });}
-  async function copySelectedCell(saveAll=false){
+  async function exportCells(action='copy'){
     const image=one();if(!sliceMode||image?.type!=='embedded-image'||image.visible===false||sliceCopying)return;
-    const snapshot=clone(image),cell=sliceCell;
+    const snapshot=clone(image),cell=sliceCell,batch=action!=='copy';
     sliceCopying=true;syncSliceControls(dialog,image,true,sliceCell,true);error('');
-    const progress=$('#sliceProgress'),status=$('#sliceStatus'),stop=$('[data-action=cancelSliceExport]');
-    progress.hidden=false;progress.removeAttribute('value');status.textContent=saveAll?'Choose a folder for all image cells…':'Copying selected cell…';
-    sliceExport=saveAll?new AbortController():null;stop.hidden=!saveAll;
+    const progress=$('#sliceProgress'),status=$('#sliceStatus'),stop=$('[data-action=cancelSliceExport]'),apply=$('[data-action=apply]');
+    progress.hidden=false;progress.removeAttribute('value');status.textContent=action==='save'?'Choose a folder for all image cells…':action==='create'?'Creating separate images…':'Copying selected cell…';
+    sliceExport=batch?new AbortController():null;stop.hidden=!batch;stop.textContent=action==='create'?'Stop Creating':'Stop Saving';apply.disabled=true;
     try{
       await new Promise(resolve=>setTimeout(resolve,0));
-      if(saveAll){
+      if(finished)return;
+      if(action==='create'){
+        const cells=await createSliceImages(snapshot,(saved,total)=>{progress.max=total;progress.value=saved;status.textContent=`Creating images: ${saved} of ${total}…`;},sliceExport.signal);
+        if(finished)return;
+        if(!cells){status.textContent='Stopped. No separate images were added.';return;}
+        const canvas=outputBounds(state),clip=imageClip(snapshot);
+        change(()=>{
+          const copies=cells.map(cell=>({id:id(),type:'embedded-image',name:`${snapshot.name||'Image'} — Row ${cell.row+1}, Column ${cell.column+1}`,
+            source:cell.source,x:canvas.x+canvas.width+24+cell.x-clip.x+cell.column*12,y:cell.y+cell.row*12,width:cell.width,height:cell.height,visible:true}));
+          state.objects.push(...copies);selected=[copies[0].id];sliceMode=false;cropMode=false;tool='select';$('#canvasZoom').value='fit';
+        },true);
+        status.textContent=`Created ${cells.length} separate images. Original image kept.`;
+      }else if(action==='save'){
         const result=await saveAllSlices(snapshot,(saved,total)=>{progress.max=total;progress.value=saved;status.textContent=`Saving cells: ${saved} of ${total}…`;},sliceExport.signal);
         status.textContent=result?`${result.saved===result.total?'Saved':'Stopped: saved'} ${result.saved} of ${result.total} cells in ${result.folder}`:'Save canceled.';
       }else{await copySlice(snapshot,cell);status.textContent='Selected cell copied.';}
     } catch(e){status.textContent=e.message;throw e;}
-    finally{sliceCopying=false;sliceExport=null;stop.hidden=true;progress.hidden=true;syncSliceControls(dialog,one(),sliceMode,sliceCell);}
+    finally{sliceCopying=false;sliceExport=null;stop.hidden=true;progress.hidden=true;apply.disabled=false;syncSliceControls(dialog,one(),sliceMode,sliceCell);}
   }
   dialog.addEventListener('click',async event=>{
     const target=event.target.closest('button');if(!target)return;
@@ -221,9 +233,17 @@ export async function annotate(initial,{crop=false}={}) {
         case 'copy':await copyObjects(selectedObjects());break;
         case 'paste':if(!await pasteObjects())error('Copy objects or an image first.');break;
         case 'front':reorder(true);break;case 'back':reorder(false);break;
-        case 'slice':if(one()?.type!=='embedded-image')break;sliceMode=!sliceMode;cropMode=false;tool='select';sliceCell=0;change(()=>{if(sliceMode&&!one().locked&&!Array.isArray(one().sliceDividers))setSliceCount(one(),3);});break;
-        case 'copySlice':await copySelectedCell();break;
-        case 'saveAllSlices':await copySelectedCell(true);break;
+        case 'slice':
+          if(one()?.type!=='embedded-image')break;
+          sliceMode=!sliceMode;cropMode=false;tool='select';sliceCell=0;
+          change(()=>{
+            if(!sliceMode||one().locked)return;
+            if(!Array.isArray(one().sliceDividers))setSliceCount(one(),3);
+            if(!Array.isArray(one().sliceRowDividers))setSliceCount(one(),1,'y');
+          });break;
+        case 'copySlice':await exportCells();break;
+        case 'saveAllSlices':await exportCells('save');break;
+        case 'createSliceImages':await exportCells('create');break;
         case 'cancelSliceExport':sliceExport?.abort();break;
         case 'crop':if(one()?.locked)break;cropMode=!cropMode;sliceMode=false;tool='select';render();break;
         case 'resetCrop':change(()=>{if(one()&&!one().locked)resetCrop(one());});break;
@@ -250,7 +270,7 @@ export async function annotate(initial,{crop=false}={}) {
     const el=event.target;
     if(el.dataset.visible){change(()=>{const object=state.objects.find(o=>o.id===el.dataset.visible);if(object&&!object.locked)object.visible=el.checked;});return;}
     if(el.id==='canvasZoom'){render(false,true);return;}
-    if(el.id==='sliceDividerCount'){change(()=>{setSliceCount(one(),el.value);sliceCell=0;});return;}
+    if(el.id==='sliceDividerCount'||el.id==='sliceRowDividerCount'){change(()=>{setSliceCount(one(),el.value,el.id==='sliceRowDividerCount'?'y':'x');sliceCell=0;});return;}
     if(el.id==='sliceCell'){sliceCell=Number(el.value);if(sliceMode&&one()?.type==='embedded-image')updateSliceOverlay(svg,one(),sliceCell,zoom);return;}
     if(['canvasColor','canvasTransparent'].includes(el.id)){change(()=>state.background=$('#canvasTransparent').checked?'none':$('#canvasColor').value);return;}
     change(()=>inspector.edit(selectedObjects(),el));
@@ -258,7 +278,7 @@ export async function annotate(initial,{crop=false}={}) {
   dialog.addEventListener('keydown',event=>{
     event.stopPropagation();if(event.target.matches('input,textarea,select'))return;
     if(event.key==='Delete'||event.key==='Backspace'){event.preventDefault();remove();}
-    if(event.ctrlKey&&event.key.toLowerCase()==='c'){event.preventDefault();(sliceMode&&one()?.type==='embedded-image'?copySelectedCell():copyObjects(selectedObjects())).catch(error);}
+    if(event.ctrlKey&&event.key.toLowerCase()==='c'){event.preventDefault();(sliceMode&&one()?.type==='embedded-image'?exportCells():copyObjects(selectedObjects())).catch(error);}
     if(event.ctrlKey&&event.key.toLowerCase()==='v'){event.preventDefault();pasteObjects().catch(error);}
     if(event.ctrlKey&&event.key.toLowerCase()==='z'){event.preventDefault();historyMove(event.shiftKey?1:-1);}
     if(event.ctrlKey&&event.key.toLowerCase()==='y'){event.preventDefault();historyMove(1);}

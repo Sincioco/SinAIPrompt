@@ -1002,3 +1002,39 @@ checks, 16 architecture fixtures and whitespace checks also passed. One packaged
 run failed the unchanged mixed-selection annotation drag test; an unchanged rerun
 passed it and the complete suite. The existing two architecture review warnings
 remain, with no exceptions or changes to MainWindow's 562-line implementation.
+
+## October 6: image rows and independent cell images
+
+The existing `image-slicing.js` owns both divider axes, row-major bounds and PNG
+rendering. Horizontal positions use normalized `sliceRowDividers` metadata;
+missing metadata defaults to one centered divider and an explicit empty array
+keeps one row. The shared grid calculation constrains both axes to nonempty pixel
+cells after crop/resize. Native `SliceExport` accepts up to 33 by 33 cells and pads
+numbered filenames to the batch's digit count. Divider movement updates only SVG
+guides and controls, without encoding or replacing the image.
+
+Create Separate Images renders one detached cell at a time using the same crop,
+rounded clipping and opacity as Copy/Save. It yields between cells and reports
+progress; cancellation returns no partial collection. The annotation dialog keeps
+scene/history ownership and appends the finished independent PNG layers in one
+undoable change, beside the untouched original. Only the first copy is selected,
+and the canvas fits the result. Apply is disabled during rendering; Cancel/Stop
+remain available. No native file write is involved in creating these layers.
+Apply To Document uses the existing annotation persistence/rendering path.
+
+No new modules, dependencies, global state, reverse dependencies or guardrail
+exceptions were introduced. MainWindow remains unchanged at 562 lines. Existing
+annotation history serialization and full-scene rendering remain performance
+review triggers for very large scenes; this change does not run that work during
+divider movement or render unfinished image batches into the canvas.
+
+Changed production sizes: annotation UI 275→295 lines, slicing 105→137 and native
+slice export 90→91. Focused browser checks grew 177→329 and native export checks
+48→53. Both development and offline packaged integration runs passed 980 checks,
+including exact row/cell PNG pixels, zero encoding during horizontal dragging,
+independent movement, batch undo/redo, cancellation without partial layers, and
+original-object preservation through Apply/reopen. All 52 JavaScript syntax
+checks, 16 architecture fixtures and whitespace checks passed. The build had no
+compiler warnings/errors; the two existing MainWindow architecture review
+warnings remain. The packaged app was gracefully relaunched and restored the
+user's document session, including its unsaved draft.

@@ -72,10 +72,21 @@ also offers the current selection's project destinations. Each move carries its
 matching image folder and updates local HTML references. Unsaved edits stay open,
 locks remain intact, and existing destination files are never overwritten.
 
-In the Image Editor, select an image and choose **Divide Into Cells**, then
-**Save All Slices**. Choose one destination folder; numbered PNG cells are saved in
-a new image-named subfolder. Progress and **Stop Saving** remain available during
-export. Stopping keeps cells already saved, and later exports use a fresh folder.
+In the Image Editor, select an image and choose **Divide Into Cells**. Adjust
+**Vertical dividers** for columns and **Horizontal dividers** for rows. Horizontal
+dividers default to one line halfway down the image; use one vertical and one
+horizontal divider for a 2×2 contact sheet. Drag either axis's red handles for
+unequal cells, or set horizontal dividers to zero for a single row.
+**Save All Slices** saves numbered PNG cells into a new image-named subfolder after
+one destination choice, going left to right across each row, then top to bottom.
+Progress and **Stop Saving** remain available during export. Stopping keeps cells
+already saved, and later exports use a fresh folder.
+
+**Create Separate Images** makes a new image layer for every cell, arranged beside
+the original with space between cells. Each copy moves independently; the original
+image and source file remain intact. Creation shows progress and can be stopped
+without adding partial layers. Undo removes the complete new set in one step.
+Use **Apply To Document** to keep the canvas and its editable image layers.
 
 ## Bundled reference documents
 
