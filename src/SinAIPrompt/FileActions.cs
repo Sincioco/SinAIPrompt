@@ -115,7 +115,7 @@ public partial class MainWindow
                 if (MarkdownImport.IsMarkdown(path))
                 {
                     documentLoads++; OpenProgress.Visibility = Visibility.Visible;
-                    try { path = await MarkdownImport.ConvertAsync(path, GetEditor(activeDocument!).ConvertMarkdownAsync); }
+                    try { path = await MarkdownImport.ConvertAsync(path, App.Current.Store.DirectoryPath, GetEditor(activeDocument!).ConvertMarkdownAsync); }
                     finally { if (--documentLoads == 0) OpenProgress.Visibility = Visibility.Collapsed; }
                 }
                 var existing = Documents.FirstOrDefault(d => string.Equals(d.Path, path, StringComparison.OrdinalIgnoreCase));

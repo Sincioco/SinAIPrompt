@@ -534,12 +534,18 @@ WebView lazily; this task preserves space during that work rather than preloadin
 
 ## Markdown Support (23:49 request; September 13 implementation)
 
-`MarkdownImport` owns reading a source and publishing a new sibling HTML file, using an
-explicit conversion callback. Existing `MarkdownExport` provides the narrow per-editor
+`MarkdownImport` owns reading a source and publishing a new HTML file under the explicitly
+supplied application storage folder (`Markdown Imports`), using a conversion callback.
+Existing `MarkdownExport` provides the narrow per-editor
 Markdown conversion adapter; `Web/markdown.js` remains the only Markdown parser and uses
 the existing Modern CSS owner. Conversion uses a detached DOM, never the live document.
 Writes run on a worker and publish by a non-overwriting move, with numbered names on
-collision. The existing FileActions owner now contains OpenPaths coordination extracted
+collision. Editable imports resolve generated image/link references against the original
+Markdown file URI in the detached DOM; local anchors remain local. Preview conversion
+keeps its relative references. Ordinary document paths retain save/autosave/recovery
+ownership; no import registry or new window state is needed. Storage relocation retains
+its existing JSON-only behavior, so earlier imports keep their original internal paths.
+The existing FileActions owner now contains OpenPaths coordination extracted
 from MainWindow, plus the small status-bar progress indicator and file-drop routing.
 
 Explorer selection and Markdown drops create read-only previews instead of converted
@@ -1059,3 +1065,30 @@ architecture warnings remain. The development suite finished after its launcher'
 60-second limit. Packaged validation required fixing focus sensitivity in the new
 test popup and an unchanged rerun after an unrelated Copy Image clipboard check
 failed. The final packaged run passed without those failures.
+
+## October 7: internal Markdown imports
+
+`MarkdownImport` receives the configured storage folder and original source path
+explicitly. It publishes numbered, non-overwriting HTML copies in `Markdown Imports`
+on its existing worker path. The browser's existing Markdown conversion owner resolves
+generated image and link references against the source file URI in a detached document;
+local anchors and the source-free preview path retain their behavior. Normal document
+paths continue to own save, autosave, recent-file and session recovery behavior.
+
+Production growth is confined to MarkdownImport (33 to 35 lines), its MarkdownExport
+adapter (35 to 36), and markdown.js (144 to 149). FileActions remains 448 lines and
+MainWindow remains 562 against its unchanged 564-line ceiling. Native Markdown checks
+grow from 100 to 128 lines, with the import/save scenario extracted locally; existing
+browser document-tools checks grow from 57 to 67. No new files, dependencies, global
+state, reverse dependencies, guardrail exceptions or baseline changes were introduced.
+Existing window-partial coupling and JSON-only storage relocation remain unchanged.
+
+The development and final offline packaged suites each passed 991 native/browser
+checks, including source-folder preservation, saved edits/reopening, encoded local
+image rendering, filename collisions, reference rebasing and unchanged previews/drops.
+All 52 JavaScript syntax checks, 16 architecture-checker fixtures and whitespace checks
+passed. Builds had no compiler warnings or errors; the two existing MainWindow review
+warnings remain. The first packaged run failed an unchanged screen-capture pointer-speed
+assertion; the unchanged package passed the complete suite in a fresh isolated profile.
+Existing sibling HTML files are not migrated. Existing internal copies also retain
+their absolute paths if application storage is subsequently changed.

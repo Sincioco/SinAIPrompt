@@ -16,23 +16,16 @@ internal static class MarkdownImportSelfTest
         string saved = original.Text, previousFolder = App.Current.Preferences.ExplorerDirectory;
         bool mode = window.Explorer.ExplorerMode, visible = window.IsDocumentList;
         var documents = window.Documents.ToArray();
-        string folder = Path.Combine(App.Current.Store.DirectoryPath, "markdown-import"); Directory.CreateDirectory(folder);
+        string folder = Path.Combine(App.Current.Store.DirectoryPath, "markdown-import source #1"); Directory.CreateDirectory(folder);
+        string imports = Path.Combine(App.Current.Store.DirectoryPath, "Markdown Imports");
         string markdown = Path.Combine(folder, "ReadMe.md"), htmlPath = Path.Combine(folder, "Drop.html");
-        string source = "# Markdown fixture\n\n**Bold text** and [a link](Drop.html).\n\n## Detail\n\n![Local image](pixel.png)\n\n<script>window.untrustedRan=true</script>";
+        string source = "# Markdown fixture\n\n**Bold text** and [a link](Drop.html). [Section](#detail)\n\n## Detail\n\n![Local image](pixel%20%231.png)\n\n<script>window.untrustedRan=true</script>";
         File.WriteAllText(markdown, source); File.WriteAllText(htmlPath, "<h1>Dropped HTML</h1>");
-        File.WriteAllBytes(Path.Combine(folder, "pixel.png"), Convert.FromBase64String("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLttAAAAABJRU5ErkJggg=="));
+        File.WriteAllBytes(Path.Combine(folder, "pixel #1.png"), Convert.FromBase64String("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLttAAAAABJRU5ErkJggg=="));
         try
         {
-            await window.OpenPathsAsync([markdown]);
-            string converted = Path.Combine(folder, "ReadMe - Converted.html");
-            check(window.ActiveDocument!.Path == converted && File.Exists(converted) && File.ReadAllText(markdown) == source,
-                "File/Open converts Markdown into a sibling Name - Converted.html and preserves the source");
-            string first = File.ReadAllText(converted);
-            check(first.Contains("data-sin-style-mode=\"modern\"") && first.Contains("<h1>Markdown fixture</h1>") && first.Contains("<strong>Bold text</strong>") && first.Contains("src=\"pixel.png\""),
-                "Converted HTML has Modern styling, Markdown formatting and relative local-image references");
-            await window.OpenPathsAsync([markdown]);
-            check(window.ActiveDocument!.Path == Path.Combine(folder, "ReadMe - Converted (2).html") && File.ReadAllText(converted) == first,
-                "Repeated conversion chooses a new filename without overwriting an earlier HTML document");
+            await OpenAndSave(window, markdown, source, imports, check);
+            int importedCount = Directory.GetFiles(imports, "*.html").Length;
             window.ActiveDocument = original;
             int count = window.Documents.Count;
             window.SetDocumentList(true); window.Explorer.SetMode(true); await window.Explorer.SetFolderAsync(folder);
@@ -56,7 +49,7 @@ internal static class MarkdownImportSelfTest
             await Drop(view.Browser, [markdown], 600, 300);
             preview = await Preview(window);
             await WaitFor(preview, "document.querySelector('#preview')?.contentDocument?.querySelector('h1')?.textContent==='Markdown fixture'");
-            check(window.Documents.Count == count && Directory.GetFiles(folder, "*Converted*.html").Length == 2 && File.ReadAllText(markdown) == source,
+            check(window.Documents.Count == count && Directory.GetFiles(imports, "*.html").Length == importedCount && Directory.GetFiles(folder, "*Converted*.html").Length == 1 && File.ReadAllText(markdown) == source,
                 "Dropping Markdown onto the editor shows a read-only Modern preview without creating a converted file");
             // The drop disposes this preview. Its DevTools reply may never arrive;
             // the observable result is the newly opened HTML editor below.
@@ -73,6 +66,41 @@ internal static class MarkdownImportSelfTest
             if (previousFolder.Length > 0) await window.Explorer.SetFolderAsync(previousFolder);
             window.Explorer.SetMode(mode); window.SetDocumentList(visible);
         }
+    }
+    static async Task OpenAndSave(MainWindow window, string markdown, string source, string imports, Action<bool, string> check)
+    {
+        string folder = Path.GetDirectoryName(markdown)!, converted = Path.Combine(imports, "ReadMe - Converted.html");
+        string previous = Path.Combine(folder, "ReadMe - Converted.html"); File.WriteAllText(previous, "Existing user HTML");
+        string[] files = Directory.GetFiles(folder).Order().ToArray();
+        File.SetAttributes(markdown, File.GetAttributes(markdown) | FileAttributes.ReadOnly);
+        try { await window.OpenPathsAsync([markdown]); }
+        finally { File.SetAttributes(markdown, File.GetAttributes(markdown) & ~FileAttributes.ReadOnly); }
+        var imported = window.ActiveDocument!; var editor = window.CurrentView!;
+        check(imported.Path == converted && File.Exists(converted) && File.ReadAllText(markdown) == source && Directory.GetFiles(folder).Order().SequenceEqual(files),
+            "File/Open converts read-only Markdown into application storage without creating files in its source folder");
+        string first = File.ReadAllText(converted);
+        check(first.Contains("data-sin-style-mode=\"modern\"") && first.Contains("<h1>Markdown fixture</h1>") && first.Contains("<strong>Bold text</strong>") && first.Contains(new Uri(Path.Combine(folder, "pixel #1.png")).AbsoluteUri) && first.Contains(new Uri(Path.Combine(folder, "Drop.html")).AbsoluteUri) && first.Contains("href=\"#detail\""),
+            "Internal Markdown HTML preserves Modern formatting, source-relative image/link targets and local anchors");
+        await editor.Initialization;
+        await WaitFor(editor.Browser, "document.querySelector('#document')?.contentDocument?.images[0]?.naturalWidth===1");
+        check(await editor.Browser.ExecuteScriptAsync("!document.querySelector('#document').contentDocument.defaultView.untrustedRan") == "true",
+            "Internal Markdown images render from encoded source paths while document scripts stay disabled");
+        await editor.Browser.ExecuteScriptAsync("window.editor.command('insertText','Saved internal Markdown edit')");
+        check(await window.SaveDocument(imported) && File.ReadAllText(converted).Contains("Saved internal Markdown edit") && File.ReadAllText(markdown) == source && File.ReadAllText(previous) == "Existing user HTML" && Directory.GetFiles(folder).Order().SequenceEqual(files),
+            "Saving an imported document updates only internal HTML and preserves the Markdown and existing sibling HTML");
+        first = File.ReadAllText(converted);
+        await window.OpenPathsAsync([markdown]);
+        check(window.ActiveDocument!.Path == Path.Combine(imports, "ReadMe - Converted (2).html") && File.ReadAllText(converted) == first,
+            "Repeated Markdown conversion chooses a new internal filename without overwriting saved edits");
+        string other = Path.Combine(folder, "Another source"); Directory.CreateDirectory(other);
+        string otherMarkdown = Path.Combine(other, "ReadMe.md"); File.WriteAllText(otherMarkdown, "# Different Markdown source");
+        await window.OpenPathsAsync([otherMarkdown]);
+        check(window.ActiveDocument!.Path == Path.Combine(imports, "ReadMe - Converted (3).html") && window.ActiveDocument.Text.Contains("Different Markdown source") && Directory.GetFiles(other).Length == 1,
+            "Markdown files with matching names from different folders receive separate internal copies");
+        window.RemoveDocument(imported);
+        await window.OpenPathsAsync([converted]);
+        check(window.ActiveDocument!.Path == converted && window.ActiveDocument.Text.Contains("Saved internal Markdown edit"),
+            "Reopening internal converted HTML restores saved edits from its persistent path");
     }
     static async Task<WebView2> Preview(MainWindow window)
     {

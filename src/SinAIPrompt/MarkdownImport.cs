@@ -4,18 +4,20 @@ using SinAIPrompt.Core;
 
 namespace SinAIPrompt;
 
-// Converts one source without changing it, then atomically publishes a new sibling HTML file.
+// Converts one source without changing its folder, then atomically publishes internal HTML.
 internal static class MarkdownImport
 {
     internal static bool IsMarkdown(string path) => Path.GetExtension(path).Equals(".md", StringComparison.OrdinalIgnoreCase);
-    internal static async Task<string> ConvertAsync(string path, Func<string, Task<string>> convert)
+    internal static async Task<string> ConvertAsync(string path, string storageFolder, Func<string, string, Task<string>> convert)
     {
         path = Path.GetFullPath(path);
         string markdown = await Task.Run(() => TextFiles.Open(path).Text);
-        string html = await convert(markdown);
+        string html = await convert(markdown, path);
         return await Task.Run(() =>
         {
-            string stem = Path.Combine(Path.GetDirectoryName(path)!, Path.GetFileNameWithoutExtension(path) + " - Converted");
+            string folder = Path.Combine(storageFolder, "Markdown Imports");
+            Directory.CreateDirectory(folder);
+            string stem = Path.Combine(folder, Path.GetFileNameWithoutExtension(path) + " - Converted");
             string temporary = stem + "." + Guid.NewGuid().ToString("N") + ".tmp";
             try
             {

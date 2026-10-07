@@ -1,5 +1,5 @@
 import {setListNumber} from './list-numbering.js';
-import {markdownToHtml,htmlToMarkdown,pasteMarkdown} from './markdown.js';
+import {markdownDocument,markdownToHtml,htmlToMarkdown,pasteMarkdown} from './markdown.js';
 import {parseHtml} from './document.js';
 
 export async function runDocumentToolsTests(check){
@@ -46,6 +46,16 @@ export async function runDocumentToolsTests(check){
     check(parsed.querySelector('h1')?.textContent==='Example'&&parsed.querySelector('strong')?.textContent==='Bold'&&parsed.querySelector('ol')?.start===4&&parsed.querySelector('ol ul li')?.textContent==='Nested','Markdown parses headings, emphasis, numbered lists, and nested lists');
     check(parsed.querySelector('pre')?.textContent.includes('\n\n\n')&&parsed.querySelectorAll('table tr').length===2,'Markdown preserves fenced code and tables');
     check(!parseHtml(markdownToHtml('<script>alert(1)</script>')).querySelector('script'),'Pasted Markdown cannot introduce executable HTML');
+    const sourceUrl='file:///D:/Markdown%20%23/source/ReadMe.md';
+    const references='![Sibling](assets/pixel%20%23.png) ![Parent](../shared/pixel%20%23.png)\n\n[Sibling](Notes%20%23.html) [Parent](../guide.md?view=1#detail) [Local](#detail) [Empty]() [Web](https://example.invalid/path) [Malformed](http://[)';
+    const imported=parseHtml(markdownDocument(references,sourceUrl)),images=[...imported.images],links=[...imported.querySelectorAll('a')];
+    check(images[0]?.getAttribute('src')==='file:///D:/Markdown%20%23/source/assets/pixel%20%23.png'&&images[1]?.getAttribute('src')==='file:///D:/Markdown%20%23/shared/pixel%20%23.png','Internal Markdown imports resolve encoded sibling and parent images against the source file');
+    check(links[0]?.getAttribute('href')==='file:///D:/Markdown%20%23/source/Notes%20%23.html'&&links[1]?.getAttribute('href')==='file:///D:/Markdown%20%23/guide.md?view=1#detail','Internal Markdown imports retain source-relative links, queries and fragments');
+    check(links[2]?.getAttribute('href')==='#detail'&&links[3]?.getAttribute('href')===''&&links[4]?.getAttribute('href')==='https://example.invalid/path'&&links[5]?.getAttribute('href')==='http://[','Markdown import preserves local anchors, empty links, external URLs and malformed references');
+    const preview=parseHtml(markdownDocument(references));
+    check(preview.images[0]?.getAttribute('src')==='assets/pixel%20%23.png'&&preview.querySelector('a')?.getAttribute('href')==='Notes%20%23.html','Markdown conversion without a source URL keeps relative preview references');
+    const unsafe=parseHtml(markdownDocument('[Script](javascript:alert) [VB](vbscript:run) [Data](data:text/html,bad) ![Image](javascript:alert)\n\n<script>window.untrustedRan=true</script>\n\n<img src=x onerror=alert(1)>',sourceUrl));
+    check([...unsafe.querySelectorAll('a')].length===3&&[...unsafe.querySelectorAll('a')].every(link=>link.getAttribute('href')==='')&&unsafe.images[0]?.getAttribute('src')===''&&!unsafe.querySelector('script,[onerror]')&&unsafe.body.textContent.includes('<script>'),'Source-aware Markdown imports keep unsafe URLs empty and raw scripts or event handlers inert');
     doc=await load('');
     check(await pasteMarkdown(doc,markdown,()=>{}),'An empty document accepts Markdown paste');
     check(doc.documentElement.dataset.sinStyleMode==='modern'&&doc.querySelector('h1').textContent==='Example','Markdown paste uses Modern styling');

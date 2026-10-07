@@ -3,8 +3,13 @@ import {toPng,parseHtml,ensureStyle,serialize} from './document.js';
 import {setDocumentStyle} from './document-styles.js';
 
 const safeUrl=value=>/^(?:javascript|vbscript|data):/i.test(value.trim())?'':value.trim();
-export function markdownDocument(text){
+export function markdownDocument(text,sourceUrl=''){
   const doc=parseHtml(markdownToHtml(text));
+  // Internal imports retain references to the source folder; local anchors stay local.
+  if(sourceUrl)for(const element of doc.querySelectorAll('img[src],a[href]')){
+    const attribute=element.localName==='img'?'src':'href',value=element.getAttribute(attribute);
+    if(value&&!value.startsWith('#'))try{element.setAttribute(attribute,new URL(value,sourceUrl).href);}catch{/* Keep malformed references unchanged. */}
+  }
   ensureStyle(doc);setDocumentStyle(doc,'modern');
   return serialize(doc);
 }

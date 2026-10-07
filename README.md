@@ -127,6 +127,8 @@ Open the gear button and change **Application storage** to a persistent location
 
 The storage folder contains `settings.json`, `session.json`, and `templates.json`, plus recovery backups. It is independent of the HTML document folder and optional autosave folder. The default is `%LOCALAPPDATA%\Sin - AI Prompt`.
 
+Opening a `.md` file creates its editable `Name - Converted.html` copy in `Markdown Imports` under Application storage. The source folder stays unchanged; repeated imports receive numbered filenames. Save and session recovery use that internal copy, while images and links still refer to the original source locations. Explorer previews and Markdown drops do not create converted files. Previously generated sibling HTML files stay where they are. Changing Application storage affects new imports; existing copies retain their saved paths in the previous storage folder.
+
 The chosen location is recorded in `app\data-location.json`. Keep that file and the chosen storage folder when moving/rebuilding the app. Packaging preserves the location file. You can also launch with `--data-dir "D:\Sin AI Prompt Data"` to use an existing profile directly. Windows WebView2's disposable browser cache lives separately under `%LOCALAPPDATA%\Sin - AI Prompt Cache`; losing it does not lose documents, settings, or templates.
 
 ## Sin - Notepad foundation
