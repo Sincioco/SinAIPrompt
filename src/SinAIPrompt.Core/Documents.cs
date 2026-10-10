@@ -118,7 +118,7 @@ public static class TextFiles
             string.IsNullOrWhiteSpace(Path.GetFileNameWithoutExtension(fileName)) ||
             fileName.EndsWith('.') || fileName.EndsWith(' ') || fileName.Length > 255 ||
             Regex.IsMatch(fileName, @"^(CON|PRN|AUX|NUL|CONIN\$|CONOUT\$|COM[1-9¹²³]|LPT[1-9¹²³])(\.|$)", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant))
-            throw new ArgumentException("Enter a valid file name, including its extension, without a folder path or reserved Windows name.");
+            throw new ArgumentException("Enter a valid file name without a folder path or reserved Windows name.");
     }
     public static void Rename(string path, string destination)
     {
@@ -169,6 +169,7 @@ public sealed class Settings
     public bool WordWrap { get; set; } = true;
     public bool StatusBar { get; set; } = true;
     public bool ShowToolbar { get; set; } = true;
+    public bool ShowSpellcheck { get; set; } = true;
     public bool WrapToolbar { get; set; } = true;
     public bool? ShowTabs { get; set; }
     public bool ShowPrivateDocuments { get; set; } = true;

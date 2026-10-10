@@ -6,7 +6,7 @@ namespace SinAIPrompt;
 
 public partial class MainWindow
 {
-    void RenameDocument(Document doc) => Dialogs.RenameFile(this, doc.Name, name => RenameDocumentFile(doc, name), keepExtension: doc.Path != null);
+    void RenameDocument(Document doc) => Dialogs.RenameFile(this, doc.Name, name => RenameDocumentFile(doc, name), keepExtension: false);
 
     internal async Task RenameExplorerImage(PromptEntry entry, string name)
     {
@@ -52,6 +52,8 @@ public partial class MainWindow
         if (projectMoveInProgress) throw new IOException("Wait for the project move to finish before renaming files.");
         if (doc.IsReadOnly) throw new IOException("Unlock the document before renaming it.");
         if (!Documents.Contains(doc)) throw new IOException("The document is no longer open.");
+        TextFiles.ValidateFileName(name);
+        if (!Path.HasExtension(name)) name += ".html";
         if (doc.Path == null)
         {
             TextFiles.ValidateFileName(name);

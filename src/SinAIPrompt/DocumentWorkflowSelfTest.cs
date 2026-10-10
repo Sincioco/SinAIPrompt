@@ -12,8 +12,9 @@ internal static class DocumentWorkflowSelfTest
 {
     internal static async Task Run(MainWindow window, Action<bool, string> check)
     {
-        foreach (string name in new[] { "2026-09-12 1520 - Topic.html", "2026-09-12 - Topic.html", "2026-09-12-1520 - Topic.html", "Topic.html" })
+        foreach (string name in new[] { "2026-09-12 1520 - Topic.html", "2026-09-12 - Topic.html", "2026-09-12-1520 - Topic.html", "Topic.html", "Topic.HTM", "Topic.png" })
         {
+            bool keepExtension = name.EndsWith(".png", StringComparison.Ordinal);
             string? selection = null, inputName = null, renameResult = null;
             var choose = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(25) };
             choose.Tick += (_, _) =>
@@ -24,10 +25,10 @@ internal static class DocumentWorkflowSelfTest
                 selection = input.SelectedText; inputName = input.Text; input.Text = "Changed title";
                 ScreenCaptureSelfTest.Controls(dialog).OfType<Button>().Single(button => button.Content.ToString() == "Rename").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             };
-            try { choose.Start(); Dialogs.RenameFile(window, name, value => { renameResult = value; return Task.CompletedTask; }); }
+            try { choose.Start(); Dialogs.RenameFile(window, name, value => { renameResult = value; return Task.CompletedTask; }, keepExtension); }
             finally { choose.Stop(); }
             check(selection == "Topic", "Rename selects the title without its date/time or extension: " + name);
-            check(inputName == Path.GetFileNameWithoutExtension(name) && renameResult == "Changed title.html", "Rename hides and preserves the original extension: " + name);
+            check(inputName == (keepExtension ? Path.GetFileNameWithoutExtension(name) : name) && renameResult == (keepExtension ? "Changed title.png" : "Changed title"), "HTML rename accepts the typed name while image rename preserves its hidden extension: " + name);
         }
         foreach (string label in new[] { "Relative Paths", "Absolute Paths", "Cancel" })
         {
@@ -71,7 +72,7 @@ internal static class DocumentWorkflowSelfTest
             check(edited.ModifiedUtc == old.ModifiedUtc && edited.Dirty, "Unsaved modification order survives session recovery");
         }
         string folder = Path.Combine(App.Current.Store.DirectoryPath, "rename-from-ribbon"); Directory.CreateDirectory(folder);
-        string source = Path.Combine(folder, "Before.html"), images = Path.Combine(folder, "Before"); Directory.CreateDirectory(images);
+        string source = Path.Combine(folder, "Before.htm"), images = Path.Combine(folder, "Before"); Directory.CreateDirectory(images);
         string png = Directory.GetFiles(Path.Combine(Path.GetDirectoryName(original.Path!)!, Path.GetFileNameWithoutExtension(original.Path!)), "*.png")[0];
         File.Copy(png, Path.Combine(images, "picture.png"));
         File.WriteAllText(source, "<p>One image rename</p><img src=\"Before/picture.png\" data-sin-storage=\"separate\">");
@@ -97,7 +98,7 @@ internal static class DocumentWorkflowSelfTest
             await completed.Task.WaitAsync(TimeSpan.FromSeconds(12));
             await view.FlushAsync();
             check(renamed.Name == "After # rename.html" && !File.Exists(source) && File.Exists(Path.Combine(folder, "After # rename", "picture.png")),
-                "Ribbon Rename completes its actual modal dialog and moves the HTML plus image folder without hanging");
+                "Ribbon Rename defaults an omitted extension to .html and moves the HTML plus image folder without hanging");
             check(renamed.Text.Contains("After%20%23%20rename/picture.png") && renamed.Text.Contains("unsaved content") && renamed.Dirty,
                 "Ribbon Rename refreshes encoded image references and preserves the unsaved edit");
             string markdown = Path.Combine(folder, "Markdown export.md");

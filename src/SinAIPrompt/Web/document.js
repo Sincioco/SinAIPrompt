@@ -15,6 +15,7 @@ details[data-sin-code-display] pre[data-sin-code-preview]{margin:10px 0 0;paddin
 details[data-sin-code-display][open] pre[data-sin-code-preview]{display:none}
 ${sourceColors}`;
 export const editingStyles = `body{min-height:calc(100vh - 80px);outline:none}img[data-sin-selected]::selection,figure[data-sin-youtube]::selection,figure[data-sin-youtube] *::selection{background:transparent}figure[data-sin-youtube] [data-video-action]{cursor:pointer}pre[data-sin-code]{cursor:pointer}a{cursor:text}::highlight(sin-search){background:#ffff72;color:#111}
+body[spellcheck="false"]::spelling-error,body[spellcheck="false"] ::spelling-error{text-decoration:none}
 /* Keep a marker's actual color visible while highlighted text is selected. */
 :is(mark,span[style*="background-color"]:not([style*="transparent"]):not([style*="rgba(0, 0, 0, 0)"]))::selection{background:transparent;color:currentColor}`;
 

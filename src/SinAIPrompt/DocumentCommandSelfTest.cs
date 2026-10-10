@@ -122,21 +122,26 @@ internal static class DocumentCommandSelfTest
         string originalText = doc.Text;
         int editors = window.CreatedEditorCount;
         await window.RenameDocumentFile(doc, "My renamed draft");
-        check(doc.Name == "My renamed draft" && window.Title.EndsWith(doc.Name + " *") && doc.Path == null &&
+        check(doc.Name == "My renamed draft.html" && window.Title.EndsWith(doc.Name + " *") && doc.Path == null &&
             doc.Text == originalText && doc.Dirty && window.CreatedEditorCount == editors,
-            "Draft rename updates its title without saving, losing edits, or creating an editor");
+            "Draft rename adds .html when omitted without saving, losing edits, or creating an editor");
+        foreach (string explicitName in new[] { "My renamed draft.htm", "My renamed draft.HTML", "My renamed draft.html" })
+        {
+            await window.RenameDocumentFile(doc, explicitName);
+            check(doc.Name == explicitName && doc.Path == null && doc.Text == originalText, "Draft rename preserves an explicitly supplied extension: " + explicitName);
+        }
         check(App.Current.SaveState(), "Renamed draft can be saved to session recovery");
         var recovered = App.Current.Store.Read<Session>("session.json").Windows[0].Documents.Single(d => d.Id == doc.Id);
         check(recovered.Name == doc.Name && recovered.Path == null && recovered.Text == doc.Text && recovered.Dirty,
             "Session recovery preserves the draft name and unsaved text");
         check(JsonSerializer.Deserialize<Document>("{\"UntitledNumber\":42}")!.Name == "Prompt 42",
             "Older recovery records keep their default untitled names");
-        foreach (string invalid in new[] { "", "..", "bad/name", "CON.html", "trailing.", ".html" })
+        foreach (string invalid in new[] { "", "..", "bad/name", "CON", "CON.html", "trailing.", "trailing ", ".html", new string('x', 251) })
         {
             bool rejected = false;
             try { await window.RenameDocumentFile(doc, invalid); }
             catch (ArgumentException) { rejected = true; }
-            check(rejected && doc.Name == "My renamed draft" && doc.Text == originalText && doc.Path == null,
+            check(rejected && doc.Name == "My renamed draft.html" && doc.Text == originalText && doc.Path == null,
                 "Invalid draft name leaves the document unchanged: " + invalid);
         }
     }
@@ -190,6 +195,7 @@ internal static class DocumentCommandSelfTest
 
     public static async Task Appearance(MainWindow window, Action<bool, string> check)
     {
+        await Spellcheck(window, check);
         var preferences = App.Current.Preferences;
         var view = window.CurrentView!;
         preferences.ShowToolbar = false; window.ApplyPreferences();
@@ -236,6 +242,61 @@ internal static class DocumentCommandSelfTest
             await view.Browser.ExecuteScriptAsync("!document.querySelector('#toolbar').hidden") == "true", "Settings restores the toolbar and persists the same visibility preference");
         check(preferences.ImageStorage == "inline" && App.Current.Store.Read<Settings>("settings.json").ImageStorage == "inline", "The selected image storage default persists in application settings");
         preferences.ImageStorage = ""; window.ApplyPreferences();
+    }
+
+    static async Task Spellcheck(MainWindow window, Action<bool, string> check)
+    {
+        var preferences = App.Current.Preferences;
+        var original = window.ActiveDocument!; var originalView = window.CurrentView!;
+        bool previous = preferences.ShowSpellcheck;
+        var draft = window.NewDocument(); var view = window.CurrentView!;
+        try
+        {
+            await view.FirstPaint.WaitAsync(TimeSpan.FromSeconds(5));
+            check(new Settings().ShowSpellcheck && JsonSerializer.Deserialize<Settings>("{}")!.ShowSpellcheck && window.SpellcheckMenu.IsChecked,
+                "Spellcheck underlines default to shown for new and older settings");
+            await view.Browser.ExecuteScriptAsync("window.editor.load('<p>Spellcheck preview: </p><p spellcheck=\"true\">Explicit spelling preference: </p>')");
+            await view.Browser.CoreWebView2!.CallDevToolsProtocolMethodAsync("Runtime.evaluate", "{\"expression\":\"window.editor.ready()\",\"awaitPromise\":true}");
+            await view.Browser.ExecuteScriptAsync("const d=document.querySelector('#document').contentDocument;d.body.focus();const r=d.createRange();r.selectNodeContents(d.body.lastElementChild);r.collapse(false);d.getSelection().removeAllRanges();d.getSelection().addRange(r)");
+            await view.Browser.CoreWebView2.CallDevToolsProtocolMethodAsync("Input.insertText", "{\"text\":\"Wixwell Geomancer Godseeker Aniri zqxwvvv \"}");
+            await Task.Delay(700);
+            await view.FlushAsync();
+            string before = draft.Text; bool dirty = draft.Dirty;
+            check(before.Contains("zqxwvvv"), "Spellcheck preview receives native typing before toggling underlines");
+            await view.Browser.ExecuteScriptAsync("window.spellingDocument=document.querySelector('#document').contentDocument;window.spellingRange=window.spellingDocument.getSelection().getRangeAt(0).cloneRange();window.spellingHtml=window.editor.html()");
+            using (var capture = File.Create(Path.Combine(App.Current.Store.DirectoryPath, "spellcheck-shown.png")))
+                await view.Browser.CoreWebView2.CapturePreviewAsync(Microsoft.Web.WebView2.Core.CoreWebView2CapturePreviewImageFormat.Png, capture);
+            window.SpellcheckMenu.IsChecked = false; window.SpellcheckMenu.RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
+            check(!preferences.ShowSpellcheck && await view.Browser.ExecuteScriptAsync("!window.spellingDocument.body.spellcheck && CSS.supports('selector(::spelling-error)') && getComputedStyle(window.spellingDocument.body.lastElementChild,'::spelling-error').textDecorationLine==='none'") == "true",
+                "View menu hides spelling marks, including explicit child spellcheck attributes");
+            check(await view.Browser.ExecuteScriptAsync("window.editor.html()===window.spellingHtml && document.querySelector('#document').contentDocument===window.spellingDocument && window.spellingDocument.getSelection().anchorNode===window.spellingRange.startContainer && window.spellingDocument.getSelection().anchorOffset===window.spellingRange.startOffset") == "true" && draft.Text == before && draft.Dirty == dirty,
+                "Spellcheck toggle preserves document HTML, dirty state, live frame and selection");
+            using (var capture = File.Create(Path.Combine(App.Current.Store.DirectoryPath, "spellcheck-hidden.png")))
+                await view.Browser.CoreWebView2.CapturePreviewAsync(Microsoft.Web.WebView2.Core.CoreWebView2CapturePreviewImageFormat.Png, capture);
+            check(await originalView.Browser.ExecuteScriptAsync("!document.querySelector('#document').contentDocument.body.spellcheck") == "true",
+                "The spellcheck preference also updates inactive open editors");
+            check(App.Current.SaveState() && !App.Current.Store.Read<Settings>("settings.json").ShowSpellcheck,
+                "Hidden spellcheck underlines persist in application settings");
+            await view.Browser.ExecuteScriptAsync("window.editor.command('undo')");
+            check(await view.Browser.ExecuteScriptAsync("!window.editor.html().includes('zqxwvvv')") == "true", "Toggling spellcheck preserves the preceding edit's Undo");
+            await view.SetSourceAsync(true); await view.SetSourceAsync(false);
+            await view.Browser.CoreWebView2.CallDevToolsProtocolMethodAsync("Runtime.evaluate", "{\"expression\":\"window.editor.ready()\",\"awaitPromise\":true}");
+            check(await view.Browser.ExecuteScriptAsync("!document.querySelector('#document').contentDocument.body.spellcheck") == "true",
+                "Hidden spellcheck underlines survive a source-to-visual reload");
+            window.ActiveDocument = original; window.RemoveDocument(draft);
+            draft = window.NewDocument(); view = window.CurrentView!;
+            await view.FirstPaint.WaitAsync(TimeSpan.FromSeconds(5));
+            check(!window.SpellcheckMenu.IsChecked && await view.Browser.ExecuteScriptAsync("!document.querySelector('#document').contentDocument.body.spellcheck") == "true",
+                "Newly initialized editors inherit the hidden spellcheck preference");
+            window.SpellcheckMenu.IsChecked = true; window.SpellcheckMenu.RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
+            check(preferences.ShowSpellcheck && await view.Browser.ExecuteScriptAsync("document.querySelector('#document').contentDocument.body.spellcheck") == "true" && await originalView.Browser.ExecuteScriptAsync("document.querySelector('#document').contentDocument.body.spellcheck") == "true",
+                "View menu restores spellcheck in active and inactive editors");
+        }
+        finally
+        {
+            preferences.ShowSpellcheck = previous; window.ApplyPreferences();
+            window.ActiveDocument = original; window.RemoveDocument(draft);
+        }
     }
 
     public static async Task DuplicateAndRevert(MainWindow window, Action<bool, string> check)

@@ -188,7 +188,7 @@ public partial class PromptExplorer : UserControl, IDisposable
         catch (Exception ex) { Notice.Text = ex.Message; }
         finally { SetBusy(false); }
     }
-    void Rename(PromptEntry entry) => Dialogs.RenameFile(Window.GetWindow(this), entry.Name, async name => { await rename(entry, name); await RefreshAsync(); }, keepExtension: !entry.IsFolder);
+    void Rename(PromptEntry entry) => Dialogs.RenameFile(Window.GetWindow(this), entry.Name, async name => { await rename(entry, name); await RefreshAsync(); }, keepExtension: !entry.IsFolder && !entry.IsHtml);
     internal ContextMenu CreateFileMenu(PromptEntry entry)
     {
         var menu = new ContextMenu();

@@ -49,6 +49,7 @@
     <MenuItem x:Name="StatusBarMenu" Header="_Status Bar" IsCheckable="True" Click="StatusBarClick"/>
     <MenuItem x:Name="LineNumbersMenu" Header="_Line Numbers" IsCheckable="True" Click="LineNumbersClick"/>
     <MenuItem x:Name="WordWrapMenu" Header="_Word Wrap" IsCheckable="True" Click="WordWrapClick"/>
+    <MenuItem x:Name="SpellcheckMenu" Header="Show Spellcheck _Underlines" IsCheckable="True"/>
     <Separator/><MenuItem x:Name="TabBarMenu" Header="Tab Bar" IsCheckable="True"/><MenuItem x:Name="WrapToolbarMenu" Header="Wrap Toolbar / Ribbon" IsCheckable="True"/>
     <MenuItem x:Name="DocumentListMenu" Header="_Navigation Pane" IsCheckable="True" InputGestureText="Ctrl+Shift+L" Click="DocumentListClick"/>
     <MenuItem x:Name="MultiFileSelectionMenu" Header="_Multi File Selection" IsCheckable="True" IsChecked="False"/>

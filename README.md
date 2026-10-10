@@ -17,6 +17,8 @@ Keep the entire `app` folder together. Its .NET runtime is included; it uses the
 - Font Color and Highlight are split buttons: the left applies the remembered color; the arrow opens its palette. Click outside to dismiss. All palettes share the ten most recently chosen colors, including annotation palettes, and retain them after restart. Tools buttons fill available ribbon space individually before wrapping or entering overflow.
 - **Link** provides a full-width address, optional name and **URL only, no thumbnail**. YouTube links default to a card with thumbnail, title/channel, inline playback, fullscreen and **Open In Browser**. **Save the YouTube thumbnail locally** optionally embeds a PNG; otherwise the thumbnail loads from YouTube. Other available page thumbnails are embedded, with text-link fallback when unavailable.
 - Modified documents show ` *` after their name in the title bar; saving clears it.
+- Renaming a document without an extension adds `.html`; explicitly entered extensions are kept.
+- **View → Show Spellcheck Underlines** shows or hides red spelling marks across documents. The choice is remembered after restarting and does not change saved HTML.
 - Find and replace (`Ctrl+F` / `Ctrl+H`) open the source view, where you can search the complete HTML.
 - HTML head content and script source are retained. Document scripts and inline event handlers do not run inside the editor.
 

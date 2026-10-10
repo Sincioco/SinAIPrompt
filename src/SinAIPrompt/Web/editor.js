@@ -25,6 +25,8 @@ import {prepareOriginalImages,observeOriginalImages} from './original-images.js'
 const frame=document.querySelector('#document'),$=s=>document.querySelector(s);
 let doc=null,selection=null,currentRaw='',base='https://sin-document.local/',loading=Promise.resolve(),loadingNow=false;
 let changeTimer,lastImageStatus="",loadRevision=0;
+let showSpellcheck=true;
+function setSpellcheck(value){showSpellcheck=!!value;if(doc)doc.body.spellcheck=showSpellcheck;}
 function imageStatus(source=""){if(source!==lastImageStatus){lastImageStatus=source;send('image-status',{source});}}
 const exports=new Map();
 const search=createDocumentSearch(()=>doc,changed);
@@ -71,7 +73,7 @@ async function load(raw,newBase=base){
   if(!input.querySelector('base[href]'))input.head.prepend(baseTag);
   const style=input.createElement('style');style.dataset.sinRuntime='1';style.textContent=fontCss+editingStyles;input.head.append(style);
   loading=prepareOriginalImages(input).then(()=>{if(revision!==loadRevision)return;return new Promise(resolve=>{frame.onload=()=>{
-    doc=frame.contentDocument;doc.body.contentEditable='true';doc.body.spellcheck=true;loadingNow=false;
+    doc=frame.contentDocument;doc.body.contentEditable='true';doc.body.spellcheck=showSpellcheck;loadingNow=false;
     ribbon.attach(doc);
     attachFileDrop(doc);access.attach(doc);
     attachListNumbering(doc);
@@ -179,7 +181,7 @@ $('#regionCapture').onclick=async()=>{
 $('#link').onclick=()=>insertLink({getDocument:()=>doc,saveSelection,command}).catch(report);
 $('#dismissNotice').onclick=()=>$('#notice').hidden=true;
 window.editor={load,html,setBase,focus,command,insertImage,openAnnotation,pasteCode,renameImageFolder,setImageStorage:imageInsertion.setStorage,ready:()=>loading,
-  stopMedia:videos.close,setToolbarWrap:ribbon.setWrap,
+  stopMedia:videos.close,setToolbarWrap:ribbon.setWrap,setSpellcheck,
   setReadOnly:value=>{access.set(value);images.select(null);imageActions.close();videoSelection.select(null);},
   outline:createDocumentOutline(()=>doc),
   setNavigationInset:width=>{for(const area of [frame,$('#notice')]){area.style.marginLeft=width+'px';area.style.width=`calc(100% - ${width}px)`;}},

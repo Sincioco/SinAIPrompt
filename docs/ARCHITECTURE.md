@@ -1092,3 +1092,42 @@ warnings remain. The first packaged run failed an unchanged screen-capture point
 assertion; the unchanged package passed the complete suite in a fresh isolated profile.
 Existing sibling HTML files are not migrated. Existing internal copies also retain
 their absolute paths if application storage is subsequently changed.
+
+## October 10: rename defaults and spellcheck visibility
+
+`HtmlFileRename` owns the `.html` default for extension-free draft and saved-file
+renames. Raw names are validated before the default is applied; the resulting name
+still passes existing length, collision, image-folder transaction and conflict checks.
+HTML rename dialogs show the full filename and select its title, allowing explicit
+extensions without appending a second suffix. Image renames retain their existing
+hidden-extension behavior. The existing Explorer adapter uses the same HTML path.
+
+`Settings.ShowSpellcheck` owns the persisted preference, defaulting to true for older
+profiles. The View menu broadcasts the change through existing preference application;
+`HtmlEditorHost` adapts it to the browser before initial document loading. `editor.js`
+keeps one effective boolean per editor and updates the current body in place. The
+existing runtime stylesheet suppresses spelling decorations, including explicit
+descendant spellcheck overrides; runtime styling and the body attribute are excluded
+by the existing serializer. Toggling requires no document reload, history operation,
+source rewrite or new editor for an inactive document.
+
+Production growth: Documents 246→247; Dialogs 135→137; HtmlFileRename 139→141;
+MainWindow 562→564; XAML 79→80; HtmlEditorHost 408→409; editor.js 208→210;
+document.js 111→112; PromptExplorer remains 307. Existing integration suites grow
+291→352 (document commands), 131→132 (workflow), and 206→209 (UI). No modules,
+dependencies, reverse dependencies, guardrail exceptions or baseline changes were
+introduced. MainWindow reaches its unchanged 564-line ceiling; its existing window
+and partial-class coupling remains a review trigger before further growth.
+
+Validation: the final offline package passed 1,012 native/browser checks, including
+real rename dialogs, extension defaults, invalid names, collision protection,
+image-folder moves and unsaved-edit preservation. Spellcheck checks cover native
+typing, persisted settings, active/inactive/new editors, source reloads, unchanged
+HTML/dirty state/selection and retained Undo. Before/after WebView captures were
+visually reviewed and show actual red marks disappearing. All 52 JavaScript syntax
+checks, 16 architecture fixtures and `git diff --check` passed. Build/package had
+zero compiler warnings/errors. The architecture checker reports one existing size
+warning at MainWindow's ceiling. Both test launchers reached their 60-second wait
+limit; their isolated app processes subsequently finished with ALL CHECKS PASSED
+(1,011 development checks before the extra native-typing assertion, 1,012 packaged).
+No known product failures remain.

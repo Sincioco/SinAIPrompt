@@ -81,6 +81,8 @@ public static class Dialogs
         {
             input.Focus();
             int end = input.Text.Length;
+            string extension = Path.GetExtension(currentName);
+            if (!keepExtension && (extension.Equals(".html", StringComparison.OrdinalIgnoreCase) || extension.Equals(".htm", StringComparison.OrdinalIgnoreCase))) end -= extension.Length;
             var prefix = System.Text.RegularExpressions.Regex.Match(currentName, @"^\d{4}-\d{2}-\d{2}(?:[ -]\d{4})?\s*-\s*");
             int start = prefix.Success && prefix.Length < end ? prefix.Length : 0;
             input.Select(start, end - start);

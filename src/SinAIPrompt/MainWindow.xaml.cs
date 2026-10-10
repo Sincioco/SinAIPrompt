@@ -91,6 +91,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         SetDocumentList(session?.DocumentList ?? (Preferences.ExplorerMode || Preferences.DocumentList), false);
         navigation.InitializeTabs(session?.ShowTabs);
         WrapToolbarMenu.Click += (_, _) => { Preferences.WrapToolbar = WrapToolbarMenu.IsChecked; ApplyPreferences(); };
+        SpellcheckMenu.Click += (_, _) => { Preferences.ShowSpellcheck = SpellcheckMenu.IsChecked; foreach (var window in Application.Current.Windows.OfType<MainWindow>()) window.ApplyPreferences(); };
         MultiFileSelectionMenu.Click += (_, _) => Explorer.SetMultiFileSelection(MultiFileSelectionMenu.IsChecked);
         Explorer.DocumentVisible = privacy.IsVisible; Explorer.EntryVisible = privacy.IsVisible;
         ShowPrivateDocumentsMenu.IsChecked = Preferences.ShowPrivateDocuments;
@@ -346,6 +347,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     public void ApplyPreferences()
     {
         WrapToolbarMenu.IsChecked = Preferences.WrapToolbar;
+        SpellcheckMenu.IsChecked = Preferences.ShowSpellcheck;
         foreach (var view in editors.Values) view.ApplyPreferences();
         StatusBar.Visibility = Preferences.StatusBar ? Visibility.Visible : Visibility.Collapsed;
         ApplyTheme(); UpdateStatus(); App.Current.MarkChanged();

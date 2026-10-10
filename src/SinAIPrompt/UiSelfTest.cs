@@ -137,9 +137,9 @@ internal static class UiSelfTest
             Check(Directory.GetFiles(Path.Combine(movedFolder, "Saved prompt"), "*.png").Length > 0 && File.Exists(Path.Combine(documents, "Prompt 1.html")), "Save As retains separate PNG storage and preserves the original file");
             var imageNames = Directory.GetFiles(Path.Combine(movedFolder, "Saved prompt"), "*.png").Select(Path.GetFileName).Order().ToArray();
             await view.Browser.ExecuteScriptAsync("window.editor.command('insertText','Keep this unsaved rename edit')");
-            await window.RenameDocumentFile(first, "Renamed # prompt.html");
+            await window.RenameDocumentFile(first, "Renamed # prompt");
             string renamedFolder = Path.Combine(movedFolder, "Renamed # prompt");
-            Check(File.Exists(first.Path!) && !File.Exists(copied) && !Directory.Exists(Path.Combine(movedFolder, "Saved prompt")) && Directory.GetFiles(renamedFolder, "*.png").Select(Path.GetFileName).Order().SequenceEqual(imageNames), "Rename moves the HTML file and its matching image folder without copying images");
+            Check(first.Name == "Renamed # prompt.html" && File.Exists(first.Path!) && !File.Exists(copied) && !Directory.Exists(Path.Combine(movedFolder, "Saved prompt")) && Directory.GetFiles(renamedFolder, "*.png").Select(Path.GetFileName).Order().SequenceEqual(imageNames), "Rename adds an omitted .html extension and moves the matching image folder without copying images");
             Check(File.ReadAllText(first.Path!).Contains("Renamed%20%23%20prompt/image-") && first.Text.Contains("Renamed%20%23%20prompt/image-"), "Rename updates saved and open image references with URL-encoded folder names");
             Check(first.Dirty && first.Text.Contains("Keep this unsaved rename edit") && !File.ReadAllText(first.Path!).Contains("Keep this unsaved rename edit"), "Rename preserves unsaved edits without writing them into the saved HTML");
             await view.Browser.ExecuteScriptAsync("window.savedImagesReady=null;window.editor.ready().then(()=>Promise.all([...document.querySelector('#document').contentDocument.images].map(image=>image.decode()))).then(()=>window.savedImagesReady=true).catch(()=>window.savedImagesReady=false)");
@@ -147,8 +147,11 @@ internal static class UiSelfTest
             for (int i = 0; i < 100 && savedImagesReady == "null"; i++) { await Task.Delay(20); savedImagesReady = await view.Browser.ExecuteScriptAsync("window.savedImagesReady"); }
             Check(savedImagesReady == "true", "Images remain visible immediately after renaming");
             string occupiedImages = Path.Combine(movedFolder, "Occupied");Directory.CreateDirectory(occupiedImages);File.WriteAllText(Path.Combine(occupiedImages, "keep.txt"), "Keep");
-            bool renameBlocked = false;try { await window.RenameDocumentFile(first, "Occupied.html"); } catch (IOException) { renameBlocked = true; }
+            bool renameBlocked = false;try { await window.RenameDocumentFile(first, "Occupied"); } catch (IOException) { renameBlocked = true; }
             Check(renameBlocked && File.Exists(first.Path!) && Directory.Exists(renamedFolder) && !File.Exists(Path.Combine(movedFolder, "Occupied.html")) && File.ReadAllText(Path.Combine(occupiedImages, "keep.txt")) == "Keep", "Rename rejects an occupied image folder before moving any files");
+            string occupiedFile = Path.Combine(movedFolder, "Existing.html"); File.WriteAllText(occupiedFile, "Keep existing HTML");
+            bool fileCollision = false; try { await window.RenameDocumentFile(first, "Existing"); } catch (IOException) { fileCollision = true; }
+            Check(fileCollision && first.Name == "Renamed # prompt.html" && File.ReadAllText(occupiedFile) == "Keep existing HTML", "Rename checks collisions after adding the omitted .html extension without overwriting the destination");
             string beforeFailedRename = first.Path!;
             File.SetAttributes(beforeFailedRename, File.GetAttributes(beforeFailedRename) | FileAttributes.ReadOnly);
             bool renameRolledBack = false;

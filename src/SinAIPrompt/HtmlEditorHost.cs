@@ -172,7 +172,7 @@ public sealed partial class EditorView
                         await Browser.CoreWebView2.CallDevToolsProtocolMethodAsync("Runtime.evaluate", Json(new { expression = $"window.editor.insertImage({Json(new Uri(file.Path).AbsoluteUri)})", awaitPromise = true }));
                     break;
                 case "test-path-status" when App.Current.TestMode: result = PathStatus.Text; break;
-                case "ready": ready = true; LoadHtml(); ApplyHtmlPreferences(); ApplyReadOnly(); initialized.TrySetResult(); break;
+                case "ready": ready = true; ApplyHtmlPreferences(); LoadHtml(); ApplyReadOnly(); initialized.TrySetResult(); break;
                 case "painted": painted.TrySetResult(); break;
                 case "change": AcceptHtml(message.GetProperty("html").GetString()!); break;
                 case "source": await SetSourceAsync(true); break;
@@ -307,6 +307,7 @@ public sealed partial class EditorView
         if (Browser == null) return;
         UpdateMode(); Browser.ZoomFactor = Document.Zoom / 100.0;
         SetNavigationInset(navigationInset);
+        if (ready) _ = Browser.ExecuteScriptAsync($"window.editor.setSpellcheck({Json(App.Current.Preferences.ShowSpellcheck)})");
         if (ready) _ = Browser.ExecuteScriptAsync($"document.documentElement.dataset.theme={Json(App.Current.Preferences.Theme.ToLowerInvariant())};document.querySelector('#toolbar').hidden={Json(!App.Current.Preferences.ShowToolbar)};window.editor.setImageStorage({Json(App.Current.Preferences.ImageStorage)});window.editor.setToolbarWrap({Json(App.Current.Preferences.WrapToolbar)})");
     }
     public async Task<string?> PrepareSaveAsAsync(string path)
