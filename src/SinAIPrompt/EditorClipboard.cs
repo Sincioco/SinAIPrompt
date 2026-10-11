@@ -41,10 +41,13 @@ internal static class EditorClipboard
         else Clipboard.SetDataObject(data, true);
     }
 
-    internal static async Task<object?> ReadAsync(string? documentKey = null)
+    internal static async Task<object?> ReadAsync(string? documentKey = null, bool textOnly = false)
     {
         var data = App.Current.TestMode ? TestData : Clipboard.GetDataObject();
         if (data == null) return null;
+        string text = data.GetData(DataFormats.UnicodeText) as string ?? "";
+        // Explicit plain-text paste never reads files, HTML, or image formats.
+        if (textOnly) return new { text };
         if (documentKey != null && data.GetData(imageFormat) is string internalJson)
         {
             try
@@ -56,7 +59,6 @@ internal static class EditorClipboard
         }
         if (data.GetData(DataFormats.FileDrop) is string[] files && files.FirstOrDefault(path => Path.GetExtension(path).ToLowerInvariant() is ".md" or ".markdown") is { } markdown)
             return new { markdown = await File.ReadAllTextAsync(markdown), @base = new Uri(Path.GetDirectoryName(markdown)! + Path.DirectorySeparatorChar).AbsoluteUri };
-        string text = data.GetData(DataFormats.UnicodeText) as string ?? "";
         string? html = data.GetData(DataFormats.Html) as string;
         if (!string.IsNullOrEmpty(html))
         {

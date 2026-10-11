@@ -449,25 +449,25 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     internal bool TryInsertShortcut(Key key, ModifierKeys modifiers, DateTime? now = null)
     {
         if (modifiers != ModifierKeys.Control || Editor == null) return false;
-        if (key == Key.D) { InsertDate(0, now, rememberChoice: false); return true; }
+        if (key == Key.D) { InsertDate(0, now, rememberChoice: false, heading: true); return true; }
         if (key == Key.L) { InsertAtCaret(new string('_', 80)); return true; }
         if (key == Key.I) { InsertDateAndSeparator(now); return true; }
         return false;
     }
-    void InsertAtCaret(string text)
+    void InsertAtCaret(string text, string visualCommand = "insertText")
     {
         if (Editor == null || ActiveDocument?.IsReadOnly == true) return;
-        if (CurrentView?.IsVisual == true) { CurrentView.Command("insertText", text); return; }
+        if (CurrentView?.IsVisual == true) { CurrentView.Command(visualCommand, text); return; }
         int start = Editor.SelectionStart;
         Editor.SelectedText = text;
         Editor.Select(start + text.Length, 0);
         FocusEditor();
     }
-    internal void InsertDate(int? choice = null, DateTime? now = null, bool rememberChoice = true)
+    internal void InsertDate(int? choice = null, DateTime? now = null, bool rememberChoice = true, bool heading = false)
     {
         int format = DateTimeFormats.NormalizeChoice(choice ?? Preferences.DateTimeFormat);
         if (Editor == null || ActiveDocument?.IsReadOnly == true) return;
-        InsertAtCaret(DateTimeFormats.Format(now ?? DateTime.Now, format));
+        InsertAtCaret(DateTimeFormats.Format(now ?? DateTime.Now, format), heading ? "insertDateHeading" : "insertText");
         if (rememberChoice) { Preferences.DateTimeFormat = format; App.Current.MarkChanged(); }
     }
     void InsertSeparatorClick(object sender, RoutedEventArgs e) => InsertAtCaret(new string('_', 80));
@@ -515,7 +515,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     void RedoClick(object sender, RoutedEventArgs e) { if (ActiveDocument?.IsReadOnly == true) return; if (CurrentView?.IsVisual == true) CurrentView.Command("redo"); else Editor?.Redo(); FocusEditor(); }
     void CutClick(object sender, RoutedEventArgs e) { if (ActiveDocument?.IsReadOnly == true) return; if (CurrentView?.IsVisual == true) CurrentView.Command("cut"); else Editor?.Cut(); FocusEditor(); }
     void CopyClick(object sender, RoutedEventArgs e) { if (CurrentView?.IsVisual == true) CurrentView.Command("copy"); else Editor?.Copy(); FocusEditor(); }
-    void PasteClick(object sender, RoutedEventArgs e) { if (ActiveDocument?.IsReadOnly == true) return; if (CurrentView?.IsVisual == true) CurrentView.Command("paste"); else Editor?.Paste(); FocusEditor(); }
+    void PasteClick(object sender, RoutedEventArgs e) { if (ActiveDocument?.IsReadOnly == true) return; if (CurrentView?.IsVisual == true) CurrentView.Command((sender as MenuItem)?.Tag as string ?? "paste"); else Editor?.Paste(); FocusEditor(); }
     void DeleteClick(object sender, RoutedEventArgs e) { if (ActiveDocument?.IsReadOnly == true) return; if (CurrentView?.IsVisual == true) CurrentView.Command("delete"); else if (Editor != null) Editor.SelectedText = ""; FocusEditor(); }
     void SelectAllClick(object sender, RoutedEventArgs e) { if (CurrentView?.IsVisual == true) CurrentView.Command("selectAll"); else Editor?.SelectAll(); FocusEditor(); }
     void FindClick(object sender, RoutedEventArgs e) => ShowFind();

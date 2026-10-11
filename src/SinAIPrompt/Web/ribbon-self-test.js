@@ -39,6 +39,7 @@ export async function runRibbonTests(check) {
     window.editor.setToolbarWrap(true);
     toolbar.style.width=originalWidth;
     check(!document.querySelector('.ribbon-actions,#source')&&document.querySelector('.numbering-split [data-cmd=insertOrderedList]')&&document.querySelector('.numbering-split #listNumbering svg'),'Numbering and its options share one split button; the View Source bar is removed');
+    check(document.querySelector('.paste-split .paste-large[data-cmd=paste]')&&document.querySelector('.paste-split #pasteOptions svg')&&document.querySelector('#pasteOptions').getAttribute('aria-haspopup')==='menu','Paste has a normal-paste button and a separately accessible options arrow');
     check(document.querySelector('#link').closest('.tools-group')&&document.querySelector('#pasteCode svg'),'Link and Paste Code have large icons in the Tools section');
     toolbar.style.width='480px';window.editor.setToolbarWrap(false);await delay();await delay();
     const more=document.querySelector('#moreRibbon');
@@ -206,9 +207,36 @@ export async function runRibbonTests(check) {
     await load('<p id="sample"><strong>Copy 中文 café</strong></p><p id="after">Destination</p>');select('#sample');
     await window.editor.command('copy');const copied=await request('editor-paste');
     check(copied.html.includes('Copy 中文 café')&&copied.html.includes('strong')&&!copied.html.includes('StartFragment:'),'Windows HTML clipboard preserves Unicode text and rich formatting');
-    select('#after');await window.editor.command('paste');
-    check(doc().body.lastElementChild.textContent==='Copy 中文 café','Ribbon paste inserts Windows HTML at the saved selection');
+    select('#after');click('.paste-large');await delay();
+    check(doc().body.lastElementChild.textContent==='Copy 中文 café'&&doc().body.lastElementChild.querySelector('strong'),'The main Paste button inserts rich Windows HTML at the saved selection');
+    window.editor.command('undo');select('#after');
+    async function tapPasteOptions(){
+      const rect=document.querySelector('#pasteOptions').getBoundingClientRect();
+      for(const type of ['mousePressed','mouseReleased'])await request('test-mouse',{parameters:{type,x:rect.x+rect.width/2,y:rect.y+rect.height/2,button:'left',clickCount:1}});
+      await delay();
+    }
+    await tapPasteOptions();
+    const pasteMenu=document.querySelector('#pasteOptionsMenu');
+    check(pasteMenu.matches(':popover-open')&&[...pasteMenu.children].map(item=>item.textContent).join('|')==='Paste|Paste as Text'&&document.activeElement===pasteMenu.firstElementChild,'The Paste arrow opens the two correctly named choices and focuses the first menu item');
+    await tapPasteOptions();check(!pasteMenu.matches(':popover-open'),'A second real click closes Paste Options without reopening it');
+    click('#pasteOptions');await delay();
+    pasteMenu.firstElementChild.dispatchEvent(new KeyboardEvent('keydown',{key:'ArrowDown',bubbles:true,cancelable:true}));
+    check(document.activeElement===pasteMenu.lastElementChild,'Arrow Down moves keyboard focus to Paste as Text');
+    pasteMenu.lastElementChild.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true,cancelable:true}));await delay();
+    check(!pasteMenu.matches(':popover-open')&&document.activeElement.id==='pasteOptions'&&document.querySelector('#pasteOptions').getAttribute('aria-expanded')==='false','Escape closes Paste Options and returns focus to its arrow');
+    click('#pasteOptions');await delay();click('#pasteOptionsMenu [data-cmd=paste]');await delay();
+    check(doc().body.lastElementChild.textContent==='Copy 中文 café'&&doc().body.lastElementChild.querySelector('strong')&&!pasteMenu.matches(':popover-open'),'The Paste menu item retains rich formatting and closes its menu');
     select('body > :last-child');await window.editor.command('cut');check(doc().body.lastElementChild.textContent==='','Cut removes text after copying it');
     window.editor.command('undo');check(doc().body.lastElementChild.textContent==='Copy 中文 café','Native undo restores cut text');
+    await load('<p id="sample">Replace this text</p><p id="after">Keep this paragraph</p>');select('#sample');
+    toolbar.style.width='250px';window.editor.setToolbarWrap(false);await delay();await delay();click('#moreRibbon');click('#pasteOptions');await delay();
+    check(document.querySelector('.ribbon-overflow:popover-open .paste-popup:popover-open'),'Paste Options remains attached to the Clipboard group inside ribbon overflow');
+    click('#pasteOptionsMenu [data-cmd=pasteText]');await delay();
+    check(doc().querySelector('#sample').textContent==='Copy 中文 café'&&!doc().querySelector('#sample strong,#sample b,#sample font')&&doc().querySelector('#after').textContent==='Keep this paragraph','Paste as Text in ribbon overflow replaces the saved selection with unformatted text');
+    window.editor.setToolbarWrap(true);toolbar.style.width=originalWidth;await delay();await delay();
+    const beforeDismiss=window.editor.html();click('#pasteOptions');await delay();
+    const frame=document.querySelector('#document').getBoundingClientRect();
+    for(const type of ['mousePressed','mouseReleased'])await request('test-mouse',{parameters:{type,x:frame.right-30,y:frame.top+30,button:'left',clickCount:1}});
+    await delay();check(!pasteMenu.matches(':popover-open')&&window.editor.html()===beforeDismiss,'Clicking the document dismisses Paste Options without pasting or changing the document');
   } finally {await window.editor.load(saved);}
 }

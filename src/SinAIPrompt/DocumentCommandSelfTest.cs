@@ -193,6 +193,79 @@ internal static class DocumentCommandSelfTest
         finally { DocumentAccess.Set(doc, false); }
     }
 
+    public static async Task PasteAsText(MainWindow window, Action<bool, string> check)
+    {
+        var original = window.ActiveDocument!; var clipboard = EditorClipboard.TestData;
+        var draft = window.NewDocument(); var view = window.CurrentView!; var browser = view.Browser;
+        var edit = window.MainMenu.Items.OfType<MenuItem>().Single(item => item.Header.ToString() == "_Edit");
+        var items = edit.Items.OfType<MenuItem>().ToArray();
+        var paste = items.Single(item => item.Header.ToString() == "Paste as _Text");
+        async Task Evaluate(string expression)
+        {
+            string response = await browser.CoreWebView2.CallDevToolsProtocolMethodAsync("Runtime.evaluate", JsonSerializer.Serialize(new { expression, awaitPromise = true }));
+            using var result = JsonDocument.Parse(response);
+            if (result.RootElement.TryGetProperty("exceptionDetails", out var failure)) throw new Exception(failure.ToString());
+        }
+        async Task Invoke(MenuItem item)
+        {
+            await browser.ExecuteScriptAsync("window.pasteMenuPending=new Promise(resolve=>window.pasteMenuComplete=resolve)");
+            item.RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
+            if (!draft.IsReadOnly)
+                await Evaluate("Promise.race([window.pasteMenuPending,new Promise((_,reject)=>setTimeout(()=>reject(new Error('Native menu did not dispatch its editor command')),3000))])");
+            await view.FlushAsync();
+        }
+        try
+        {
+            await view.FirstPaint.WaitAsync(TimeSpan.FromSeconds(5));
+            check(Array.IndexOf(items, paste) == Array.FindIndex(items, item => item.Header.ToString() == "_Paste") + 1 && paste.Tag as string == "pasteText",
+                "Edit menu offers Paste as Text immediately after ordinary Paste");
+            // Await the real command dispatched by the native menu, including its clipboard bridge request.
+            await browser.ExecuteScriptAsync("window.pasteMenuCommand=window.editor.command;window.editor.command=(...args)=>{const result=window.pasteMenuCommand(...args);window.pasteMenuComplete?.(result);return result;}");
+            view.FocusEditing();
+            await Evaluate("window.editor.load('<p><br></p>').then(()=>{const d=document.querySelector('#document').contentDocument;d.body.focus();d.getSelection().collapse(d.body.firstElementChild,0);d.dispatchEvent(new Event('selectionchange'));})");
+            const string text = "# 標題 😀\n**Literal Markdown**\n<em>Literal HTML</em>\n[Link](https://example.com)";
+            EditorClipboard.Copy("<h1 style='color:red'>Imported formatting</h1><img src='unwanted.png'>", text);
+            await Invoke(paste);
+            string observed = await browser.ExecuteScriptAsync("(()=>{const d=document.querySelector('#document').contentDocument;return {text:d.body.innerText,html:d.body.innerHTML,notice:document.querySelector('#notice').innerText};})()");
+            using var pasted = JsonDocument.Parse(observed);
+            var lines = pasted.RootElement.GetProperty("text").GetString()!.Replace("\r", "").Split('\n', StringSplitOptions.RemoveEmptyEntries);
+            bool literal = lines.SequenceEqual(text.Split('\n'));
+            check(literal, "Native Paste as Text inserts Unicode and multiline Markdown, HTML and link syntax literally" + (literal ? "" : ": " + observed));
+            check(await browser.ExecuteScriptAsync("!document.querySelector('#document').contentDocument.body.querySelector('h1,h2,strong,b,em,i,a,img,video,iframe,figure,ul,ol,pre,[style]')") == "true",
+                "Paste as Text ignores rich clipboard HTML and creates no imported formatting, links or media");
+            string before = await browser.ExecuteScriptAsync("window.editor.html()");
+            await browser.ExecuteScriptAsync("window.editor.command('selectAll')");
+            EditorClipboard.TestData = new DataObject();
+            EditorClipboard.TestData.SetText("https://youtu.be/dQw4w9WgXcQ", TextDataFormat.UnicodeText);
+            await Invoke(paste);
+            check(await browser.ExecuteScriptAsync("(()=>{const d=document.querySelector('#document').contentDocument;return d.body.innerText.trim()==='https://youtu.be/dQw4w9WgXcQ'&&!d.querySelector('a,figure,iframe');})()") == "true",
+                "Paste as Text replaces the selection and keeps a YouTube URL as literal text");
+            await Invoke(window.UndoMenu);
+            check(await browser.ExecuteScriptAsync("window.editor.html()") == before, "Native Undo restores the selection replaced by Paste as Text in one step");
+            EditorClipboard.TestData = new DataObject();
+            EditorClipboard.TestData.SetData(DataFormats.FileDrop, new[] { original.Path! });
+            EditorClipboard.TestData.SetData("PNG", new MemoryStream([1, 2, 3]));
+            await Invoke(paste);
+            check(await browser.ExecuteScriptAsync("window.editor.html()") == before, "Image and file clipboard formats without text leave the document unchanged");
+            await browser.ExecuteScriptAsync("document.querySelector('#pasteOptions').click()");
+            await Task.Delay(80);
+            using (var capture = File.Create(Path.Combine(App.Current.Store.DirectoryPath, "paste-menu.png")))
+                await browser.CoreWebView2.CapturePreviewAsync(Microsoft.Web.WebView2.Core.CoreWebView2CapturePreviewImageFormat.Png, capture);
+            await browser.ExecuteScriptAsync("document.querySelector('#pasteOptionsMenu').hidePopover()");
+            string locked = draft.Text;
+            draft.IsReadOnly = true; draft.Notify();
+            EditorClipboard.TestData.SetText("Forbidden paste", TextDataFormat.UnicodeText);
+            await Invoke(paste);
+            check(draft.Text == locked && await browser.ExecuteScriptAsync("window.editor.html()") == before,
+                "The native Paste as Text menu cannot mutate a locked document");
+        }
+        finally
+        {
+            EditorClipboard.TestData = clipboard; draft.IsReadOnly = false; draft.Notify();
+            window.ActiveDocument = original; window.RemoveDocument(draft);
+        }
+    }
+
     public static async Task Appearance(MainWindow window, Action<bool, string> check)
     {
         await Spellcheck(window, check);

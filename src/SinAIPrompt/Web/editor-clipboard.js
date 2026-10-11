@@ -8,7 +8,7 @@ import {cleanOriginalImages} from './original-images.js';
 export async function clipboardCommand(doc,name,{changed,insertImage}) {
   const selection=doc.getSelection();if(!selection?.rangeCount)return;
   const range=selection.getRangeAt(0).cloneRange();
-  if(!native){doc.execCommand(name);changed();return;}
+  if(!native){doc.execCommand(name==='pasteText'?'pasteAndMatchStyle':name);changed();return;}
   if(name==='copy'||name==='cut'){
     if(range.collapsed)return;
     const wrapper=doc.createElement('div');wrapper.append(range.cloneContents());
@@ -24,9 +24,13 @@ export async function clipboardCommand(doc,name,{changed,insertImage}) {
     if(name==='copy')return;
     // Cut only after Windows accepted the copy, using the original selection.
   }else{
-    const data=await request('editor-paste');if(!data)return;
+    const data=await request('editor-paste',{textOnly:name==='pasteText'});if(!data)return;
     if(!range.startContainer.isConnected)return;
     doc.body.focus();selection.removeAllRanges();selection.addRange(range);
+    if(name==='pasteText'){
+      if(data.text){editVideoAtoms(doc,()=>doc.execCommand('insertText',false,data.text));changed();}
+      return;
+    }
     if(!data.image&&pasteYouTube(doc,data.text,changed))return;
     if(await pasteMarkdown(doc,data.markdown??data.text??'',changed,data.base??'',data.markdown!=null))return;
     if(data.html){

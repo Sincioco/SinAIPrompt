@@ -1131,3 +1131,39 @@ warning at MainWindow's ceiling. Both test launchers reached their 60-second wai
 limit; their isolated app processes subsequently finished with ALL CHECKS PASSED
 (1,011 development checks before the extra native-typing assertion, 1,012 packaged).
 No known product failures remain.
+
+### October 11 — plain-text paste and date headings
+
+`EditorClipboard.ReadAsync` owns the explicit text-only read and returns before
+reading HTML, file drops, or images. `editor-clipboard.js` inserts that text at the
+saved selection with native Undo, bypassing Markdown and video conversion. The
+Edit menu delegates through its existing paste handler; `ribbon.js` owns the Paste
+split button and its temporary popover, including keyboard and overflow behavior.
+
+Ctrl+D keeps native date formatting in the existing date-command path and delegates
+visual paragraph editing to `word-styles.js`. It applies Heading2, inserts the next
+paragraph, and applies Normal there. The editor retains selection/history ownership
+and read-only protection. F5, date-menu insertion, and source-mode text insertion
+retain their existing behavior. No new modules, dependencies, global state,
+architecture exceptions, or baseline changes are introduced. MainWindow remains
+at its reviewed 564-line ceiling; its existing partial-class coupling is unchanged.
+
+Production physical-line growth: `EditorClipboard.cs` 92→94, `MainWindow.xaml`
+80→81, `editor-clipboard.js` 49→53, `editor.js` 210→212, `ribbon.js` 158→177,
+`ribbon.css` 75→80, and `word-styles.js` 82→90. `HtmlEditorHost.cs` remains 409,
+`HtmlFileActions.cs` 69, and `MainWindow.xaml.cs` 564. Integration coverage grows
+352→425 in `DocumentCommandSelfTest.cs`, 95→175 in `DocumentContentSelfTest.cs`,
+209→211 in `UiSelfTest.cs`, and 214→242 in `ribbon-self-test.js`.
+
+Validation: development and offline packaged runs each pass all 1,040 native/browser
+integration checks, including menu dispatch, literal Unicode/multiline paste,
+replacement/Undo, locked and nontext clipboard behavior, split-button choices,
+keyboard/dismissal/overflow, real Ctrl+D input, Heading2 outline, Normal typing,
+midparagraph insertion, F5 preference and source compatibility. The new popover's
+WebView screenshot was visually reviewed. All 52 JavaScript syntax checks using
+Visual Studio's installed Node, all 16 architecture fixtures, and `git diff --check`
+pass. Build and package report zero compiler warnings/errors. The architecture
+checker passes 167 files with its existing MainWindow size warning; actual ownership
+and dependency changes were reviewed manually, without claiming semantic enforcement.
+Initial test-fixture assumptions about Chromium paragraph separators and an unfinished
+preceding document reload were corrected. No known product failures remain.

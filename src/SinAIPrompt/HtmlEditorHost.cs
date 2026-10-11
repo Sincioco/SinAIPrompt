@@ -180,7 +180,7 @@ public sealed partial class EditorView
                 case "annotation-copy": AnnotationClipboard.Copy(message.GetProperty("format").GetString()!, message.GetProperty("content").GetString()!, message.GetProperty("objects").GetString()!); break;
                 case "annotation-paste": result = AnnotationClipboard.Read(); break;
                 case "editor-copy": EditorClipboard.Copy(message.GetProperty("html").GetString()!, message.GetProperty("text").GetString()!, message.TryGetProperty("internalHtml", out var internalHtml) ? internalHtml.GetString() : null, Document.Id.ToString()); break;
-                case "editor-paste": result = await EditorClipboard.ReadAsync(Document.Id.ToString()); break;
+                case "editor-paste": result = await EditorClipboard.ReadAsync(Document.Id.ToString(), message.TryGetProperty("textOnly", out var textOnly) && textOnly.GetBoolean()); break;
                 case "copy-image": EditorClipboard.CopyImage(message.GetProperty("data").GetString()!); break;
                 case "slice-export-begin":
                     string? sliceFolder = App.Current.TestMode ? Path.Combine(App.Current.Store.DirectoryPath, "Slice exports") : SliceExport.ChooseFolder(Owner);

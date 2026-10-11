@@ -66,6 +66,14 @@ export function applyParagraphStyle(doc,id) {
   return formatted;
 }
 
+export function insertDateHeading(doc,text) {
+  doc.execCommand('insertText',false,text);
+  applyParagraphStyle(doc,'heading2');
+  doc.execCommand('insertParagraph',false,null);
+  const paragraph=applyParagraphStyle(doc,'normal');
+  if(paragraph)doc.getSelection()?.collapse(paragraph,0);
+}
+
 // Preview uses a runtime stylesheet, so hovering never changes saved HTML or undo.
 export function previewParagraphStyle(doc,id) {
   if(!doc)return;

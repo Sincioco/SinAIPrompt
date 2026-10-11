@@ -52,7 +52,7 @@ export function createRibbon(root,{getDocument,saveSelection,restoreSelection,co
       <div class="clipboard-small">${button('undo','Undo (Ctrl+Z)',icon('undo'))}${button('redo','Redo (Ctrl+Y)',icon('redo'))}<button data-native-command="saveAll" title="Save All (Ctrl+Alt+S)">${icon('saveAll')}</button></div>
       <div class="clipboard-small">${['lock','unlock','rename'].map(action=>`<button data-native-command="${action}" aria-label="${action}" title="${action[0].toUpperCase()+action.slice(1)}">${icon(action)}</button>`).join('')}</div></div><div class="group-caption">File</div></section>
     <section class="ribbon-group clipboard-group" aria-label="Clipboard"><div class="clipboard-controls">
-      <button class="paste-large" data-cmd="paste" title="Paste (Ctrl+V)">${icon('paste')}<span>Paste</span></button>
+      <div class="paste-split" role="group" aria-label="Paste"><button class="paste-large" data-cmd="paste" title="Paste (Ctrl+V)">${icon('paste')}<span>Paste</span></button><button id="pasteOptions" title="Paste Options" aria-label="Paste Options" aria-haspopup="menu" aria-expanded="false" popovertarget="pasteOptionsMenu"><svg viewBox="0 0 12 12" aria-hidden="true"><path d="m3 4.5 3 3 3-3"/></svg></button><div id="pasteOptionsMenu" class="paste-popup" popover="auto" role="menu" aria-label="Paste Options"><button type="button" role="menuitem" data-cmd="paste">Paste</button><button type="button" role="menuitem" data-cmd="pasteText">Paste as Text</button></div></div>
       <div class="clipboard-small">${button('cut','Cut (Ctrl+X)',icon('cut')+'Cut')}${button('copy','Copy (Ctrl+C)',icon('copy')+'Copy')}
       <button id="formatPainter" aria-pressed="false" title="Format Painter: click once for one selection; double-click to keep painting. Esc cancels.">${icon('paint')}<span>Format Painter</span></button></div></div><div class="group-caption">Clipboard</div></section>
     <section class="ribbon-group font-group" aria-label="Font"><div class="font-top">
@@ -106,9 +106,27 @@ export function createRibbon(root,{getDocument,saveSelection,restoreSelection,co
     stylePopup.addEventListener('toggle',event=>{if(event.newState==='closed'){previewParagraphStyle(getDocument(),null);stylePopup?.remove();stylePopup=null;$('#moreStyles').setAttribute('aria-expanded','false');}});
     stylePopup.showPopover();const rect=$('#moreStyles').getBoundingClientRect();stylePopup.style.top=rect.bottom+4+'px';stylePopup.style.left=Math.max(8,Math.min(rect.right-stylePopup.offsetWidth,innerWidth-stylePopup.offsetWidth-8))+'px';$('#moreStyles').setAttribute('aria-expanded','true');
   };
+  const pastePopup=$('#pasteOptionsMenu'),pasteTrigger=$('#pasteOptions');
+  pastePopup.addEventListener('toggle',event=>{
+    const open=event.newState==='open';pasteTrigger.setAttribute('aria-expanded',String(open));
+    if(!open)return;
+    const rect=pasteTrigger.getBoundingClientRect();
+    pastePopup.style.left=Math.max(8,Math.min(rect.left,innerWidth-pastePopup.offsetWidth-8))+'px';
+    pastePopup.style.top=Math.max(8,Math.min(rect.bottom+4,innerHeight-pastePopup.offsetHeight-8))+'px';
+    pastePopup.querySelector('button').focus({preventScroll:true});
+  });
+  pastePopup.addEventListener('keydown',event=>{
+    const items=[...pastePopup.querySelectorAll('button')],index=items.indexOf(document.activeElement);
+    if(['ArrowDown','ArrowUp','Home','End'].includes(event.key)){
+      event.preventDefault();event.stopPropagation();
+      items[event.key==='Home'?0:event.key==='End'?items.length-1:(index+(event.key==='ArrowDown'?1:items.length-1))%items.length].focus();
+    }else if(event.key==='Escape'){event.preventDefault();event.stopPropagation();pastePopup.hidePopover();pasteTrigger.focus({preventScroll:true});}
+    else if(event.key==='Tab')pastePopup.hidePopover();
+  });
   root.addEventListener('mousedown',event=>{saveSelection();if(event.target.closest('button'))event.preventDefault();});
   root.addEventListener('click',event=>{
     const target=event.target.closest('[data-cmd]');if(!target)return;
+    if(pastePopup.contains(target))pastePopup.hidePopover();
     previewParagraphStyle(getDocument(),null);
     Promise.resolve(command(target.dataset.cmd)).catch(report);
   });
@@ -126,7 +144,8 @@ export function createRibbon(root,{getDocument,saveSelection,restoreSelection,co
     $('#formatPainter').setAttribute('aria-pressed','true');$('#painterHint').hidden=false;
   };
   function attach(doc){
-    cancelPainter();formatting=createTextFormatting(doc);refreshStyles();
+    cancelPainter();pastePopup.hidePopover();formatting=createTextFormatting(doc);refreshStyles();
+    doc.addEventListener('pointerdown',()=>pastePopup.hidePopover());
     doc.addEventListener('pointerup',()=>{
       if(!painter)return;
       if(selectWordAtCaret(doc)&&applyInlineFormat(doc,painter)){if(!locked)cancelPainter();finishChange();}
@@ -143,7 +162,7 @@ export function createRibbon(root,{getDocument,saveSelection,restoreSelection,co
       const css=doc.defaultView.getComputedStyle(element),font=css.fontFamily.split(',')[0].replaceAll('"','').trim();
       for(const control of root.querySelectorAll('[data-cmd]')){
         if(['cut','copy'].includes(control.dataset.cmd))control.disabled=doc.getSelection().isCollapsed||control.dataset.cmd==='cut'&&!doc.body.isContentEditable;
-        else if(!['paste','undo','redo','indent','outdent'].includes(control.dataset.cmd))control.setAttribute('aria-pressed',String(doc.queryCommandState(control.dataset.cmd)));
+        else if(!['paste','pasteText','undo','redo','indent','outdent'].includes(control.dataset.cmd))control.setAttribute('aria-pressed',String(doc.queryCommandState(control.dataset.cmd)));
       }
       if(document.activeElement!==$('#font')){if(![...$('#font').options].some(option=>option.value===font))$('#font').add(new Option(font,font));$('#font').value=font;}
       if(document.activeElement!==$('#fontSize'))$('#fontSize').value=String(Math.round(parseFloat(css.fontSize)*.75*100)/100);

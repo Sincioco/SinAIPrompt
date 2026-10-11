@@ -1,6 +1,6 @@
 #toolbar{flex:none;background:var(--surface);border-bottom:1px solid var(--line);padding:6px 8px 0;user-select:none}
 .ribbon-groups{display:flex;flex-wrap:wrap;gap:0;align-items:stretch}
-.file-group{width:178px}.clipboard-group{width:152px}.font-group{width:278px}.paragraph-group{width:166px}.styles-group{flex:0 0 550px;max-width:100%;min-width:150px}.tools-group{width:360px}
+.file-group{width:178px}.clipboard-group{width:168px}.font-group{width:278px}.paragraph-group{width:166px}.styles-group{flex:0 0 550px;max-width:100%;min-width:150px}.tools-group{width:360px}
 .tools-controls{display:flex;align-items:stretch;min-height:66px;gap:3px}
 #toolbar .tools-controls button,#toolbar #screenCapture{display:flex;flex-direction:column;justify-content:center;align-items:center;gap:4px;font-size:11px;flex:0 0 72px;min-width:0;padding-left:2px;padding-right:2px}
 #toolbar .save-large svg,#toolbar .tools-controls svg{width:27px;height:29px}
@@ -65,11 +65,16 @@
 .ribbon-overflow{position:fixed;inset:auto;margin:0;padding:8px;max-width:calc(100vw - 16px);max-height:calc(100vh - 160px);overflow:auto;display:flex;flex-wrap:wrap;gap:8px;background:var(--surface);color:var(--text);border:1px solid var(--line);border-radius:5px;box-shadow:0 6px 20px #0003}
 .ribbon-overflow:not(:popover-open){display:none}
 .ribbon-overflow .ribbon-group{flex-shrink:0;border-right:1px solid var(--line)}
-:is(.numbering-split,.highlight-split,.font-color-split){display:flex;border:1px solid transparent;border-radius:3px}
-:is(.numbering-split,.highlight-split,.font-color-split):is(:hover,:focus-within){background:#e5edf5;border-color:#c7d7e6}
-#toolbar :is(.numbering-split,.highlight-split,.font-color-split) button{border:0;border-radius:0;background:transparent}
-#toolbar :is(#listNumbering,#highlightOptions,#fontColorOptions){min-width:16px;width:16px;padding:3px}
-:is(.numbering-split,.highlight-split,.font-color-split):hover :is(#listNumbering,#highlightOptions,#fontColorOptions){box-shadow:inset 1px 0 #c7d7e6}
-#toolbar :is(#listNumbering,#highlightOptions,#fontColorOptions) svg{width:9px;height:9px;stroke-width:1.7}
+:is(.numbering-split,.highlight-split,.font-color-split,.paste-split){display:flex;border:1px solid transparent;border-radius:3px}
+:is(.numbering-split,.highlight-split,.font-color-split,.paste-split):is(:hover,:focus-within){background:#e5edf5;border-color:#c7d7e6}
+#toolbar :is(.numbering-split,.highlight-split,.font-color-split,.paste-split) button{border:0;border-radius:0;background:transparent}
+#toolbar :is(#listNumbering,#highlightOptions,#fontColorOptions,#pasteOptions){min-width:16px;width:16px;padding:3px}
+:is(.numbering-split,.highlight-split,.font-color-split,.paste-split):hover :is(#listNumbering,#highlightOptions,#fontColorOptions,#pasteOptions){box-shadow:inset 1px 0 #c7d7e6}
+#toolbar :is(#listNumbering,#highlightOptions,#fontColorOptions,#pasteOptions) svg{width:9px;height:9px;stroke-width:1.7}
 #toolbar #backColor{width:29px;min-width:29px;padding:2px 5px;height:26px}
-:root[data-theme=dark] :is(.numbering-split,.highlight-split,.font-color-split):is(:hover,:focus-within){background:#394d60;border-color:#63798d}
+:root[data-theme=dark] :is(.numbering-split,.highlight-split,.font-color-split,.paste-split):is(:hover,:focus-within){background:#394d60;border-color:#63798d}
+.paste-split{flex:none}.paste-popup{position:fixed;inset:auto;margin:0;padding:4px;min-width:155px;border:1px solid var(--line);border-radius:3px;background:var(--surface);color:var(--text);box-shadow:0 5px 18px #0003}
+.paste-popup:not(:popover-open){display:none}
+#toolbar .paste-popup button{display:block;width:100%;padding:5px 10px;text-align:left;white-space:nowrap}
+#toolbar .paste-popup button:is(:hover,:focus-visible){background:#e5edf5}
+:root[data-theme=dark] #toolbar .paste-popup button:is(:hover,:focus-visible){background:#394d60}

@@ -55,7 +55,7 @@ public partial class MainWindow
             case "previous": CycleDocument(-1); break;
             case "documentList": SetDocumentList(!IsDocumentList); break;
             case "date": InsertDate(); break;
-            case "longDate": InsertDate(0, rememberChoice: false); break;
+            case "longDate": InsertDate(0, rememberChoice: false, heading: true); break;
             case "separator": InsertAtCaret(new string('_', 80)); break;
             case "find": ShowFind(); break;
             case "replace": ShowFind(true); break;

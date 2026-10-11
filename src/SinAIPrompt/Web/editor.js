@@ -18,6 +18,7 @@ import {annotate} from './annotation-ui.js';
 import {id,outputBounds} from './annotation-model.js';
 import {createRibbon} from './ribbon.js';
 import {clipboardCommand} from './editor-clipboard.js';
+import {insertDateHeading} from './word-styles.js';
 import {attachFileDrop} from './file-drop.js';
 import {observeEditorChrome} from './editor-chrome.js';
 import {prepareOriginalImages,observeOriginalImages} from './original-images.js';
@@ -107,9 +108,10 @@ async function setBase(newBase,updated=null){
 }
 function command(name,value=null){
   if(!doc||access.locked&&!['copy','selectAll'].includes(name))return;restoreSelection();
-  if(['cut','copy','paste'].includes(name))return clipboardCommand(doc,name,{changed,insertImage}).catch(report);
+  if(['cut','copy','paste','pasteText'].includes(name))return clipboardCommand(doc,name,{changed,insertImage}).catch(report);
   doc.execCommand('styleWithCSS',false,true);
   if(name==='insertOrderedList')toggleNumbering(doc);
+  else if(name==='insertDateHeading')editVideoAtoms(doc,()=>insertDateHeading(doc,value));
   else if(['delete','insertHTML','insertText'].includes(name))editVideoAtoms(doc,()=>doc.execCommand(name,false,value));
   else doc.execCommand(name,false,value);
   changed();syncFormatting();

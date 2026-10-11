@@ -33,6 +33,7 @@
     <Separator/><MenuItem x:Name="CutMenu" Header="Cu_t" InputGestureText="Ctrl+X" Click="CutClick"/>
     <MenuItem x:Name="CopyMenu" Header="_Copy" InputGestureText="Ctrl+C" Click="CopyClick"/>
     <MenuItem Header="_Paste" InputGestureText="Ctrl+V" Click="PasteClick"/>
+    <MenuItem Header="Paste as _Text" Tag="pasteText" Click="PasteClick"/>
     <MenuItem x:Name="DeleteMenu" Header="De_lete" InputGestureText="Del" Click="DeleteClick"/>
     <Separator/><MenuItem Header="_Find" InputGestureText="Ctrl+F" Click="FindClick"/>
     <MenuItem Header="Find Next" InputGestureText="F3" Click="FindNextClick"/>
