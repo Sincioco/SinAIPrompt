@@ -1,4 +1,9 @@
 // Outline indexes are transient; navigation adds no IDs or markup to saved HTML.
+export function documentTitle(doc){
+  return [...doc.body.querySelectorAll('[data-sin-style=title]')]
+    .filter(node=>!node.closest('figure,pre,[contenteditable=false]:not(body)')&&!node.querySelector('[data-sin-style=title]'))
+    .map(node=>node.textContent.replace(/\s+/g,' ').trim()).find(Boolean)||'';
+}
 export function createDocumentOutline(getDocument){
   const nodes=()=>[...getDocument()?.body.querySelectorAll('h1,h2,[data-sin-style=title],[data-sin-style=heading],[data-sin-style=heading2]')||[]]
     .filter(node=>!node.closest('figure,pre,[contenteditable=false]:not(body)'));

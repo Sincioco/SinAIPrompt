@@ -3,7 +3,7 @@ import {parseHtml,ensureStyle,editingStyles,serialize,toPng,portableHtml,pasteSa
 import {renameImageFile} from './asset-references.js';
 import {rewriteProjectReferences} from './project-references.js';
 import {createDocumentSearch} from './document-search.js';
-import {createDocumentOutline} from './document-outline.js';
+import {createDocumentOutline,documentTitle} from './document-outline.js';
 import {createDocumentAccess} from './document-access.js';
 import {attachListNumbering,toggleNumbering} from './list-numbering.js';
 import {createImageSelection} from './image-selection.js';
@@ -186,6 +186,7 @@ window.editor={load,html,setBase,focus,command,insertImage,openAnnotation,pasteC
   stopMedia:videos.close,setToolbarWrap:ribbon.setWrap,setSpellcheck,
   setReadOnly:value=>{access.set(value);images.select(null);imageActions.close();videoSelection.select(null);},
   outline:createDocumentOutline(()=>doc),
+  documentTitle:raw=>documentTitle(parseHtml(raw)),
   setNavigationInset:width=>{for(const area of [frame,$('#notice')]){area.style.marginLeft=width+'px';area.style.width=`calc(100% - ${width}px)`;}},
   renameImageFile,
   rewriteProjectReferences,

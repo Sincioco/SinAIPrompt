@@ -9,6 +9,67 @@ namespace SinAIPrompt;
 
 internal static class DocumentCommandSelfTest
 {
+    public static async Task TitleFirstSave(MainWindow window, Action<bool, string> check)
+    {
+        var previous = window.ActiveDocument!;
+        string previousFolder = window.Explorer.WorkingFolder, autoSave = App.Current.Preferences.AutoSaveDirectory;
+        string folder = Path.Combine(App.Current.Store.DirectoryPath, "Title first save"); Directory.CreateDirectory(folder);
+        App.Current.Preferences.AutoSaveDirectory = "";
+        await window.Explorer.SetFolderAsync(folder);
+        var draft = window.NewDocument(); var view = window.CurrentView!;
+        async Task Load(string html)
+        {
+            await view.Browser.CoreWebView2.CallDevToolsProtocolMethodAsync("Runtime.evaluate", JsonSerializer.Serialize(new
+                { expression = $"window.editor.ready().then(()=>window.editor.load({JsonSerializer.Serialize(html)}))", awaitPromise = true }));
+            await view.FlushAsync();
+        }
+        try
+        {
+            await view.FirstPaint.WaitAsync(TimeSpan.FromSeconds(5));
+            string prefix = draft.Name[..15];
+            await Load("<p data-sin-style='title'>RAID <b>2.0</b> - Micro Command</p><p>Pending latest content</p>");
+            var suggested = await DocumentTitleSave.ResolveAsync(draft, view, "", "");
+            check(suggested?.FileName == prefix + " - RAID 2.0 - Micro Command.html" && suggested.Path == null,
+                "First-save naming uses visible Title text and keeps the original draft timestamp when a folder must be chosen");
+            check(await window.SaveDocument(draft) && draft.Path == Path.Combine(folder, suggested!.FileName) && File.ReadAllText(draft.Path).Contains("Pending latest content"),
+                "Save automatically creates the title-named HTML in the working folder with the latest visual content");
+            string savedPath = draft.Path!;
+            await Load("<p data-sin-style='title'>Changed Title</p><p>Updated content</p>");
+            check(await window.SaveDocument(draft) && draft.Path == savedPath && File.ReadAllText(savedPath).Contains("Updated content"),
+                "Subsequent Save keeps the saved filename even when the document Title changes");
+            window.RemoveDocument(draft); draft = window.NewDocument(); view = window.CurrentView!;
+            await view.FirstPaint.WaitAsync(TimeSpan.FromSeconds(5));
+            draft.DraftName = prefix + " - Prompt 99";
+            await Load("<div data-sin-style='title'><p data-sin-style='title'>RAID 2.0 - Micro Command</p><p>Do not include body text</p></div>");
+            check(await window.SaveDocument(draft) && Path.GetFileName(draft.Path) == prefix + " - RAID 2.0 - Micro Command 2.html" && File.ReadAllText(savedPath).Contains("Updated content"),
+                "First Save uses the innermost Title and a numbered suffix to preserve an existing filename");
+            window.RemoveDocument(draft); draft = window.NewDocument(); view = window.CurrentView!;
+            await view.FirstPaint.WaitAsync(TimeSpan.FromSeconds(5));
+            draft.DraftName = prefix + " - Prompt 100";
+            await view.SetSourceAsync(true); view.Editor.Text = "<p data-sin-style='title'>Source: Title / 中文</p><p>Source body</p>";
+            var sourceName = await DocumentTitleSave.ResolveAsync(draft, view, "", folder);
+            check(sourceName?.FileName == prefix + " - Source- Title - 中文.html" && Path.GetDirectoryName(sourceName.Path) == folder,
+                "Source-view Title naming sanitizes Windows filename characters and supports the autosave folder fallback");
+            check(await window.SaveDocument(draft) && Path.GetFileName(draft.Path) == sourceName!.FileName,
+                "First Save also derives its filename from a Title in source view");
+            window.RemoveDocument(draft); draft = window.NewDocument(); view = window.CurrentView!;
+            await view.FirstPaint.WaitAsync(TimeSpan.FromSeconds(5));
+            await Load("<title>Prompt</title><h1>Heading only</h1><p>Body</p>");
+            check(await DocumentTitleSave.ResolveAsync(draft, view, folder, "") == null, "Documents without a Title retain the existing first-save workflow");
+            string protectedPath = Path.Combine(folder, "Protected.html"); File.WriteAllText(protectedPath, "Keep this file");
+            bool rejected = false;
+            try { TextFiles.Save(draft, protectedPath, createNew: true); } catch (IOException) { rejected = true; }
+            check(rejected && File.ReadAllText(protectedPath) == "Keep this file" && draft.Path == null,
+                "Atomic creation rejects a destination that appears before saving without replacing its contents");
+        }
+        finally
+        {
+            App.Current.Preferences.AutoSaveDirectory = autoSave;
+            window.ActiveDocument = previous; window.RemoveDocument(draft);
+            await window.Explorer.SetFolderAsync(previousFolder);
+        }
+    }
+
     public static async Task NewPromptReady(MainWindow window, Action<bool, string> check)
     {
         var previous = window.ActiveDocument!;

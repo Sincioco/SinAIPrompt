@@ -127,7 +127,7 @@ public static class TextFiles
         // File.Move never replaces an existing destination; no save or re-encoding occurs.
         File.Move(path, destination);
     }
-    public static void Save(Document doc, string path, bool overwriteConflict = false)
+    public static void Save(Document doc, string path, bool overwriteConflict = false, bool createNew = false)
     {
         path = System.IO.Path.GetFullPath(path);
         bool same = string.Equals(path, doc.Path, StringComparison.OrdinalIgnoreCase);
@@ -141,19 +141,19 @@ public static class TextFiles
         byte[] bytes;
         if (!doc.Dirty && doc.Path != null && File.Exists(doc.Path) && !ChangedOnDisk(doc)) bytes = File.ReadAllBytes(doc.Path);
         else { var enc = EncodingFor(doc.EncodingName); bytes = [.. enc.GetPreamble(), .. enc.GetBytes(doc.Text.Replace("\n", doc.NewLine))]; }
-        AtomicWrite(path, bytes);
+        AtomicWrite(path, bytes, createNew: createNew);
         doc.DraftName = null;
         if (doc.CreatedUtc == default) doc.CreatedUtc = File.GetCreationTimeUtc(path);
         doc.ModifiedUtc = File.GetLastWriteTimeUtc(path);
         doc.Path = path; doc.IsReadOnly = DocumentAccess.IsReadOnly(path); doc.SavedText = doc.Text; doc.SavedEncoding = doc.EncodingName; doc.SavedNewLine = doc.NewLine; doc.Fingerprint = Hash(bytes); doc.Notify();
     }
-    public static void AtomicWrite(string path, byte[] bytes, bool backup = false)
+    public static void AtomicWrite(string path, byte[] bytes, bool backup = false, bool createNew = false)
     {
         string tmp = path + "." + Guid.NewGuid().ToString("N") + ".tmp";
         try
         {
             using (var stream = new FileStream(tmp, FileMode.CreateNew, FileAccess.Write, FileShare.None, 65536, FileOptions.WriteThrough)) { stream.Write(bytes); stream.Flush(true); }
-            if (File.Exists(path)) File.Replace(tmp, path, backup ? path + ".bak" : null);
+            if (!createNew && File.Exists(path)) File.Replace(tmp, path, backup ? path + ".bak" : null);
             else File.Move(tmp, path);
         }
         finally { if (File.Exists(tmp)) File.Delete(tmp); }

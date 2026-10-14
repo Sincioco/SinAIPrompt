@@ -263,6 +263,13 @@ public sealed partial class EditorView
         string result = await Browser.ExecuteScriptAsync("window.editor.html(true)");
         AcceptHtml(JsonSerializer.Deserialize<string>(result) ?? Document.Text);
     }
+    internal async Task<string> ReadDocumentTitleAsync()
+    {
+        if (disposed || Browser.CoreWebView2 == null) return "";
+        await initialized.Task;
+        string result = await Browser.ExecuteScriptAsync($"window.editor.documentTitle({Json(Document.Text)})");
+        return JsonSerializer.Deserialize<string>(result) ?? "";
+    }
     public async void ToggleSource() => await SetSourceAsync(IsVisual);
     public async void ShowSource() { if (IsVisual) await SetSourceAsync(true); }
     public async Task SetSourceAsync(bool source)

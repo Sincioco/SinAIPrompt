@@ -173,39 +173,6 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         if (Preferences.Recent.Count > Settings.RecentFileLimit) Preferences.Recent.RemoveRange(Settings.RecentFileLimit, Preferences.Recent.Count - Settings.RecentFileLimit);
         App.Current.MarkChanged();
     }
-    public async Task<bool> SaveDocument(Document doc, bool saveAs = false, string? destinationPath = null)
-    {
-        if (!await FlushDocument(doc)) return false;
-        string? path = destinationPath ?? doc.Path;
-        if (saveAs || path == null)
-        {
-            var dialog = new SaveFileDialog { Title = "Save As", FileName = doc.Path == null && !Path.HasExtension(doc.Name) ? doc.Name + ".html" : doc.Name, Filter = "HTML Documents (*.html;*.htm)|*.html;*.htm|All files (*.*)|*.*", DefaultExt = ".html", AddExtension = true, OverwritePrompt = true, CheckPathExists = true };
-            if (doc.Path != null) dialog.InitialDirectory = Path.GetDirectoryName(doc.Path);
-            if (dialog.ShowDialog(this) != true) return false;
-            path = dialog.FileName;
-        }
-        var duplicate = Documents.FirstOrDefault(d => d != doc && string.Equals(d.Path, path, StringComparison.OrdinalIgnoreCase));
-        if (duplicate != null) { MessageBox.Show(this, "This file is already open in another tab. Choose a different name to keep both documents.", "Sin - AI Prompt"); return false; }
-        try
-        {
-            bool conflict = string.Equals(path, doc.Path, StringComparison.OrdinalIgnoreCase) && TextFiles.ChangedOnDisk(doc);
-            if (conflict && MessageBox.Show(this, "This file changed outside Sin - AI Prompt or was moved. Replace it with the text in this tab?", "File changed", MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes) return false;
-            var view = editors.GetValueOrDefault(doc.Id);
-            if (view == null && doc.Path != null && !string.Equals(path, doc.Path, StringComparison.OrdinalIgnoreCase))
-            { ActiveDocument = doc; view = CurrentView; }
-            string original = doc.Text;
-            string? relocated = view == null ? null : await view.PrepareSaveAsAsync(path!);
-            if (relocated != null) doc.Text = relocated;
-            try { TextFiles.Save(doc, path!, conflict); }
-            catch { doc.Text = original; throw; }
-            DocumentEmojis.Set(doc, doc.Emoji, Preferences);
-            if (view != null) await view.RefreshBase(reloadDocument: relocated == null);
-            if (relocated != null) { view!.AcceptHtml(doc.Text); view.ReloadSavedHtml(); }
-            AddRecent(path!); noticedVersions.Remove(doc.Id); autoSaveErrors.Remove(doc.Id); pendingAutoSaves.Remove(doc.Id); ExternalNotice.Visibility = Visibility.Collapsed; UpdateStatus(); App.Current.MarkChanged(); return true;
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Text.EncoderFallbackException)
-        { MessageBox.Show(this, "Could not save the file. Your text is still open.\n\n" + ex.Message, "Sin - AI Prompt", MessageBoxButton.OK, MessageBoxImage.Error); return false; }
-    }
     async Task<bool> ConfirmSave(Document doc)
     {
         if (!await FlushDocument(doc)) return false;

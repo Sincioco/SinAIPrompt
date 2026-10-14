@@ -20,6 +20,7 @@ Paths below are relative to `src/`; unqualified native filenames are under
 | Image-file rename | `ImageFileRename.cs` owns destination validation and the file/parent-save transaction; `Web/asset-references.js` rewrites matching local image sources relative to the explicit parent HTML | Existing `HtmlFileRename.cs` coordinates open copies, paused autosaves and conflicts; `HtmlEditorHost.cs` is the parser/live-editor adapter. Checks cover encoded/absolute/base-relative URLs, unsaved edits, collision rejection and rollback. No parent editor is created for an unopened file. |
 | Markdown and list numbering | `Web/markdown.js` owns safe Markdown conversion and empty-document paste; `list-numbering.js` owns current-list operations. `EditorClipboard` reads file/text clipboard data and `MarkdownExport.cs` coordinates one editor's existing asset export path | No libraries or runtime downloads. Browser checks cover common structures, nested numbering and Undo; native checks paste a real local Markdown file and export independent PNG assets. |
 | File operations and annotation hosting | `FileActions.cs`, `HtmlFileActions.cs`, `HtmlFileRename.cs`, `AnnotationHost.cs`: partial `MainWindow` implementations sharing that window's state | Existing legacy integration boundaries, not independent state owners. Native file/asset and modal-layout checks. |
+| First-save title naming | `DocumentTitleSave.cs` owns the filename, preserved draft timestamp, destination-folder choice and collision suffix. `document-outline.js` reads visible Title text; `HtmlEditorHost` parses the current HTML snapshot through the existing sandbox-safe parser | `HtmlFileActions` coordinates the existing save workflow. Core atomic creation refuses an occupied automatic destination. Visual/source, collision, unchanged saved-path and first-save integration checks. No title text is persisted separately. |
 | Visual/source editing adapter | `EditorView.cs` + `HtmlEditorHost.cs`: one document's WPF source view, WebView lifecycle, synchronization, mapping, native messages | Calls the window and platform adapters. Existing reverse coupling must not spread. Source/visual, immediate save, image, typing tests. |
 | Document data and persistence | `SinAIPrompt.Core/Documents.cs`: `Document`, settings/session records, `TextFiles`, `Store`, numbering, search | Core uses .NET APIs; no dependency on the WPF app or WebView. Save/conflict, recovery, numbering checks. |
 | Periodic session recovery | `SessionPersistence.cs` owns detached recovery snapshots, revisions, the newest pending snapshot and one background writer; App schedules it | Captures window/document values on the dispatcher, sharing only immutable strings. Streams JSON on the worker. Explicit saves drain the worker before publication. Native checks cover dispatcher access, snapshot isolation, ordering, retry, atomic backup, relocation and exact JSON compatibility. |
@@ -66,13 +67,13 @@ existing CI configuration to connect; these local entry points are the gate.
 | --- | ---: | ---: |
 | Application entry/composition (`App.xaml.cs`) | 200 physical lines | 300 |
 | Other handwritten modules, markup, tooling, and tests | 500 | 800 |
-| Legacy `MainWindow.xaml.cs` | 500 | **564 (no growth; reviewed reductions from 616 and 580)** |
+| Legacy `MainWindow.xaml.cs` | 500 | **531 (no growth; reviewed reductions from 616, 580 and 564)** |
 
 Physical lines include blank lines and comments; a final newline does not create
 an extra line. Files without a final newline are counted too. Tests use the same
 file budget for now. `MainWindow.xaml.cs` is classified by its actual window-UI
 role, not the word "Main" in its name; its mixed responsibilities require the
-stricter 564-line legacy ceiling recorded with a stable ID and review trigger.
+stricter 531-line legacy ceiling recorded with a stable ID and review trigger.
 
 The checker covers `.cs`, `.js`, `.xaml`, `.css`, `.html`, `.ps1`, `.csproj`,
 `.props`, and `.targets` anywhere in the checkout, including new directories.
@@ -1167,3 +1168,38 @@ checker passes 167 files with its existing MainWindow size warning; actual owner
 and dependency changes were reviewed manually, without claiming semantic enforcement.
 Initial test-fixture assumptions about Chromium paragraph separators and an unfinished
 preceding document reload were corrected. No known product failures remain.
+
+### October 14 — first-save filenames from Document Title
+
+`DocumentTitleSave` owns first-save naming and folder/collision policy with explicit
+document, editor and folder inputs. The existing outline module extracts the first
+nonempty innermost Title paragraph from an inert HTML parse, including source edits.
+The filename retains the draft's `yyyy-MM-dd HHmm` prefix. Working-folder saves use
+the existing synchronization, asset relocation and atomic save pipeline. Explicit
+Save As and documents without Title retain the dialog workflow; a titled draft with
+no configured destination gets the generated filename in that dialog. Saved documents
+keep their path even when Title changes. Automatic first saves use exclusive atomic
+creation so another file appearing after name selection cannot be overwritten.
+
+The existing 33-line save routine moved from `MainWindow.xaml.cs` into its existing
+`HtmlFileActions.cs` integration module before adding title policy. This is a focused
+extraction, not an independent state-owner claim: the partial-class window coupling
+remains. The same `main-window-ui` baseline record was tightened from 564 to 531,
+preserving its 616→580→564 history. No limits or exclusions were expanded.
+
+Physical-line changes: MainWindow 564→531; HtmlFileActions 69→106; HtmlEditorHost
+409→416; document-outline.js 9→14; editor.js 212→213; Core Documents remains 247.
+DocumentTitleSave adds 39 focused lines. Existing integration coverage grows
+425→486 in DocumentCommandSelfTest and 211→212 in UiSelfTest. No external components
+or new runtime state were introduced.
+
+Validation: both the development build and offline package pass all 1,048
+native/browser checks. New scenarios exercise current visual content, source-view
+Title extraction, preserved draft timestamps, destination fallback, Windows filename
+sanitization, existing-file suffixes, unchanged saved paths and exclusive creation
+against a destination that appears before publication. All 52 JavaScript syntax
+checks, 16 architecture fixtures and `git diff --check` pass. Build/package report
+zero compiler warnings/errors. The checker passes 168 handwritten files with the
+existing MainWindow size-review warning at the tightened 531-line ceiling. Ownership,
+the moved routine and default-compatible Core parameters were reviewed manually;
+this is not semantic dependency enforcement. No guardrail exceptions were added.
