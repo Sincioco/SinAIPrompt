@@ -5,7 +5,7 @@ import {pasteMarkdown} from './markdown.js';
 import {pasteYouTube,editVideoAtoms} from './youtube.js';
 import {cleanOriginalImages} from './original-images.js';
 
-export async function clipboardCommand(doc,name,{changed,insertImage}) {
+export async function clipboardCommand(doc,name,{changed,insertImage,clearAll=()=>false}) {
   const selection=doc.getSelection();if(!selection?.rangeCount)return;
   const range=selection.getRangeAt(0).cloneRange();
   if(!native){doc.execCommand(name==='pasteText'?'pasteAndMatchStyle':name);changed();return;}
@@ -15,7 +15,9 @@ export async function clipboardCommand(doc,name,{changed,insertImage}) {
     cleanOriginalImages(wrapper);
     wrapper.querySelectorAll('[data-sin-selected]').forEach(el=>el.removeAttribute('data-sin-selected'));
     Object.assign(wrapper.style,captureFormat(doc));
-    const text=range.toString();
+    // Range.toString() concatenates adjacent headings/paragraphs/list items.
+    // The live selection supplies the rendered line breaks for plain paste.
+    const text=selection.toString();
     const hasImages=!!wrapper.querySelector('img');
     const video=wrapper.childNodes.length===1&&wrapper.firstElementChild?.matches('figure[data-sin-youtube]');
     const fragment=video?wrapper.firstElementChild.outerHTML+'<p><br></p>':wrapper.outerHTML;
@@ -28,7 +30,7 @@ export async function clipboardCommand(doc,name,{changed,insertImage}) {
     if(!range.startContainer.isConnected)return;
     doc.body.focus();selection.removeAllRanges();selection.addRange(range);
     if(name==='pasteText'){
-      if(data.text){editVideoAtoms(doc,()=>doc.execCommand('insertText',false,data.text));changed();}
+      if(data.text){editVideoAtoms(doc,()=>doc.execCommand('insertText',false,data.text.replace(/\r\n?/g,'\n')));changed();}
       return;
     }
     if(!data.image&&pasteYouTube(doc,data.text,changed))return;
@@ -49,5 +51,5 @@ export async function clipboardCommand(doc,name,{changed,insertImage}) {
   }
   if(!range.startContainer.isConnected)return;
   doc.body.focus();selection.removeAllRanges();selection.addRange(range);
-  editVideoAtoms(doc,()=>doc.execCommand('delete'));changed();
+  if(!clearAll())editVideoAtoms(doc,()=>doc.execCommand('delete'));changed();
 }

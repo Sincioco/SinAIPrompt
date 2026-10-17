@@ -5,6 +5,7 @@ import {rewriteProjectReferences} from './project-references.js';
 import {createDocumentSearch} from './document-search.js';
 import {createDocumentOutline,documentTitle} from './document-outline.js';
 import {createDocumentAccess} from './document-access.js';
+import {selectAllContent,clearAllSelected} from './document-clearing.js';
 import {attachListNumbering,toggleNumbering} from './list-numbering.js';
 import {createImageSelection} from './image-selection.js';
 import {createImageInsertion} from './image-insertion.js';
@@ -88,6 +89,7 @@ async function load(raw,newBase=base){
     doc.addEventListener('pointerover',event=>imageStatus(event.target.closest('img')?.getAttribute('src')||images.selected?.getAttribute('src')||''));
     doc.addEventListener('pointerout',event=>{if(event.target.closest('img'))imageStatus(images.selected?.getAttribute('src')||'');});
     doc.addEventListener('keydown',shortcuts);doc.addEventListener('paste',paste);
+    doc.addEventListener('beforeinput',event=>{if(event.inputType.startsWith('delete')&&!event.target.closest?.('input,textarea,select')&&clearDocumentSelection()){event.preventDefault();changed();syncFormatting();}});
     doc.addEventListener('dragover',event=>{if(event.dataTransfer.types.includes('Files'))event.preventDefault();});
     doc.addEventListener('drop',event=>{const files=[...event.dataTransfer.files].filter(f=>f.type.startsWith('image/'));if(files.length){event.preventDefault();(async()=>{for(const f of files)await insertImage(await blobData(f));})().catch(report);}});
     resolve();
@@ -108,13 +110,20 @@ async function setBase(newBase,updated=null){
 }
 function command(name,value=null){
   if(!doc||access.locked&&!['copy','selectAll'].includes(name))return;restoreSelection();
-  if(['cut','copy','paste','pasteText'].includes(name))return clipboardCommand(doc,name,{changed,insertImage}).catch(report);
+  if(name==='selectAll'){selectAllContent(doc);saveSelection();syncFormatting();return;}
+  if(['cut','copy','paste','pasteText'].includes(name))return clipboardCommand(doc,name,{changed,insertImage,clearAll:clearDocumentSelection}).catch(report);
   doc.execCommand('styleWithCSS',false,true);
   if(name==='insertOrderedList')toggleNumbering(doc);
+  else if(name==='delete'){if(!clearDocumentSelection())editVideoAtoms(doc,()=>doc.execCommand('delete'));}
   else if(name==='insertDateHeading')editVideoAtoms(doc,()=>insertDateHeading(doc,value));
-  else if(['delete','insertHTML','insertText'].includes(name))editVideoAtoms(doc,()=>doc.execCommand(name,false,value));
+  else if(['insertHTML','insertText'].includes(name))editVideoAtoms(doc,()=>doc.execCommand(name,false,value));
   else doc.execCommand(name,false,value);
   changed();syncFormatting();
+}
+function clearDocumentSelection(){
+  if(!doc||access.locked||!clearAllSelected(doc))return false;
+  videos.close();videoSelection.select(null);images.select(null);imageActions.close();
+  ribbon.resetFormatting();saveSelection();return true;
 }
 function syncFormatting(){ribbon.sync();}
 function selectImage(image){images.select(image);}
@@ -156,6 +165,7 @@ async function openAnnotation(image=null,capturedSource=null){
 }
 function shortcuts(event){
   const ctrl=event.ctrlKey||event.metaKey,key=event.key.toLowerCase();let action=null;
+  if(ctrl&&!event.shiftKey&&key==='a'&&!event.target.closest?.('input,textarea,select')){event.preventDefault();command('selectAll');return;}
   if(native&&ctrl&&!event.shiftKey&&['c','x'].includes(key)){event.preventDefault();saveSelection();command(key==='c'?'copy':'cut');return;}
   if(ctrl){const map={s:event.shiftKey?'saveAs':'save',n:'new',t:'new',o:'open',w:'close',f:'find',h:'replace',d:'longDate',l:'separator',tab:event.shiftKey?'previous':'next','+':'zoomIn','=':'zoomIn','-':'zoomOut','0':'zoomReset'};action=map[key];if(key==='l'&&event.shiftKey)action='documentList';if(key==='u'&&event.shiftKey){event.preventDefault();send('source');return;}}
   if(event.key==='F5')action='date';

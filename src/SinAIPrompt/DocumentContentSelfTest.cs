@@ -10,6 +10,91 @@ namespace SinAIPrompt;
 
 internal static class DocumentContentSelfTest
 {
+    internal static async Task EditingCleanup(MainWindow window, Action<bool, string> check)
+    {
+        var view = window.CurrentView!;
+        await view.FlushAsync(); string original = view.Document.Text;
+        var clipboard = EditorClipboard.TestData;
+        async Task Evaluate(string expression)
+        {
+            string response = await view.Browser.CoreWebView2.CallDevToolsProtocolMethodAsync("Runtime.evaluate", JsonSerializer.Serialize(new { expression, awaitPromise = true }));
+            using var result = JsonDocument.Parse(response);
+            if (result.RootElement.TryGetProperty("exceptionDetails", out var error)) throw new Exception(error.ToString());
+        }
+        async Task Load(string html) => await Evaluate($"(async()=>{{await window.editor.ready();await window.editor.load({JsonSerializer.Serialize(html)});const d=document.querySelector('#document').contentDocument;d.body.focus();d.getSelection().collapse(d.body.firstElementChild,0);d.dispatchEvent(new Event('selectionchange'));}})()");
+        async Task<bool> Is(string expression) => await view.Browser.ExecuteScriptAsync($"(()=>{{const d=document.querySelector('#document').contentDocument;return {expression};}})()") == "true";
+        async Task Key(string key, string code, int virtualKey, int modifiers = 0)
+        {
+            foreach (string type in new[] { "keyDown", "keyUp" })
+                await view.Browser.CoreWebView2.CallDevToolsProtocolMethodAsync("Input.dispatchKeyEvent", JsonSerializer.Serialize(new { type, key, code, windowsVirtualKeyCode = virtualKey, modifiers }));
+        }
+        try
+        {
+            await Load("<h2>Heading two</h2><ul><li>Bullet one</li><li>Bullet two</li></ul>");
+            await Evaluate("window.editor.command('selectAll');window.editor.command('copy')");
+            using var copied = JsonDocument.Parse(JsonSerializer.Serialize(await EditorClipboard.ReadAsync(textOnly: true)));
+            string copiedText = copied.RootElement.GetProperty("text").GetString()!;
+            check(copiedText.Replace("\r", "").Split('\n', StringSplitOptions.RemoveEmptyEntries).SequenceEqual(new[] { "Heading two", "Bullet one", "Bullet two" }),
+                "Copying Heading2 and bullet points retains the rendered line breaks in Windows plain text");
+            await Load("<p><br></p>");
+            await Evaluate("document.querySelector('#pasteOptions').click();document.querySelector('#pasteOptionsMenu [data-cmd=pasteText]').click()");
+            for (int i = 0; i < 100 && !await Is("d.body.textContent.includes('Bullet two')"); i++) await Task.Delay(10);
+            check(await Is("d.body.innerText.split(/\\n+/).filter(Boolean).join('|')==='Heading two|Bullet one|Bullet two'&&!d.querySelector('h2,ul,li,b,strong')"),
+                "Ribbon Paste as Text preserves the copied heading and each bullet on separate lines without their formatting");
+            await Load("<p><br></p>");
+            EditorClipboard.TestData = new DataObject();
+            EditorClipboard.TestData.SetText("First\r\nSecond\rThird\n\nFourth\r\n", TextDataFormat.UnicodeText);
+            await Evaluate("window.editor.command('pasteText')");
+            check(await Is("[...d.body.children].map(p=>p.textContent).join('|')==='First|Second|Third||Fourth|'&&!d.body.textContent.includes('\\r')"),
+                "Plain-text paste honors CRLF, standalone CR, LF, blank lines and a trailing line break");
+
+            const string nested = "<!--Before--><div style='font-size:36px;font-weight:600;border-bottom:1px solid red'><div data-sin-style='heading2'><p>Visible heading</p><ul><li>Visible bullet</li></ul><span hidden>Hidden nested text</span></div></div><div hidden>Hidden root text</div><style>.old-format{color:red}</style><input type='hidden' value='Hidden field'><template><p>Hidden template</p></template><script type='application/json'>{\"hidden\":true}</script><!--After-->";
+            await Load(nested);
+            await Evaluate("(()=>{const d=document.querySelector('#document').contentDocument;d.getSelection().collapse(d.querySelector('p').firstChild,7);d.dispatchEvent(new Event('selectionchange'));document.querySelector('#fontSize').value='42';document.querySelector('#fontSize').dispatchEvent(new Event('change'));})()");
+            await Key("a", "KeyA", 65, 2); await Key("Delete", "Delete", 46);
+            check(await Is("d.body.children.length===1&&d.body.firstElementChild.matches('p[data-sin-style=normal]')&&d.body.textContent===''&&!d.body.querySelector('div,style,[hidden],[contenteditable]')&&d.body.childNodes.length===1"),
+                "Real Ctrl+A then Delete removes nested borders, hidden HTML, comments and old formatting, leaving one Normal paragraph");
+            await view.Browser.CoreWebView2.CallDevToolsProtocolMethodAsync("Input.insertText", "{\"text\":\"Fresh text\"}");
+            check(await Is("(()=>{const n=d.getSelection().anchorNode,e=n.nodeType===1?n:n.parentElement,s=d.defaultView.getComputedStyle(e);return d.body.textContent==='Fresh text'&&s.fontSize==='16px'&&s.fontWeight==='400';})()"),
+                "Typing after clearing all content uses Normal and discards the previous pending insertion font");
+            await Evaluate("window.editor.command('undo');window.editor.command('undo')");
+            check(await Is("d.body.textContent.includes('Hidden nested text')&&d.body.textContent.includes('Hidden root text')&&d.querySelector('input[type=hidden]').value==='Hidden field'&&d.querySelector('template').content.textContent==='Hidden template'&&!!d.body.querySelector('ul,style,script')"),
+                "Undo restores the complete deleted document, including hidden content and formatting");
+            await Evaluate("window.editor.command('redo')");
+            check(await Is("d.body.children.length===1&&d.body.textContent===''&&!d.body.querySelector('div,style,[hidden]')"),
+                "Redo clears the restored document completely again");
+            await Load(nested);
+            await Evaluate("window.editor.command('selectAll');window.editor.command('delete')");
+            check(await Is("d.body.childNodes.length===1&&d.body.textContent===''&&d.body.firstElementChild.dataset.sinStyle==='normal'"),
+                "The editor Select All and Delete commands use the same complete-content cleanup");
+            await Load(nested);
+            await Evaluate("(()=>{const d=document.querySelector('#document').contentDocument;d.execCommand('selectAll');d.dispatchEvent(new Event('selectionchange'));window.editor.command('delete');})()");
+            check(await Is("d.body.childNodes.length===1&&d.body.textContent===''&&d.body.firstElementChild.dataset.sinStyle==='normal'"),
+                "Chromium's own Select All also clears hidden siblings and styled ancestors");
+            await Load("<h2>Keep this heading</h2><p>Remove word only</p>");
+            await Evaluate("(()=>{const d=document.querySelector('#document').contentDocument,r=d.createRange();r.setStart(d.querySelector('p').firstChild,7);r.setEnd(d.querySelector('p').firstChild,11);d.getSelection().removeAllRanges();d.getSelection().addRange(r);d.dispatchEvent(new Event('selectionchange'));window.editor.command('delete');})()");
+            check(await Is("d.querySelector('h2').textContent==='Keep this heading'&&d.querySelector('p').textContent.replace(/\\u00a0/g,' ')==='Remove  only'"),
+                "Deleting a partial selection preserves the rest of the document and its heading");
+            await Load("<p>Only visible text</p><hr>");
+            await Evaluate("(()=>{const d=document.querySelector('#document').contentDocument,r=d.createRange();r.selectNodeContents(d.querySelector('p'));d.getSelection().removeAllRanges();d.getSelection().addRange(r);d.dispatchEvent(new Event('selectionchange'));window.editor.command('delete');})()");
+            check(await Is("!!d.querySelector('hr')&&d.body.children.length===2"),
+                "Selecting all text without an adjacent nontext object does not clear that unselected object");
+            await Load(nested);
+            await Evaluate("window.editor.command('selectAll');window.editor.command('cut')");
+            check(await Is("d.body.childNodes.length===1&&d.body.textContent===''&&d.body.firstElementChild.dataset.sinStyle==='normal'"),
+                "Cutting all content also removes hidden containers after copying successfully");
+            await Load(nested);
+            await Evaluate("window.editor.setReadOnly(true);window.editor.command('selectAll');window.editor.command('delete')");
+            check(await Is("d.body.textContent.includes('Hidden nested text')&&!!d.querySelector('ul')"), "Read-only documents reject complete-content cleanup");
+        }
+        finally
+        {
+            EditorClipboard.TestData = clipboard;
+            await Evaluate("window.editor.setReadOnly(false)");
+            view.AcceptHtml(original); view.ReloadSavedHtml();
+        }
+    }
+
     internal static async Task DateHeading(MainWindow window, Action<bool, string> check)
     {
         var view = window.CurrentView!; var document = view.Document;

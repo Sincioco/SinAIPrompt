@@ -38,6 +38,7 @@ Paths below are relative to `src/`; unqualified native filenames are under
 | Settings and editor chrome | `SettingsDialog.cs` owns tabbed settings controls; `Settings.ShowToolbar` persists visibility. `ToolbarVisibility` filters blank-menu double clicks with an explicit settings object and apply callback. `EditorPathStatus` owns one editor's hovered/selected image source and displayed path | The native host binds the status text and receives image-status messages. Browser/native checks cover settings save, toolbar visibility, local image paths and document fallback. No new state in MainWindow. |
 | Document copies and revert | `DocumentCopies.cs` owns duplicate naming and copy creation, using the existing browser export/asset relocation path. `FileActions.cs` coordinates selected document, paused autosaves, progress and revert confirmation | Saved copies own their own image folders; drafts embed image copies. Native checks cover current unsaved text, names, collisions, separate/inline images, original-file preservation, cancel and confirmed revert. |
 | Text clipboard and Office fonts | `EditorClipboard.cs` owns Windows HTML/text exchange and isolated test clipboard; `EditorFonts.cs` owns an immutable cached catalog of existing local Aptos faces | `Web/editor-clipboard.js` operates on an explicit document selection. Font catalog reads run off the UI thread; a local WebView mapping serves existing Office fonts without copying, downloading or exporting them. Actual local-font loads and Unicode clipboard round trips tested. |
+| Complete-content deletion | `Web/document-clearing.js` owns whole-document selection coverage and one native undoable replacement with an empty Normal paragraph | Uses existing Modern presets and video-atom editing. Root visibility/editability changes are synchronous and restored on nodes retained by Undo. The editor closes transient media/image UI and resets ribbon insertion formatting; no native window state is added. |
 | Annotation interaction | `Web/annotation-ui.js`: one dialog's scene, selection, gesture, zoom and history; `annotation-inspector.js` adapts explicit objects to property controls; `annotation-menu.js` owns only the temporary context menu | Uses model, templates, clipboard, and bridge. Mouse/keyboard, lock, crop, copy/paste, modal tests. |
 | Annotation representation | `Web/annotation-model.js`: geometry, movement, SVG/PNG rendering; no persistent scene ownership | Explicit scene/object arguments; image/escaping utilities. Geometry and render behavior covered through browser tests. |
 | Exchange and utilities | `Web/templates.js`, `annotation-clipboard.js`, `document.js`, `source-highlighting.js` | Focused data operations. `bridge.js` owns pending native requests and small browser dialogs; it must not become a feature/state hub. |
@@ -1203,3 +1204,45 @@ zero compiler warnings/errors. The checker passes 168 handwritten files with the
 existing MainWindow size-review warning at the tightened 531-line ceiling. Ownership,
 the moved routine and default-compatible Core parameters were reviewed manually;
 this is not semantic dependency enforcement. No guardrail exceptions were added.
+
+### October 17 — clipboard line breaks and complete-content deletion
+
+`editor-clipboard.js` reads the rendered Selection text when copying, preserving
+heading, paragraph and list-item boundaries that `Range.toString()` concatenates.
+Explicit plain-text paste normalizes CRLF and standalone CR to LF before native
+text insertion, retaining blank/trailing lines and bypassing rich-format conversion.
+
+`document-clearing.js` owns full-selection coverage and complete body replacement.
+Keyboard and menu Select All include hidden nodes. Native browser selections are
+also recognized from their visible text edges, with unselected media/rules protected.
+During one synchronous native insertion, root elements temporarily become visible,
+noneditable atoms so Chromium removes their entire subtrees rather than preserving
+styled ancestors or hidden descendants. Hidden input types are exposed only for
+that operation. Original attributes are restored on the nodes retained by native
+Undo. The existing video-atom adapter preserves populated video cards. No temporary
+attributes are saved, and no intermediate state is painted. Undo/Redo remain native;
+there is no parallel history or persistent cleanup state.
+
+The editor coordinates clearing media/image UI and the ribbon's pending insertion
+format. One empty Modern Normal paragraph remains in the existing document shell.
+Cut uses the same replacement only after the native clipboard accepts the copy.
+Partial selections and read-only documents keep their existing protections. No
+automatic migration or batch rewrite of user documents was added.
+
+Physical-line changes: document-clearing.js adds 57 focused lines; editor-clipboard
+53→55; editor.js 213→223; ribbon.js remains 177 and text-formatting.js remains 100.
+DocumentContentSelfTest grows 175→260 and UiSelfTest 212→213. MainWindow remains 531;
+its reviewed baseline, all limits and all exclusions are unchanged. Dependencies
+and state ownership were reviewed manually; no new cycles, globals or components
+were introduced.
+
+Validation: the development suite passed 1,059 native/browser checks before the
+additional browser-Select-All and unselected-rule cases; the final offline package
+passed all 1,061 checks. Regressions cover actual Ribbon paste of copied Heading2
+and bullet points, CR/LF variants, blank/trailing lines, real Ctrl+A/Delete, hidden
+fields/templates/style/script nodes/comments, Normal typing, Undo/Redo, partial
+selection, cut and locks. All 53 JavaScript syntax checks, 16 architecture fixtures
+and `git diff --check` pass. Build/package report zero compiler warnings/errors.
+The architecture gate passes 169 files with the existing MainWindow review warning.
+One existing live-pointer annotation Redo assertion failed in an earlier package
+run; the unchanged package passed the complete rerun. No annotation code changed.

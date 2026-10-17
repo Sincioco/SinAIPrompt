@@ -96,5 +96,5 @@ export function createTextFormatting(doc) {
     },{once:true});
   }
   doc.addEventListener('beforeinput',followingParagraph);
-  return {setFontSize};
+  return {setFontSize,reset(){pendingSize=null;existingFonts.clear();doc.execCommand('removeFormat',false,null);}};
 }

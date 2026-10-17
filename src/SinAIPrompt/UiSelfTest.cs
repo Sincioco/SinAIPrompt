@@ -69,6 +69,7 @@ internal static class UiSelfTest
             await ScreenCaptureSelfTest.RegionShortcut(window, Check);
             await DocumentContentSelfTest.Run(window, Check);
             await DocumentContentSelfTest.DateHeading(window, Check);
+            await DocumentContentSelfTest.EditingCleanup(window, Check);
             await MarkdownImportSelfTest.Run(window, Check);
             await SearchSelfTest.Source(window, Check);
             var exceptionEvent = view.Browser.CoreWebView2!.GetDevToolsProtocolEventReceiver("Runtime.exceptionThrown");

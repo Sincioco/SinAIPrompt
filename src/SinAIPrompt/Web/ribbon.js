@@ -173,5 +173,5 @@ export function createRibbon(root,{getDocument,saveSelection,restoreSelection,co
       colorPickers.forEach(picker=>picker.sync());
     });
   }
-  return {attach,sync,setWrap:createRibbonOverflow(root)};
+  return {attach,sync,resetFormatting(){cancelPainter();formatting?.reset();},setWrap:createRibbonOverflow(root)};
 }
