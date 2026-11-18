@@ -56,5 +56,15 @@ export function createImageSelection(frame,changed,onSelection){
   });
   document.addEventListener('pointercancel',()=>{if(gesture&&image){restore();gesture=null;position();}shield?.remove();shield=null;});
   function resize(){if(image){overlay.dataset.resizing='true';position();}}
-  return {select,attach,resize,get selected(){return image;}};
+  async function resizeAutomatically(){
+    const target=image;if(!target?.ownerDocument.body.isContentEditable)return;
+    await target.decode();
+    if(image!==target||!target.isConnected||!target.ownerDocument.body.isContentEditable)return;
+    const doc=target.ownerDocument,index=[...doc.images].indexOf(target),replacement=target.cloneNode(true);
+    replacement.removeAttribute('data-sin-selected');
+    replacement.style.width=target.naturalWidth+'px';replacement.style.maxWidth='100%';replacement.style.height='auto';
+    doc.body.focus();const range=doc.createRange();range.selectNode(target);doc.getSelection().removeAllRanges();doc.getSelection().addRange(range);
+    doc.execCommand('insertHTML',false,replacement.outerHTML);select(doc.images[index]);changed();
+  }
+  return {select,attach,resize,resizeAutomatically,get selected(){return image;}};
 }

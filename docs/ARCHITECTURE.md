@@ -1276,3 +1276,35 @@ checks, 16 architecture fixtures and diff whitespace checks pass. Build/package
 have zero compiler warnings/errors; the architecture gate passes 169 files with
 only the existing MainWindow size-review warning. No new dependencies or guardrail
 exceptions were needed. Already-exported files require re-export to adopt the layout.
+
+### November 19 — automatic image sizing
+
+`image-selection.js` owns automatic sizing alongside existing manual resize state.
+The action decodes the selected image asynchronously, verifies it is still selected
+and editable, and replaces it through one native undoable edit. Native pixel width,
+100% maximum width and automatic height let the image follow its containing content
+without enlarging beyond native resolution. The clone preserves image references,
+storage and annotation metadata. No image pixels are resampled or overwritten.
+
+`image-actions.js` adds the requested “Resized automatically” action, renames the
+existing action to “Resize Image Manually”, and disables both on read-only documents.
+The editor supplies one narrow callback; no new globals, state owners, dependencies
+or reverse imports were introduced. The existing manual gesture path is unchanged.
+
+Physical-line changes: image-selection.js 59→70, image-actions.js 42→43 and
+media-self-test.js 111→135. editor.js remains 223 and MainWindow.xaml.cs remains
+531. Existing guardrails and exclusions are unchanged. Ownership, callback wiring
+and retained image metadata were reviewed manually, separately from size checks.
+
+Validation: development and final offline-package runs each passed all 1,081 native
+and browser checks. Coverage includes real menu clicks, narrow/wide containers,
+native-size caps, proportions, small images, metadata, neighboring text, Undo/Redo,
+reload, read-only menu protection and unchanged manual handles. The packaged menu
+capture was inspected visually. All 53 JavaScript syntax checks, 16 architecture
+fixtures and diff whitespace checks passed. Build/package have zero compiler
+warnings/errors; the gate passes 169 files with the existing MainWindow warning.
+An initial Redo assertion incorrectly required inline height:auto after Chromium
+removed that redundant declaration; rendered dimensions and responsive behavior
+pass. A separate retry failed an existing tab-bar mouse-wheel check before reaching
+browser tests; the subsequent development and packaged full runs passed. No tab-bar
+behavior or architecture exceptions were changed.

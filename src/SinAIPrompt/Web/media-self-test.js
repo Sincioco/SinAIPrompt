@@ -21,7 +21,8 @@ export async function runMediaTests(check){
     window.editor.command('selectAll');window.editor.command('delete');await window.editor.insertImage(png,'separate');
     check(doc().images[0].getAttribute('src')===source,'An explicit separate insertion overrides the default and reuses the existing image');
     doc().images[0].click();
-    check([...document.querySelectorAll('[data-image-action]')].map(b=>b.textContent).join('|')==='Select Image|Copy Image|Edit Image|Resize Image|Rename Image|Delete Image|View Full Screen|View Externally'&&!document.querySelector('dialog[open]'),'Image dropdown starts with Select Image and Copy Image');
+    check([...document.querySelectorAll('[data-image-action]')].map(b=>b.textContent).join('|')==='Select Image|Copy Image|Edit Image|Resize Image Manually|Resized automatically|Rename Image|Delete Image|View Full Screen|View Externally'&&!document.querySelector('dialog[open]'),'Image dropdown includes manual and automatic resize actions');
+    await request('test-capture',{name:'image-resize-menu'});
     const beforeCopy=window.editor.html(),selectedImage=doc().images[0];
     await realClick(document.querySelector('[data-image-action=select]'));
     check(doc().getSelection().getRangeAt(0).cloneContents().querySelector('img')?.getAttribute('src')===source&&!document.querySelector('.image-actions').matches(':popover-open'),'Select Image closes the menu and selects the whole image');
@@ -31,7 +32,7 @@ export async function runMediaTests(check){
     check(copyPreview.naturalWidth===100&&copyPreview.naturalHeight===60&&!copied.html&&window.editor.html()===beforeCopy,'Copy Image puts original-size PNG pixels on the clipboard without document edits or HTML');
     try{
       window.editor.setReadOnly(true);selectedImage.click();
-      check(!document.querySelector('[data-image-action=select]').disabled&&!document.querySelector('[data-image-action=copy]').disabled&&document.querySelector('[data-image-action=edit]').disabled,'Read-only documents allow selecting and copying images');
+      check(!document.querySelector('[data-image-action=select]').disabled&&!document.querySelector('[data-image-action=copy]').disabled&&document.querySelector('[data-image-action=edit]').disabled&&document.querySelector('[data-image-action=resize-auto]').disabled,'Read-only documents allow selecting and copying images and disable automatic resizing');
       await request('editor-copy',{html:'<p>Replace this clipboard fixture</p>',text:'fixture'});
       await realClick(document.querySelector('[data-image-action=copy]'));
       await wait(async()=>(await request('editor-paste'))?.image?.startsWith('data:image/png;base64,'));
@@ -45,6 +46,27 @@ export async function runMediaTests(check){
     await document.exitFullscreen();
     await wait(async()=>!(await request('test-annotation-layout')).expanded);
     check(!document.querySelector('.media-fullscreen'),'Leaving fullscreen removes the temporary viewer and restores the editor');
+    canvas.width=1600;canvas.height=800;const widePng=canvas.toDataURL();
+    await window.editor.load(`<p>Before image</p><div id="resize-container" style="width:300px"><img src="${widePng}" data-sin-storage="inline" data-sin-annotation='{"fixture":true}' style="width:120px;height:60px"></div><p>After image</p>`);
+    await doc().images[0].decode();
+    const beforeAutomatic=window.editor.html();doc().images[0].click();
+    await realClick(document.querySelector('[data-image-action=resize-auto]'));
+    await wait(()=>doc().images[0].style.width==='1600px');
+    check(Math.abs(doc().images[0].getBoundingClientRect().width-300)<1&&Math.abs(doc().images[0].getBoundingClientRect().height-150)<1,'Automatic image resize fills a narrow container proportionately');
+    check(doc().images[0].dataset.sinStorage==='inline'&&doc().images[0].dataset.sinAnnotation==='{"fixture":true}'&&doc().body.textContent==='Before imageAfter image','Automatic image resize preserves storage, annotation metadata and neighboring text');
+    window.editor.command('undo');await delay();
+    check(window.editor.html()===beforeAutomatic,'Automatic image resize is one undoable edit');
+    window.editor.command('redo');await delay();
+    check(Math.abs(doc().images[0].getBoundingClientRect().width-300)<1&&Math.abs(doc().images[0].getBoundingClientRect().height-150)<1,'Redo restores responsive automatic image sizing: '+doc().images[0].getAttribute('style'));
+    doc().querySelector('#resize-container').style.width='2400px';
+    check(Math.abs(doc().images[0].getBoundingClientRect().width-1600)<1,'Automatically resized images stop at native resolution when the container grows');
+    const automaticSaved=window.editor.html();await window.editor.load(automaticSaved);await doc().images[0].decode();
+    check(Math.abs(doc().images[0].getBoundingClientRect().width-1600)<1,'Automatic image sizing survives serialization and reload');
+    doc().images[0].click();await realClick(document.querySelector('[data-image-action=resize]'));
+    check(document.querySelector('.image-selection').dataset.resizing==='true','Resize Image Manually still activates the existing resize handles');
+    await window.editor.load(`<div style="width:300px"><img src="${png}" style="width:250px;height:150px"></div>`);await doc().images[0].decode();
+    doc().images[0].click();await realClick(document.querySelector('[data-image-action=resize-auto]'));await wait(()=>doc().images[0].style.width==='100px');
+    check(Math.abs(doc().images[0].getBoundingClientRect().width-100)<1&&Math.abs(doc().images[0].getBoundingClientRect().height-60)<1,'Automatic resize removes enlargement beyond a small image native dimensions');
     const video={id:'AbcD_123-xy',title:'Title & <test>',author:'Example channel',image:png};
     await window.editor.load(youtubeCard(video)+'<script>window.documentScriptRan=true</script>');
     check(doc().querySelector('[data-video-title]').textContent===video.title&&doc().querySelector('[data-video-author]').textContent===video.author&&!doc().defaultView.documentScriptRan,'YouTube cards preserve escaped title/author while document scripts remain disabled');
