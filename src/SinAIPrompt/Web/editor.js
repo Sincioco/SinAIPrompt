@@ -147,8 +147,6 @@ async function openAnnotation(image=null,capturedSource=null){
   saveSelection();let mode=image?.dataset.sinStorage||(image?(/^data:/.test(image.getAttribute('src'))?'inline':'separate'):null);
   if(mode==='reference')mode=null;
   let state;
-  // A broken image's small error placeholder is not its intended display size.
-  const displayWidth=image?(image.naturalWidth?image.getBoundingClientRect().width:0):800;
   if(image?.dataset.sinAnnotation){state=JSON.parse(image.dataset.sinAnnotation);}
   else if(image||capturedSource){const png=await toPng(capturedSource||image.currentSrc||image.src);state={version:1,width:png.width,height:png.height,background:'none',objects:[{id:id(),type:'embedded-image',name:capturedSource?'Screen Capture':'Original Image',source:png.data,x:0,y:0,width:png.width,height:png.height,isOriginalImage:true,visible:true}]};}
   else {state={version:1,width:800,height:500,blankCanvas:true,background:'none',objects:[]};}
@@ -157,8 +155,8 @@ async function openAnnotation(image=null,capturedSource=null){
   const imageIndex=image?[...doc.images].indexOf(image):-1;
   const source=await storeImage(result.data,mode);
   if(imageIndex>=0)image=doc.images[imageIndex];
-  // PMT retains the document width and fits the expanded annotation bounds into it.
-  const width=Math.max(1,Math.round(displayWidth||state.width));
+  // Apply starts at native output size, fitting the available document width.
+  const width=result.width;
   const markup=`<img src="${escapeHtml(source)}" data-sin-storage="${mode}" data-sin-annotation="${escapeHtml(JSON.stringify(result.state))}" style="width:${width}px;max-width:100%;height:auto" alt="${escapeHtml(image?.alt||'Annotated image')}">`;
   if(image){restoreSelection();const r=doc.createRange();r.selectNode(image);selection=r;}
   command('insertHTML',markup+(image?'':'<p><br></p>'));selectImage(null);

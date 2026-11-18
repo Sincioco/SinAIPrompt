@@ -21,7 +21,7 @@ export async function runMediaTests(check){
     window.editor.command('selectAll');window.editor.command('delete');await window.editor.insertImage(png,'separate');
     check(doc().images[0].getAttribute('src')===source,'An explicit separate insertion overrides the default and reuses the existing image');
     doc().images[0].click();
-    check([...document.querySelectorAll('[data-image-action]')].map(b=>b.textContent).join('|')==='Select Image|Copy Image|Edit Image|Resize Image Manually|Resized automatically|Rename Image|Delete Image|View Full Screen|View Externally'&&!document.querySelector('dialog[open]'),'Image dropdown includes manual and automatic resize actions');
+    check([...document.querySelectorAll('[data-image-action]')].map(b=>b.textContent).join('|')==='Select Image|Copy Image|Edit Image|Resize Image Manually|Resize Automatically|Rename Image|Delete Image|View Full Screen|View Externally'&&!document.querySelector('dialog[open]'),'Image dropdown includes manual and automatic resize actions');
     await request('test-capture',{name:'image-resize-menu'});
     const beforeCopy=window.editor.html(),selectedImage=doc().images[0];
     await realClick(document.querySelector('[data-image-action=select]'));
@@ -67,6 +67,19 @@ export async function runMediaTests(check){
     await window.editor.load(`<div style="width:300px"><img src="${png}" style="width:250px;height:150px"></div>`);await doc().images[0].decode();
     doc().images[0].click();await realClick(document.querySelector('[data-image-action=resize-auto]'));await wait(()=>doc().images[0].style.width==='100px');
     check(Math.abs(doc().images[0].getBoundingClientRect().width-100)<1&&Math.abs(doc().images[0].getBoundingClientRect().height-60)<1,'Automatic resize removes enlargement beyond a small image native dimensions');
+    doc().images[0].click();await realClick(document.querySelector('[data-image-action=resize]'));
+    const manualHandle=document.querySelector('[data-image-resize=se]').getBoundingClientRect(),mx=manualHandle.x+5,my=manualHandle.y+5;
+    for(const [type,x] of [['mousePressed',mx],['mouseMoved',mx+120],['mouseReleased',mx+120]])await request('test-mouse',{parameters:{type,x,y:my,button:'left',buttons:type==='mouseReleased'?0:1,clickCount:1}});
+    doc().querySelector('div').style.width='75px';
+    check(doc().images[0].getBoundingClientRect().width>200,'Manual resizing can override both native size and the automatic container limit');
+    const manualSaved=window.editor.html();await window.editor.load(manualSaved);await doc().images[0].decode();
+    check(doc().images[0].getBoundingClientRect().width>200,'Manual size overrides survive serialization and reload');
+    await window.editor.load('<div id="paste-container" style="width:250px"><p>Paste images here</p></div>');
+    const pasteRange=doc().createRange();pasteRange.selectNodeContents(doc().querySelector('p'));doc().getSelection().removeAllRanges();doc().getSelection().addRange(pasteRange);doc().dispatchEvent(new Event('selectionchange'));
+    await request('editor-copy',{html:`<img src="${widePng}" style="width:50px;height:25px"><img src="${png}" width="600" height="400" style="width:600px;height:400px">`,text:''});
+    await window.editor.command('paste');await Promise.all([...doc().images].map(image=>image.decode()));
+    check(Math.abs(doc().images[0].getBoundingClientRect().width-250)<1&&Math.abs(doc().images[0].getBoundingClientRect().height-125)<1,'Pasted large HTML images default to container width with natural proportions');
+    check(Math.abs(doc().images[1].getBoundingClientRect().width-100)<1&&Math.abs(doc().images[1].getBoundingClientRect().height-60)<1,'Pasted small HTML images default to native size despite copied enlargement and height attributes');
     const video={id:'AbcD_123-xy',title:'Title & <test>',author:'Example channel',image:png};
     await window.editor.load(youtubeCard(video)+'<script>window.documentScriptRan=true</script>');
     check(doc().querySelector('[data-video-title]').textContent===video.title&&doc().querySelector('[data-video-author]').textContent===video.author&&!doc().defaultView.documentScriptRan,'YouTube cards preserve escaped title/author while document scripts remain disabled');

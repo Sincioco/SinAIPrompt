@@ -1308,3 +1308,46 @@ removed that redundant declaration; rendered dimensions and responsive behavior
 pass. A separate retry failed an existing tab-bar mouse-wheel check before reaching
 browser tests; the subsequent development and packaged full runs passed. No tab-bar
 behavior or architecture exceptions were changed.
+
+### November 19 — default image sizing and generated export footer
+
+`document.js` now normalizes pasted HTML image dimensions to intrinsic automatic
+width/height with a 100% container cap, including copied image fragments. Copied
+width/height attributes are removed; sources, storage and annotation metadata are
+retained. Video-card thumbnails keep their existing layout. Binary/file-image
+insertion already sets native pixel width with the same responsive cap and needs
+no change. Existing document images are not rewritten merely by opening a file.
+
+The existing Image Editor coordinator uses the rendered PNG output width on Apply
+instead of retaining an older display width or assuming an 800-pixel new image.
+Small outputs stay at native size and large outputs fit the content. The existing
+manual gesture owner explicitly removes the responsive maximum during a drag, so
+users can enlarge beyond native size or the container and keep that override on
+save/reload. “Resize Automatically” restores the responsive cap. No new persistent
+state, resize observers, imports, dependencies or architecture exceptions were added.
+
+The standalone transformation in `document.js` appends one muted generated footer.
+It formats the export instant in English with the explicit Asia/Taipei timezone,
+lowercase am/pm and GMT+8 suffix. Re-export replaces the old footer. The detached
+export document owns the footer; no mutation of the open document or new native
+state is required. Existing portable/copy callers still do not opt into standalone
+layout or footer generation. Import direction and state ownership were reviewed
+manually, separately from the architecture gate.
+
+Physical-line changes: editor.js 223→221, document.js 122→133,
+media-self-test.js 135→148, self-test.js 336→340, HtmlAssetsSelfTest.cs 239→240.
+image-actions.js remains 43, image-selection.js 70 and MainWindow.xaml.cs 531.
+All limits and exclusions remain unchanged.
+
+Validation: development and final offline-package runs each passed all 1,086 native
+and browser checks. New checks cover narrow-container HTML pastes, small images
+with oversized copied dimensions, native clipboard metadata, manual enlargement
+beyond native/container limits, override save/reload, Image Editor Apply resetting
+manual dimensions, and the exact November 19, 2026 1:30 am GMT+8 footer format from
+a fixed UTC instant. Re-export produces one footer at the end. The actual native
+standalone HTML contains the generated export timestamp, and the updated menu
+capture was inspected visually. Existing PNG embedding, source immutability,
+duplicate isolation, image references and manual Undo checks pass. All 53 JavaScript
+syntax checks, 16 architecture fixtures and diff whitespace checks passed. Build
+and package report zero compiler warnings/errors. The architecture gate passes
+169 files with the existing MainWindow 531-line warning; no exceptions were needed.

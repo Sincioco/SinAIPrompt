@@ -43,7 +43,7 @@ export function createImageSelection(frame,changed,onSelection){
     if(!gesture||!image)return;
     const {rect,corner}=gesture,dx=(event.clientX-gesture.x)*(corner.includes('w')?-1:1),dy=(event.clientY-gesture.y)*(corner.includes('n')?-1:1);
     const scale=Math.max(1/rect.width,Math.abs(dx/rect.width)>=Math.abs(dy/rect.height)?1+dx/rect.width:1+dy/rect.height);
-    image.style.width=Math.max(1,Math.round(rect.width*scale))+'px';image.style.height=Math.max(1,Math.round(rect.height*scale))+'px';position();
+    image.style.maxWidth='none';image.style.width=Math.max(1,Math.round(rect.width*scale))+'px';image.style.height=Math.max(1,Math.round(rect.height*scale))+'px';position();
   });
   function restore(){if(gesture.style==null)image.removeAttribute('style');else image.setAttribute('style',gesture.style);}
   document.addEventListener('pointerup',event=>{

@@ -4,7 +4,7 @@ import {toPng} from './document.js';
 // Image actions are temporary editor chrome, separate from document/resize state.
 export function createImageActions(frame,{select,edit,resize,resizeAutomatically,remove}){
   const menu=document.createElement('div');menu.className='image-actions';menu.popover='auto';menu.setAttribute('role','menu');
-  menu.innerHTML=[['select','Select Image'],['copy','Copy Image'],['edit','Edit Image'],['resize','Resize Image Manually'],['resize-auto','Resized automatically'],['rename','Rename Image'],['delete','Delete Image'],['fullscreen','View Full Screen'],['external','View Externally']]
+  menu.innerHTML=[['select','Select Image'],['copy','Copy Image'],['edit','Edit Image'],['resize','Resize Image Manually'],['resize-auto','Resize Automatically'],['rename','Rename Image'],['delete','Delete Image'],['fullscreen','View Full Screen'],['external','View Externally']]
     .map(([action,label])=>`<button role="menuitem" data-image-action="${action}">${label}</button>`).join('');
   document.body.append(menu);let image=null;
   function close(){menu.hidePopover();image=null;}

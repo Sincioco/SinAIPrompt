@@ -59,8 +59,9 @@ internal static class HtmlAssetsSelfTest
             string portable = "<img src=\"data:image/png;base64," + Convert.ToBase64String(File.ReadAllBytes(path)) + "\" data-sin-storage=\"inline\" data-sin-annotation=\"{}\" style=\"width:64px\">";
             EditorClipboard.Copy(portable, "", portable, "a-different-document");
             await Evaluate("window.editor.load('<p><br></p>').then(()=>window.editor.focus()).then(()=>window.editor.command('paste'))");
-            check(await browser.ExecuteScriptAsync("(()=>{const image=document.querySelector('#document').contentDocument.images[0];return image?.style.width==='64px'&&image.dataset.sinAnnotation==='{}';})()") == "true",
-                "Cross-document copies retain annotation metadata and intentional image size without another storage prompt");
+            await Evaluate("document.querySelector('#document').contentDocument.images[0].decode()");
+            check(await browser.ExecuteScriptAsync("(()=>{const image=document.querySelector('#document').contentDocument.images[0];return image?.getBoundingClientRect().width===320&&image.dataset.sinAnnotation==='{}';})()") == "true",
+                "Cross-document image pastes retain annotation metadata and default to automatic size without another storage prompt");
             CopyPhoto();
             await browser.ExecuteScriptAsync("window.editor.setImageStorage('separate')");
             await Evaluate("window.editor.load('<p><br></p>').then(()=>window.editor.focus()).then(()=>window.editor.command('paste')).then(()=>window.editor.command('paste'))");
