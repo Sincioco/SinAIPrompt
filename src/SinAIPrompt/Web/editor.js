@@ -1,5 +1,5 @@
 import {send,request,native,blobData,escapeHtml,ask,report} from './bridge.js';
-import {parseHtml,ensureStyle,editingStyles,serialize,toPng,portableHtml,pasteSafeHtml,renameImageFolder} from './document.js';
+import {parseHtml,ensureStyle,editingStyles,serialize,toPng,portableHtml,standaloneLayout,pasteSafeHtml,renameImageFolder} from './document.js';
 import {renameImageFile} from './asset-references.js';
 import {rewriteProjectReferences} from './project-references.js';
 import {createDocumentSearch} from './document-search.js';
@@ -205,7 +205,7 @@ window.editor={load,html,setBase,focus,command,insertImage,openAnnotation,pasteC
   search:options=>search.run(options),
   beginMarkdown(folder=null){const key=id();(async()=>{await loading;return await htmlToMarkdown(doc,async png=>{const path=await request('save-image-as',{data:png});return folder?new URL(path,folder).href:path;});})().then(html=>exports.set(key,{html})).catch(error=>exports.set(key,{error:error.message}));return key;},
   renameOpenImageFolder(oldName,newName){const updated=renameImageFolder(html(true),oldName,newName);load(updated);return updated;},
-  beginPortable(duplicate=false){const key=id();(async()=>{await loading;return await portableHtml(html(),base,duplicate);})().then(html=>exports.set(key,{html})).catch(error=>exports.set(key,{error:error.message}));return key;},
+  beginPortable(duplicate=false,standalone=false){const key=id();(async()=>{await loading;const output=await portableHtml(html(),base,duplicate);return standalone?standaloneLayout(output):output;})().then(html=>exports.set(key,{html})).catch(error=>exports.set(key,{error:error.message}));return key;},
   beginRelocate(){
     const key=id();
     (async()=>{

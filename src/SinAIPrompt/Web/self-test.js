@@ -1,4 +1,4 @@
-import {normalizeIndent,parseHtml,portableHtml,renameImageFolder} from './document.js';
+import {normalizeIndent,parseHtml,portableHtml,standaloneLayout,renameImageFolder} from './document.js';
 import {prepareRichSourceHighlight} from './source-highlighting.js';
 import {captureTemplate,parseTemplate,templateJson} from './templates.js';
 import {renderPng,outputBounds,move,id} from './annotation-model.js';
@@ -231,6 +231,21 @@ export async function run(){
   const rendered=await renderPng(state);annotated.src=rendered.data;annotated.dataset.sinAnnotation=JSON.stringify(state);annotated.dataset.sinStorage='inline';doc().body.dispatchEvent(new Event('input',{bubbles:true}));
   const exported=await portableHtml(window.editor.html(),'https://sin-document.local/');const parsed=parseHtml(exported);check([...parsed.images].every(i=>i.src.startsWith('data:image/png;base64,')),'Standalone HTML embeds every image as PNG');
   check(!exported.includes('data-sin-runtime')&&!exported.includes('data-sin-selected'),'Runtime selection and editor styles are excluded from saved HTML');
+  const wideCanvas=document.createElement('canvas');wideCanvas.width=2400;wideCanvas.height=200;
+  const layoutSource=await portableHtml(`<body><h1>Standalone layout</h1><img src="${wideCanvas.toDataURL()}" style="width:2400px;max-width:100%;height:auto"><img src="${png}" style="width:40px;max-width:100%;height:auto"></body>`,'https://sin-document.local/');
+  const preview=document.createElement('iframe');preview.setAttribute('sandbox','allow-same-origin');preview.style.cssText='position:fixed;top:0;left:0;height:600px;border:0;z-index:-1';
+  try{
+    const loaded=new Promise(resolve=>preview.onload=resolve);preview.srcdoc=standaloneLayout(standaloneLayout(layoutSource));document.body.append(preview);await loaded;
+    await Promise.all([...preview.contentDocument.images].map(image=>image.decode()));
+    check(preview.contentDocument.querySelectorAll('style[data-sin-standalone]').length===1,'Re-exporting replaces the standalone layout without duplicating styles');
+    for(const width of [1920,1024,375]){
+      preview.style.width=width+'px';await delay(30);
+      const page=preview.contentDocument,viewport=page.documentElement.clientWidth,body=page.body.getBoundingClientRect(),image=page.images[0].getBoundingClientRect();
+      check(Math.abs(body.width-viewport*.9)<1&&Math.abs(body.left-viewport*.05)<1,`Standalone content occupies 90% of the ${width}px screen with balanced margins`);
+      check(Math.abs(image.width-body.width)<1&&Math.abs(image.width/image.height-12)<.02,`Large standalone images use the available ${width}px layout width without distortion`);
+      check(Math.abs(page.images[1].getBoundingClientRect().width-40)<1&&page.documentElement.scrollWidth<=viewport,`Standalone ${width}px layout keeps small images at their chosen size and avoids horizontal scrolling`);
+    }
+  }finally{preview.remove();}
   const stored=window.editor.html();await window.editor.load('<html><head><title>Keep title</title></head><body><script>parent.document.body.dataset.unsafe="yes"</script><p onclick="parent.document.body.dataset.unsafe=\'yes\'">Scripts stay inert</p></body></html>');await delay(50);doc().querySelector('p').click();check(!document.body.dataset.unsafe,'Document scripts and event handlers cannot run in editor');check(window.editor.html().includes('Keep title')&&window.editor.html().includes('<script>'),'Source round-trip preserves document head and script text');
   await window.editor.load(stored);await window.editor.ready();
   doc().body.click();

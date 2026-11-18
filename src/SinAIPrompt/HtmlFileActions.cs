@@ -72,7 +72,7 @@ public partial class MainWindow
         var view = CurrentView;
         var dialog = new Microsoft.Win32.SaveFileDialog { Title = "Export As Standalone HTML", FileName = Path.GetFileNameWithoutExtension(ActiveDocument.Name) + " - Standalone.html", Filter = "HTML Document|*.html", DefaultExt = ".html" };
         if (dialog.ShowDialog(this) != true) return;
-        try { TextFiles.AtomicWrite(dialog.FileName, new UTF8Encoding(false).GetBytes(await view.ExportAsync())); MessageBox.Show(this, "Standalone HTML exported successfully.", "Sin - AI Prompt"); }
+        try { TextFiles.AtomicWrite(dialog.FileName, new UTF8Encoding(false).GetBytes(await view.ExportAsync(standalone: true))); MessageBox.Show(this, "Standalone HTML exported successfully.", "Sin - AI Prompt"); }
         catch (Exception ex) { MessageBox.Show(this, "Export could not finish.\n\n" + ex.Message, "Sin - AI Prompt"); }
     }
     internal async Task HandleHtmlCommand(string command)

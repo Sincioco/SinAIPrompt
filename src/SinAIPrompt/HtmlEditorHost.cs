@@ -390,11 +390,11 @@ public sealed partial class EditorView
             AcceptHtml(updated);
         }
     }
-    public async Task<string> ExportAsync(bool duplicate = false)
+    public async Task<string> ExportAsync(bool duplicate = false, bool standalone = false)
     {
         await initialized.Task;
         if (!IsVisual) { LoadHtml(); await Browser.ExecuteScriptAsync("window.editor.whenLoaded=true"); }
-        string key = JsonSerializer.Deserialize<string>(await Browser.ExecuteScriptAsync($"window.editor.beginPortable({Json(duplicate)})"))!;
+        string key = JsonSerializer.Deserialize<string>(await Browser.ExecuteScriptAsync($"window.editor.beginPortable({Json(duplicate)},{Json(standalone)})"))!;
         return await AwaitExportAsync(key);
     }
     async Task<string> AwaitExportAsync(string key)

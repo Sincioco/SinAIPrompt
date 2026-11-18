@@ -103,9 +103,12 @@ internal static class UiSelfTest
             for (int i = 0; i < 50 && !first.Text.Contains("Deferred autosave regression"); i++) await Task.Delay(20);
             Check(window.FlushAutoSaves(true) && File.ReadAllText(first.Path!).Contains("Deferred autosave regression"), "Deferred typing synchronization still queues native autosave");
             first.AutoSave = false;
-            var portable = await view.ExportAsync();
+            string beforeStandalone = await view.Browser.ExecuteScriptAsync("window.editor.html()");
+            var portable = await view.ExportAsync(standalone: true);
             File.WriteAllText(Path.Combine(folder, "standalone.html"), portable);
             Check(portable.Contains("data:image/png;base64,"), "Standalone export contains embedded PNG");
+            Check(portable.Contains("data-sin-standalone") && !beforeStandalone.Contains("data-sin-standalone") && await view.Browser.ExecuteScriptAsync("window.editor.html()") == beforeStandalone, "Standalone width is exported without changing the open document");
+            Check(!(await view.ExportAsync(duplicate: true)).Contains("data-sin-standalone"), "Document copies retain their original layout");
             await view.Browser.ExecuteScriptAsync("window.editor.command('insertText','Source switch regression')");
             await view.SetSourceAsync(true);
             Check(!view.IsVisual && view.Editor.IsVisible, "Native View Source exposes editable HTML");

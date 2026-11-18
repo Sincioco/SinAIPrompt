@@ -95,6 +95,16 @@ export async function portableHtml(html, base, duplicate=false, preserveReferenc
   doc.querySelectorAll('base').forEach(el => el.remove());
   return serialize(doc);
 }
+export function standaloneLayout(html) {
+  const doc=parseHtml(html);
+  doc.querySelectorAll('style[data-sin-standalone]').forEach(style=>style.remove());
+  const style=doc.createElement('style');
+  style.dataset.sinStandalone='1';
+  // Screen-only: retain the document's print layout and original image sizes.
+  style.textContent='@media screen{body{width:90%!important;max-width:none!important;margin-left:auto!important;margin-right:auto!important;padding-left:0!important;padding-right:0!important}}';
+  doc.head.append(style);
+  return serialize(doc);
+}
 async function embedCss(css, base) {
   const matches = [...css.matchAll(/url\(\s*(['"]?)(.*?)\1\s*\)/gi)];
   for (const match of matches) {

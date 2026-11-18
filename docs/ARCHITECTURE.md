@@ -1246,3 +1246,33 @@ and `git diff --check` pass. Build/package report zero compiler warnings/errors.
 The architecture gate passes 169 files with the existing MainWindow review warning.
 One existing live-pointer annotation Redo assertion failed in an earlier package
 run; the unchanged package passed the complete rerun. No annotation code changed.
+
+### November 19 — standalone export width
+
+`document.js` owns the stateless standalone layout transformation. It adds one
+screen-only stylesheet to the completed portable HTML, giving the body 90% width,
+centered margins, no fixed maximum width, and no horizontal body padding. Existing
+image dimensions and proportional maximum-width behavior remain in effect; large
+images can use the wider content area while small images retain their chosen size.
+Repeated export replaces the stylesheet rather than accumulating copies. Print
+styles are unchanged.
+
+The file-export handler explicitly opts in through the existing host/editor export
+bridge. Normal saves, clipboard conversion, combined documents and duplication
+retain their existing paths and layouts. The transformation operates on a detached
+HTML document and adds no application state or dependencies. Imports, callers and
+state ownership were reviewed manually; no new coupling cycles or exceptions were
+introduced.
+
+Physical-line changes: document.js 112→122; self-test.js 320→336; UiSelfTest.cs
+213→216. editor.js remains 223, HtmlEditorHost.cs 416, HtmlFileActions.cs 106 and
+MainWindow.xaml.cs 531. Existing guardrails and exclusions remain unchanged.
+
+Validation: development and offline-package runs each passed all 1,073 native and
+browser checks. Regressions measure rendered body/image bounds at 1920, 1024 and
+375 pixels, proportional scaling, small-image sizing, horizontal overflow, repeat
+export, document immutability and duplicate isolation. All 53 JavaScript syntax
+checks, 16 architecture fixtures and diff whitespace checks pass. Build/package
+have zero compiler warnings/errors; the architecture gate passes 169 files with
+only the existing MainWindow size-review warning. No new dependencies or guardrail
+exceptions were needed. Already-exported files require re-export to adopt the layout.
